@@ -1,0 +1,519 @@
+{
+  "experiment_meta": {
+    "name": "RDM with Trial-by-Trial Parameter Control",
+    "version": "2.0.0",
+    "description": "Random Dot Motion with complete trial-level parameter control",
+    "author": "Experimental Psychology Lab",
+    "created_date": "2025-12-17",
+    "jsPsych_version": "8.0+",
+    "parameter_control_level": "trial_based"
+  },
+
+  "experiment_type": "trial-based",
+  "timeline_type": "trial-based",
+  "parameter_control": {
+    "mode": "trial_based",
+    "total_trials": 120,
+    "randomization": "permuted_blocks",
+    "block_size": 20
+  },
+
+  "data_collection": {
+    "reaction_time": {
+      "enabled": true,
+      "precision": "milliseconds",
+      "collect_on": "response"
+    },
+    "accuracy": {
+      "enabled": true,
+      "track_confidence": true
+    },
+    "mouse_tracking": {
+      "enabled": true,
+      "sampling_rate": 30,
+      "track_during_stimulus": true
+    }
+  },
+
+  "default_parameters": {
+    "display": {
+      "canvas_width": 800,
+      "canvas_height": 600,
+      "background_color": "#404040"
+    },
+    "aperture": {
+      "shape": "circle", 
+      "diameter": 350,
+      "center_x": 400,
+      "center_y": 300
+    },
+    "fixation": {
+      "enabled": true,
+      "duration_ms": 500,
+      "type": "cross",
+      "size": 8
+    },
+    "dots": {
+      "total_dots": 150,
+      "dot_size": 4,
+      "dot_color": "#FFFFFF",
+      "lifetime_frames": 5,
+      "groups": {
+        "enabled": false,
+        "group_definitions": [
+          {
+            "group_id": "default_group",
+            "percentage": 100.0,
+            "color": "#FFFFFF",
+            "size": 4,
+            "motion_properties": {
+              "coherence_override": false,
+              "direction_override": false,
+              "speed_override": false
+            },
+            "distribution": "random"
+          }
+        ],
+        "overlap_handling": "independent"
+      }
+    },
+    "motion": {
+      "speed": 6,
+      "noise_type": "random_direction"
+    },
+    "timing": {
+      "stimulus_duration": 1500,
+      "response_deadline": 2500,
+      "inter_trial_interval": 1200
+    },
+    "response": {
+      "choices": ["f", "j"],
+      "require_response": true
+    }
+  },
+
+  "trial_timeline": [
+    {
+      "trial_id": "practice_easy_right_01",
+      "trial_type": "practice",
+      "block": "practice",
+      "trial_number": 1,
+      "parameters": {
+        "motion.coherence": 0.8,
+        "motion.direction": 0,
+        "dots.dot_color": "#FFFF00",
+        "response.correct_response": "j",
+        "response.feedback": "detailed",
+        "timing.stimulus_duration": 2000
+      }
+    },
+    {
+      "trial_id": "practice_easy_left_01", 
+      "trial_type": "practice",
+      "block": "practice",
+      "trial_number": 2,
+      "parameters": {
+        "motion.coherence": 0.8,
+        "motion.direction": 180,
+        "dots.dot_color": "#FFFF00",
+        "response.correct_response": "f",
+        "response.feedback": "detailed",
+        "timing.stimulus_duration": 2000
+      }
+    },
+    {
+      "trial_id": "main_low_coherence_right_01",
+      "trial_type": "experimental",
+      "block": "main_block_1",
+      "trial_number": 9,
+      "condition": "low_coherence",
+      "parameters": {
+        "motion.coherence": 0.05,
+        "motion.direction": 0,
+        "motion.speed": 8,
+        "dots.total_dots": 200,
+        "dots.dot_size": 3,
+        "dots.dot_color": "#FFFFFF",
+        "dots.lifetime_frames": 3,
+        "aperture.diameter": 300,
+        "timing.stimulus_duration": 1000,
+        "response.correct_response": "j",
+        "response.feedback": "accuracy_only",
+        "response.response_deadline": 3000
+      }
+    },
+    {
+      "trial_id": "main_medium_coherence_left_01",
+      "trial_type": "experimental", 
+      "block": "main_block_1",
+      "trial_number": 10,
+      "condition": "medium_coherence",
+      "parameters": {
+        "motion.coherence": 0.2,
+        "motion.direction": 180,
+        "motion.speed": 6,
+        "dots.total_dots": 150,
+        "dots.dot_size": 4,
+        "dots.dot_color": "#FFFFFF", 
+        "dots.lifetime_frames": 5,
+        "aperture.diameter": 350,
+        "timing.stimulus_duration": 1500,
+        "response.correct_response": "f",
+        "response.feedback": "accuracy_only",
+        "response.response_deadline": 2500
+      }
+    },
+    {
+      "trial_id": "main_high_coherence_right_01",
+      "trial_type": "experimental",
+      "block": "main_block_1", 
+      "trial_number": 11,
+      "condition": "high_coherence",
+      "parameters": {
+        "motion.coherence": 0.8,
+        "motion.direction": 0,
+        "motion.speed": 5,
+        "dots.total_dots": 100,
+        "dots.dot_size": 5,
+        "dots.dot_color": "#FFFFFF",
+        "dots.lifetime_frames": 8,
+        "aperture.diameter": 400,
+        "timing.stimulus_duration": 1200,
+        "response.correct_response": "j",
+        "response.feedback": "accuracy_only",
+        "response.response_deadline": 2000
+      }
+    },
+    {
+      "trial_id": "confidence_trial_01",
+      "trial_type": "experimental",
+      "block": "main_block_2",
+      "trial_number": 45,
+      "condition": "confidence_rating",
+      "parameters": {
+        "motion.coherence": 0.15,
+        "motion.direction": 180,
+        "motion.speed": 7,
+        "dots.total_dots": 175,
+        "dots.dot_size": 3.5,
+        "dots.dot_color": "#CCCCCC",
+        "timing.stimulus_duration": 1800,
+        "response.correct_response": "f",
+        "response.collect_confidence": true,
+        "response.confidence_scale": "1-4",
+        "response.confidence_prompt": "How confident are you?",
+        "response.confidence_deadline": 4000
+      }
+    },
+    {
+      "trial_id": "dual_color_groups_01",
+      "trial_type": "experimental",
+      "block": "main_block_2",
+      "trial_number": 46,
+      "condition": "dual_color_competition",
+      "parameters": {
+        "dots.groups.enabled": true,
+        "dots.groups.group_definitions": [
+          {
+            "group_id": "blue_dots",
+            "percentage": 50.0,
+            "color": "#0066FF",
+            "size": 4,
+            "motion_properties": {
+              "coherence_override": true,
+              "coherence": 0.2,
+              "direction_override": true,
+              "direction": 0,
+              "speed_override": false
+            },
+            "distribution": "random",
+            "z_order": 0
+          },
+          {
+            "group_id": "red_dots",
+            "percentage": 50.0, 
+            "color": "#FF0066",
+            "size": 4,
+            "motion_properties": {
+              "coherence_override": true,
+              "coherence": 0.8,
+              "direction_override": true,
+              "direction": 180,
+              "speed_override": false
+            },
+            "distribution": "random",
+            "z_order": 1
+          }
+        ],
+        "dots.groups.overlap_handling": "independent",
+        "timing.stimulus_duration": 2000,
+        "response.correct_response": "j",
+        "response.task_instruction": "Respond to the dominant motion direction"
+      }
+    },
+    {
+      "trial_id": "attention_groups_01",
+      "trial_type": "experimental",
+      "block": "attention_block",
+      "trial_number": 65,
+      "condition": "spatial_attention",
+      "parameters": {
+        "dots.groups.enabled": true,
+        "dots.groups.group_definitions": [
+          {
+            "group_id": "target_dots",
+            "percentage": 30.0,
+            "color": "#00FF00",
+            "size": 6,
+            "motion_properties": {
+              "coherence_override": true,
+              "coherence": 0.6,
+              "direction_override": true, 
+              "direction": 45,
+              "speed_override": true,
+              "speed": 8
+            },
+            "distribution": "clustered",
+            "cluster_center": [300, 200],
+            "cluster_radius": 80,
+            "z_order": 2
+          },
+          {
+            "group_id": "distractor_dots",
+            "percentage": 70.0,
+            "color": "#CCCCCC",
+            "size": 3,
+            "motion_properties": {
+              "coherence_override": true,
+              "coherence": 0.0,
+              "direction_override": false,
+              "speed_override": true,
+              "speed": 4
+            },
+            "distribution": "uniform",
+            "z_order": 0
+          }
+        ],
+        "dots.groups.overlap_handling": "priority_based",
+        "timing.stimulus_duration": 1800,
+        "response.correct_response": "j",
+        "response.task_instruction": "Attend to the green dots only"
+      }
+    },
+    {
+      "trial_id": "adaptive_trial_01",
+      "trial_type": "experimental",
+      "block": "adaptive_block",
+      "trial_number": 85,
+      "condition": "adaptive_staircase",
+      "parameters": {
+        "motion.coherence": {
+          "type": "adaptive",
+          "algorithm": "quest",
+          "target_performance": 0.82,
+          "current_estimate": 0.12
+        },
+        "motion.direction": {
+          "type": "random_choice",
+          "choices": [0, 180]
+        },
+        "response.correct_response": {
+          "type": "derived",
+          "source": "motion.direction",
+          "mapping": {"0": "j", "180": "f"}
+        },
+        "timing.stimulus_duration": 1500,
+        "response.feedback": "delayed"
+      }
+    }
+  ],
+
+  "parameter_generation": {
+    "adaptive_algorithms": {
+      "quest": {
+        "description": "QUEST adaptive procedure",
+        "parameters": {
+          "target_performance": 0.82,
+          "threshold_estimate": 0.1,
+          "threshold_sd": 0.2,
+          "beta": 3.5,
+          "delta": 0.01,
+          "gamma": 0.5
+        }
+      },
+      "staircase": {
+        "description": "Simple up/down staircase",
+        "parameters": {
+          "initial_value": 0.5,
+          "step_size": 0.05,
+          "up_down_rule": "2_down_1_up",
+          "min_value": 0.0,
+          "max_value": 1.0
+        }
+      }
+    },
+    "randomization_methods": {
+      "permuted_blocks": {
+        "description": "Balanced randomization within blocks",
+        "block_size": 20,
+        "balance_factors": ["motion.direction", "condition"]
+      },
+      "factorial_design": {
+        "description": "Full factorial with repetitions",
+        "factors": {
+          "motion.coherence": [0.05, 0.1, 0.2, 0.4, 0.8],
+          "motion.direction": [0, 180],
+          "dots.total_dots": [100, 200]
+        },
+        "repetitions": 3
+      },
+      "latin_square": {
+        "description": "Latin square counterbalancing",
+        "factors": ["motion.coherence", "motion.direction", "aperture.diameter"]
+      }
+    },
+    "derived_parameters": {
+      "response.correct_response": {
+        "source": "motion.direction",
+        "mapping": {
+          "0": "j",
+          "45": "j", 
+          "90": "j",
+          "135": "f",
+          "180": "f",
+          "225": "f",
+          "270": "j",
+          "315": "j"
+        }
+      },
+      "difficulty_level": {
+        "source": "motion.coherence",
+        "mapping": {
+          "coherence < 0.1": "very_hard",
+          "coherence < 0.2": "hard",
+          "coherence < 0.4": "medium", 
+          "coherence < 0.7": "easy",
+          "coherence >= 0.7": "very_easy"
+        }
+      }
+    }
+  },
+
+  "block_structure": {
+    "blocks": [
+      {
+        "block_id": "practice",
+        "block_type": "practice",
+        "trials": "practice_*",
+        "trial_count": 8,
+        "parameters": {
+          "response.feedback": "detailed",
+          "timing.stimulus_duration": 2500,
+          "dots.dot_color": "#FFFF00"
+        }
+      },
+      {
+        "block_id": "main_block_1",
+        "block_type": "experimental",
+        "trials": "main_*_01",
+        "trial_count": 40,
+        "parameters": {
+          "response.feedback": "accuracy_only"
+        },
+        "break_after": true,
+        "break_duration": 30000
+      },
+      {
+        "block_id": "confidence_block", 
+        "block_type": "experimental",
+        "trials": "confidence_*",
+        "trial_count": 30,
+        "parameters": {
+          "response.collect_confidence": true,
+          "timing.inter_trial_interval": 2000
+        }
+      },
+      {
+        "block_id": "adaptive_block",
+        "block_type": "adaptive",
+        "trials": "adaptive_*", 
+        "trial_count": 50,
+        "parameters": {
+          "motion.coherence": "adaptive_quest",
+          "response.feedback": "delayed"
+        },
+        "stopping_criteria": {
+          "max_trials": 100,
+          "convergence_threshold": 0.02,
+          "min_trials": 30
+        }
+      }
+    ]
+  },
+
+  "conditional_logic": {
+    "parameter_dependencies": [
+      {
+        "condition": "trial_type == 'practice'",
+        "parameters": {
+          "timing.stimulus_duration": 2500,
+          "response.feedback": "detailed",
+          "dots.dot_color": "#FFFF00"
+        }
+      },
+      {
+        "condition": "motion.coherence < 0.1", 
+        "parameters": {
+          "timing.response_deadline": 4000,
+          "dots.total_dots": 250
+        }
+      },
+      {
+        "condition": "block == 'confidence_block'",
+        "parameters": {
+          "response.collect_confidence": true,
+          "timing.inter_trial_interval": 2000
+        }
+      }
+    ],
+    "response_contingent_changes": [
+      {
+        "trigger": "response == 'incorrect'",
+        "next_trial_changes": {
+          "motion.coherence": "+0.05",
+          "dots.dot_color": "#FFAAAA"
+        }
+      },
+      {
+        "trigger": "rt > 2000",
+        "next_trial_changes": {
+          "timing.stimulus_duration": "+200"
+        }
+      }
+    ]
+  },
+
+  "validation_rules": {
+    "trial_coverage": {
+      "description": "All trials must have complete parameter specification",
+      "enforce": true
+    },
+    "block_balance": {
+      "description": "Check condition balance within blocks", 
+      "enforce": false
+    },
+    "parameter_ranges": {
+      "motion.coherence": {"min": 0.0, "max": 1.0},
+      "motion.direction": {"min": 0, "max": 360},
+      "dots.total_dots": {"min": 10, "max": 1000}
+    }
+  },
+
+  "export_settings": {
+    "generate_trial_lookup_tables": true,
+    "include_practice_trials": true,
+    "randomization_seed": null,
+    "jsPsych_compatibility": "8.0+",
+    "separate_blocks": false
+  }
+}

@@ -1,0 +1,426 @@
+{
+  "experiment_meta": {
+    "name": "RDM with Frame-by-Frame Parameter Control",
+    "version": "2.0.0",
+    "description": "Random Dot Motion with complete temporal parameter control",
+    "author": "Experimental Psychology Lab",
+    "created_date": "2025-12-17",
+    "jsPsych_version": "8.0+",
+    "parameter_control_level": "frame_based"
+  },
+
+  "experiment_type": "continuous",
+  "timeline_type": "frame-based",
+  "parameter_control": {
+    "mode": "frame_based",
+    "total_frames": 3600,
+    "frame_rate": 60,
+    "total_duration_ms": 60000
+  },
+
+  "data_collection": {
+    "reaction_time": {
+      "enabled": true,
+      "precision": "milliseconds",
+      "collect_continuously": true,
+      "sampling_rate": 60
+    },
+    "accuracy": {
+      "enabled": true,
+      "track_continuous_responses": true
+    },
+    "mouse_tracking": {
+      "enabled": true,
+      "sampling_rate": 60,
+      "track_trajectory": true
+    },
+    "eye_tracking": {
+      "enabled": false
+    }
+  },
+
+  "default_parameters": {
+    "display": {
+      "canvas_width": 800,
+      "canvas_height": 600,
+      "background_color": "#808080"
+    },
+    "aperture": {
+      "shape": "circle",
+      "diameter": 400,
+      "center_x": 400,
+      "center_y": 300,
+      "border_width": 2,
+      "border_color": "#FFFFFF"
+    },
+    "fixation": {
+      "enabled": true,
+      "type": "cross",
+      "size": 10,
+      "color": "#FFFFFF"
+    },
+    "dots": {
+      "total_dots": 200,
+      "dot_size": 3,
+      "dot_color": "#FFFFFF",
+      "opacity": 1.0,
+      "lifetime_frames": 10,
+      "groups": {
+        "enabled": false,
+        "group_definitions": [
+          {
+            "group_id": "group_1",
+            "percentage": 100.0,
+            "color": "#FFFFFF",
+            "size": 3,
+            "motion_properties": {
+              "coherence": 0.5,
+              "direction": 0,
+              "speed": 5,
+              "noise_type": "random_direction"
+            },
+            "distribution": "random",
+            "z_order": 0
+          }
+        ],
+        "overlap_handling": "independent",
+        "refresh_on_death": true
+      }
+    },
+    "motion": {
+      "coherence": 0.5,
+      "direction": 0,
+      "speed": 5,
+      "noise_type": "random_direction"
+    },
+    "response": {
+      "response_window": "continuous",
+      "choices": ["ArrowLeft", "ArrowRight"]
+    }
+  },
+
+  "parameter_timeline": [
+    {
+      "frame_range": [0, 60],
+      "parameters": {
+        "motion.coherence": 0.0,
+        "fixation.enabled": true,
+        "dots.opacity": 1.0,
+        "response.response_window": "disabled"
+      },
+      "description": "Fixation period - no motion"
+    },
+    {
+      "frame_range": [61, 180], 
+      "parameters": {
+        "motion.coherence": {
+          "type": "ramp",
+          "start_value": 0.0,
+          "end_value": 0.8,
+          "ramp_type": "linear"
+        },
+        "motion.direction": 0,
+        "motion.speed": 5,
+        "fixation.enabled": false,
+        "response.response_window": "enabled"
+      },
+      "description": "Motion onset with coherence ramp"
+    },
+    {
+      "frame_range": [181, 300],
+      "parameters": {
+        "motion.coherence": {
+          "type": "sine_wave",
+          "amplitude": 0.3,
+          "frequency": 0.1,
+          "offset": 0.5,
+          "phase": 0
+        },
+        "motion.direction": {
+          "type": "step_function",
+          "steps": [
+            {"frame": 181, "value": 0},
+            {"frame": 210, "value": 45},
+            {"frame": 240, "value": 90},
+            {"frame": 270, "value": 135}
+          ]
+        },
+        "dots.dot_color": {
+          "type": "conditional",
+          "condition": "coherence > 0.6",
+          "true_value": "#FF0000",
+          "false_value": "#FFFFFF"
+        }
+      },
+      "description": "Dynamic coherence with direction changes"
+    },
+    {
+      "frame_range": [301, 420],
+      "parameters": {
+        "motion.coherence": {
+          "type": "staircase",
+          "initial_value": 0.5,
+          "step_size": 0.05,
+          "up_down_rule": "1_up_2_down",
+          "target_accuracy": 0.82
+        },
+        "motion.direction": {
+          "type": "random_choice",
+          "choices": [0, 180],
+          "weights": [0.5, 0.5],
+          "change_interval": 30
+        }
+      },
+      "description": "Adaptive staircase procedure"
+    },
+    {
+      "frame_range": [421, 600],
+      "parameters": {
+        "motion.coherence": {
+          "type": "noise",
+          "base_value": 0.3,
+          "noise_amplitude": 0.2,
+          "noise_frequency": 10
+        },
+        "dots.total_dots": {
+          "type": "linear_ramp",
+          "start_value": 200,
+          "end_value": 50
+        },
+        "dots.dot_size": {
+          "type": "exponential_ramp", 
+          "start_value": 3,
+          "end_value": 6,
+          "time_constant": 0.1
+        }
+      },
+      "description": "Noisy coherence with decreasing dot count"
+    },
+    {
+      "frame_range": [241, 360],
+      "parameters": {
+        "dots.groups.enabled": true,
+        "dots.groups.group_definitions": [
+          {
+            "group_id": "blue_dots",
+            "percentage": 50.0,
+            "color": "#0066FF",
+            "size": 3,
+            "motion_properties": {
+              "coherence": 0.1,
+              "direction": 0,
+              "speed": 5,
+              "noise_type": "random_direction"
+            },
+            "distribution": "random",
+            "z_order": 0
+          },
+          {
+            "group_id": "red_dots", 
+            "percentage": 50.0,
+            "color": "#FF0066",
+            "size": 3,
+            "motion_properties": {
+              "coherence": 0.8,
+              "direction": 180,
+              "speed": 5,
+              "noise_type": "random_direction"
+            },
+            "distribution": "random",
+            "z_order": 1
+          }
+        ],
+        "dots.groups.overlap_handling": "independent"
+      },
+      "description": "Dual-color dot groups - blue low coherence left, red high coherence right"
+    },
+    {
+      "frame_range": [361, 480],
+      "parameters": {
+        "dots.groups.enabled": true,
+        "dots.groups.group_definitions": [
+          {
+            "group_id": "attended_dots",
+            "percentage": 70.0,
+            "color": {
+              "type": "sine_wave",
+              "base_color": "#00FF00",
+              "amplitude": 0.3,
+              "frequency": 5
+            },
+            "size": {
+              "type": "ramp",
+              "start_value": 2,
+              "end_value": 6,
+              "ramp_type": "linear"
+            },
+            "motion_properties": {
+              "coherence": {
+                "type": "adaptive",
+                "algorithm": "quest",
+                "target_performance": 0.82
+              },
+              "direction": 45,
+              "speed": 7,
+              "noise_type": "random_position"
+            },
+            "distribution": "clustered",
+            "cluster_center": [400, 250],
+            "cluster_radius": 100,
+            "z_order": 2
+          },
+          {
+            "group_id": "distractor_dots",
+            "percentage": 30.0,
+            "color": "#CCCCCC",
+            "size": 2,
+            "motion_properties": {
+              "coherence": 0.0,
+              "direction": "random",
+              "speed": 3,
+              "noise_type": "random_direction"
+            },
+            "distribution": "uniform",
+            "z_order": 0
+          }
+        ]
+      },
+      "description": "Attention paradigm - 70% green clustered target dots, 30% gray distractor noise"
+    }
+  ],
+
+  "parameter_functions": {
+    "ramp": {
+      "description": "Linear or nonlinear ramps between values",
+      "parameters": ["start_value", "end_value", "ramp_type"],
+      "ramp_types": ["linear", "exponential", "logarithmic", "sigmoid"]
+    },
+    "sine_wave": {
+      "description": "Sinusoidal oscillation",
+      "parameters": ["amplitude", "frequency", "offset", "phase"]
+    },
+    "step_function": {
+      "description": "Discrete value changes at specific frames",
+      "parameters": ["steps"]
+    },
+    "random_walk": {
+      "description": "Random walk with bounds",
+      "parameters": ["step_size", "bounds", "start_value"]
+    },
+    "staircase": {
+      "description": "Adaptive staircase procedure",
+      "parameters": ["initial_value", "step_size", "up_down_rule", "target_accuracy"]
+    },
+    "noise": {
+      "description": "Base value with additive noise",
+      "parameters": ["base_value", "noise_amplitude", "noise_frequency", "noise_type"]
+    },
+    "conditional": {
+      "description": "Parameter depends on another parameter's value",
+      "parameters": ["condition", "true_value", "false_value"]
+    },
+    "lookup_table": {
+      "description": "Frame-by-frame values from table",
+      "parameters": ["values", "interpolation_method"]
+    }
+  },
+
+  "event_triggers": [
+    {
+      "trigger_type": "response",
+      "trigger_condition": "any_key_pressed",
+      "actions": [
+        {
+          "action": "set_parameter",
+          "parameter": "motion.coherence",
+          "value": 0.0
+        },
+        {
+          "action": "advance_to_frame",
+          "target_frame": 600
+        }
+      ]
+    },
+    {
+      "trigger_type": "parameter_threshold",
+      "trigger_condition": "motion.coherence > 0.9",
+      "actions": [
+        {
+          "action": "set_parameter",
+          "parameter": "dots.dot_color",
+          "value": "#00FF00"
+        }
+      ]
+    },
+    {
+      "trigger_type": "time_elapsed",
+      "trigger_condition": "frame > 300",
+      "actions": [
+        {
+          "action": "enable_response_collection"
+        }
+      ]
+    }
+  ],
+
+  "response_mapping": {
+    "continuous_responses": {
+      "enabled": true,
+      "key_mappings": {
+        "ArrowLeft": {
+          "action": "direction_response",
+          "value": "leftward",
+          "continuous": true
+        },
+        "ArrowRight": {
+          "action": "direction_response", 
+          "value": "rightward",
+          "continuous": true
+        },
+        "Space": {
+          "action": "confidence_high",
+          "value": "high_confidence"
+        }
+      }
+    },
+    "response_effects": {
+      "correct_response": {
+        "parameter_changes": {
+          "dots.dot_color": "#00FF00"
+        },
+        "duration_frames": 30
+      },
+      "incorrect_response": {
+        "parameter_changes": {
+          "dots.dot_color": "#FF0000"
+        },
+        "duration_frames": 30
+      }
+    }
+  },
+
+  "validation_rules": {
+    "frame_range_coverage": {
+      "description": "All frames must be covered by parameter timeline",
+      "enforce": true
+    },
+    "parameter_continuity": {
+      "description": "Check for smooth parameter transitions",
+      "enforce": false,
+      "tolerance": 0.1
+    },
+    "performance_limits": {
+      "max_parameter_changes_per_frame": 10,
+      "max_total_dots": 1000,
+      "max_frame_rate": 120
+    }
+  },
+
+  "export_settings": {
+    "generate_frame_lookup_tables": true,
+    "optimize_for_performance": true,
+    "include_debugging_info": false,
+    "jsPsych_compatibility": "8.0+",
+    "interpolation_method": "linear"
+  }
+}

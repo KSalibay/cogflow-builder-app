@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PsychJSON Builder - Experimental Psychology Parameter Generator</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Prevent aggressive caching when opened via file:// or a simple static server -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-primary mb-4">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1">
+                <i class="fas fa-brain"></i> PsychJSON Builder
+            </span>
+            <div class="d-flex">
+                <button class="btn btn-outline-light me-2" id="loadTemplateBtn">
+                    <i class="fas fa-folder-open"></i> Load Template
+                </button>
+                <button class="btn btn-outline-light me-2" id="saveTemplateBtn">
+                    <i class="fas fa-save"></i> Save Template
+                </button>
+                <button class="btn btn-success" id="exportJsonBtn">
+                    <i class="fas fa-download"></i> Export JSON
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="main-panels-row">
+            <!-- Left Panel: Configuration -->
+            <div class="main-panel">
+                <div class="card h-100">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">
+                            <i class="fas fa-cogs"></i> Experiment Configuration
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Experiment Type Selection -->
+                        <div class="mb-4">
+                            <h6 class="fw-bold">Experiment Type</h6>
+                            <div class="btn-group w-100" role="group" id="experimentTypeGroup">
+                                <input type="radio" class="btn-check" name="experimentType" id="trialBased" value="trial-based" checked>
+                                <label class="btn btn-outline-primary" for="trialBased">Trial-Based</label>
+                                
+                                <input type="radio" class="btn-check" name="experimentType" id="continuous" value="continuous">
+                                <label class="btn btn-outline-primary" for="continuous">Continuous</label>
+                            </div>
+                        </div>
+
+                        <!-- Task Type Selection -->
+                        <div class="mb-4">
+                            <h6 class="fw-bold">Task Type</h6>
+                            <select class="form-select" id="taskType">
+                                <option value="rdm" selected>Random Dot Motion (RDM)</option>
+                                <option value="stroop" disabled>Stroop Task (Coming Soon)</option>
+                                <option value="nback" disabled>N-Back (Coming Soon)</option>
+                                <option value="simon" disabled>Simon Task (Coming Soon)</option>
+                                <option value="flanker" disabled>Flanker Task (Coming Soon)</option>
+                                <option value="sart" disabled>SART (Coming Soon)</option>
+                                <option value="custom">Custom Task</option>
+                            </select>
+                            <small class="text-muted">This determines available components in the library</small>
+                        </div>
+
+                        <!-- Data Collection Modalities -->
+                        <div class="mb-4">
+                            <h6 class="fw-bold">Data Collection</h6>
+                            <div class="form-check">
+                                <input class="form-check-input data-collection-checkbox" type="checkbox" value="reaction-time" id="reactionTime" checked>
+                                <label class="form-check-label" for="reactionTime">
+                                    Reaction Time
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input data-collection-checkbox" type="checkbox" value="accuracy" id="accuracy" checked>
+                                <label class="form-check-label" for="accuracy">
+                                    Accuracy
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input data-collection-checkbox" type="checkbox" value="correctness" id="correctness">
+                                <label class="form-check-label" for="correctness">
+                                    Correctness <small class="text-muted">(online)</small>
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input data-collection-checkbox" type="checkbox" value="eye-tracking" id="eyeTracking">
+                                <label class="form-check-label" for="eyeTracking">
+                                    Eye Tracking <small class="text-muted">(WebGazer)</small>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Dynamic Parameter Forms -->
+                        <div id="parameterForms">
+                            <!-- Forms will be dynamically generated here -->
+                        </div>
+
+                        <!-- Add Component Button -->
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-primary" id="addComponentBtn">
+                                <i class="fas fa-plus"></i> Add Component
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Middle Panel: Timeline Builder -->
+            <div class="main-panel">
+                <div class="card h-100">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-sitemap"></i> Experiment Timeline
+                        </h5>
+                        <button class="btn btn-sm btn-outline-secondary" id="clearTimelineBtn">
+                            <i class="fas fa-trash"></i> Clear
+                        </button>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="timelineBuilder" class="timeline-container">
+                            <!-- Timeline components will be dragged here -->
+                            <div id="timelineComponents" class="timeline-components-container">
+                                <div class="empty-timeline text-center text-muted p-4">
+                                    <i class="fas fa-plus-circle fa-3x mb-3"></i>
+                                    <p>Drag components here to build your experiment timeline</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: JSON Preview -->
+            <div class="main-panel">
+                <div class="card h-100">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-code"></i> JSON Preview
+                        </h5>
+                        <div>
+                            <button class="btn btn-sm btn-outline-secondary me-2" id="validateJsonBtn">
+                                <i class="fas fa-check-circle"></i> Validate
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" id="copyJsonBtn">
+                                <i class="fas fa-copy"></i> Copy
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="jsonPreview" class="json-preview">
+                            <pre><code id="jsonOutput">{
+  "timeline": [],
+  "data_collection": {
+    "reaction_time": true,
+    "accuracy": true
+  },
+  "experiment_type": "trial-based"
+}</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Component Library Modal -->
+        <div class="modal fade" id="componentLibraryModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fas fa-puzzle-piece"></i> Component Library
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row" id="componentLibrary">
+                            <!-- Component cards will be generated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Parameter Configuration Modal -->
+        <div class="modal fade" id="parameterModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="parameterModalTitle">
+                            <i class="fas fa-sliders-h"></i> Configure Parameters
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body" id="parameterModalBody">
+                        <!-- Dynamic parameter forms -->
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-info" id="previewComponentBtn">
+                            <i class="fas fa-eye"></i> Preview Component
+                        </button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" id="saveParametersBtn">Save Parameters</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Component Preview Modal -->
+        <div class="modal fade" id="componentPreviewModal" tabindex="-1">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fas fa-eye"></i> Component Preview
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="preview-container">
+                                    <canvas id="previewCanvas" width="600" height="600" style="border: 1px solid #ccc; background-color: #000000;"></canvas>
+                                </div>
+                                <div class="preview-controls mt-3">
+                                    <button class="btn btn-success" id="startPreviewBtn">
+                                        <i class="fas fa-play"></i> Start Preview
+                                    </button>
+                                    <button class="btn btn-warning" id="pausePreviewBtn" disabled>
+                                        <i class="fas fa-pause"></i> Pause
+                                    </button>
+                                    <button class="btn btn-danger" id="stopPreviewBtn" disabled>
+                                        <i class="fas fa-stop"></i> Stop
+                                    </button>
+                                    <button class="btn btn-info" id="resetPreviewBtn">
+                                        <i class="fas fa-refresh"></i> Reset
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">Live Parameters</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="previewParameterInfo">
+                                            <!-- Parameter info will be displayed here -->
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card mt-3">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">Preview Stats</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="previewStats">
+                                            <p><strong>Frame Rate:</strong> <span id="frameRate">0</span> FPS</p>
+                                            <p><strong>Dots Visible:</strong> <span id="dotsVisible">0</span></p>
+                                            <p><strong>Coherent Dots:</strong> <span id="coherentDots">0</span></p>
+                                            <p><strong>Time Elapsed:</strong> <span id="timeElapsed">0</span>ms</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
+    <!-- Cache-bust local scripts -->
+    <script src="src/JsonBuilder.js?v=20260114-3"></script>
+    <script src="src/modules/DataCollectionModules.js?v=20260114-1"></script>
+    <script src="src/modules/TrialManager.js?v=20260113-10"></script>
+    <script src="src/modules/TimelineBuilder.js?v=20260114-3"></script>
+    <script src="src/modules/ComponentPreview.js?v=20260114-2"></script>
+    <script src="src/schemas/RDMTaskSchema.js?v=20260113-10"></script>
+    <script src="src/schemas/JSPsychSchemas.js?v=20260114-3"></script>
+    <script src="src/schemas/UnifiedSchema.js?v=20260113-10"></script>
+
+    <script>
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            const jsonBuilder = new JsonBuilder();
+            jsonBuilder.initialize();
+            
+            // Store globally for access from other functions
+            window.jsonBuilderInstance = jsonBuilder;
+            
+            // Initialize ComponentPreview
+            window.componentPreview = new ComponentPreview();
+            
+            // Initialize timeline sortable functionality
+            initializeTimelineSorting();
+            
+            // Initialize RDM-specific UI components
+            initializeRDMInterface();
+        });
+        
+        function initializeTimelineSorting() {
+            const timelineContainer = document.getElementById('timelineComponents');
+            console.log('Initializing sortable for container:', timelineContainer);
+            
+            if (timelineContainer && window.Sortable) {
+                console.log('Creating sortable instance');
+                window.timelineSortable = Sortable.create(timelineContainer, {
+                    animation: 150,
+                    ghostClass: 'sortable-ghost',
+                    chosenClass: 'sortable-chosen',
+                    dragClass: 'sortable-drag',
+                    handle: '.drag-handle',
+                    filter: '.empty-timeline',
+                    preventOnFilter: false,
+                    onStart: function(evt) {
+                        console.log('Drag started:', evt.item);
+                    },
+                    onEnd: function(evt) {
+                        console.log('Drag ended:', evt.item, 'New index:', evt.newIndex);
+                        // Update JSON when order changes
+                        if (window.jsonBuilderInstance) {
+                            window.jsonBuilderInstance.updateJSON();
+                        }
+                    }
+                });
+                console.log('Sortable instance created:', window.timelineSortable);
+            } else {
+                console.warn('Failed to initialize sortable - container:', timelineContainer, 'Sortable:', window.Sortable);
+            }
+        }
+        
+        function initializeRDMInterface() {
+            // Add initial instructions component to timeline
+            addInitialInstructionsComponent();
+        }
+        
+        function addInitialInstructionsComponent() {
+            // Generate dynamic instructions text based on current experiment settings
+            function generateInstructionsText() {
+                const taskName = document.getElementById('taskName')?.value || 'Random Dot Motion task';
+                const responseKeys = document.getElementById('responseKeys')?.value || 'ArrowLeft,ArrowRight';
+                
+                // Parse response keys into readable format
+                const keyList = responseKeys.split(',').map(key => {
+                    const cleanKey = key.trim();
+                    switch(cleanKey) {
+                        case 'ArrowLeft': return 'Left Arrow';
+                        case 'ArrowRight': return 'Right Arrow';
+                        case 'ArrowUp': return 'Up Arrow';
+                        case 'ArrowDown': return 'Down Arrow';
+                        default: return cleanKey;
+                    }
+                }).join(' and ');
+                
+                return `This is an experiment which consists of the ${taskName}. Please respond to the stimuli by pressing keys ${keyList}. Press any key to continue.`;
+            }
+            
+            const timelineContainer = document.getElementById('timelineComponents');
+            if (!timelineContainer) return;
+            
+            // Hide empty state when adding first component
+            const emptyState = timelineContainer.querySelector('.empty-timeline');
+            if (emptyState) {
+                emptyState.style.display = 'none';
+            }
+            
+            const instructionsComponent = document.createElement('div');
+            instructionsComponent.className = 'timeline-component card mb-2';
+            instructionsComponent.dataset.componentType = 'html-keyboard-response';
+            
+            // Store component data
+            const componentData = {
+                type: 'html-keyboard-response',
+                stimulus: generateInstructionsText(),
+                choices: 'ALL_KEYS'
+            };
+            
+            instructionsComponent.dataset.componentData = JSON.stringify(componentData);
+            
+            instructionsComponent.innerHTML = `
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center">
+                            <div class="drag-handle me-2" style="cursor: move; color: #ccc;">
+                                <i class="fas fa-grip-vertical"></i>
+                            </div>
+                            <div>
+                                <h6 class="card-title mb-1">
+                                    <i class="fas fa-info-circle text-info"></i> Instructions
+                                </h6>
+                                <small class="text-muted">Welcome screen with task instructions</small>
+                            </div>
+                        </div>
+                        <div class="btn-group" role="group">
+                            <button class="btn btn-sm btn-outline-info" onclick="previewComponent(this)" title="Preview">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="editComponent(this)" title="Edit">
+                                <i class="fas fa-pencil-alt"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="removeComponent(this)" title="Delete">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            timelineContainer.appendChild(instructionsComponent);
+            
+            // Initialize sortable functionality after first component is added
+            if (!window.timelineSortable) {
+                initializeTimelineSorting();
+            }
+        }
+        
+        function updateInstructionsComponents() {
+            // Find all instructions components and update their text
+            const instructionsComponents = document.querySelectorAll('.timeline-component[data-component-type="html-keyboard-response"]');
+            
+            function generateInstructionsText() {
+                const taskName = document.getElementById('taskName')?.value || 'Random Dot Motion task';
+                const responseKeys = document.getElementById('responseKeys')?.value || 'ArrowLeft,ArrowRight';
+                
+                // Parse response keys into readable format
+                const keyList = responseKeys.split(',').map(key => {
+                    const cleanKey = key.trim();
+                    switch(cleanKey) {
+                        case 'ArrowLeft': return 'Left Arrow';
+                        case 'ArrowRight': return 'Right Arrow';
+                        case 'ArrowUp': return 'Up Arrow';
+                        case 'ArrowDown': return 'Down Arrow';
+                        default: return cleanKey;
+                    }
+                }).join(' and ');
+                
+                return `This is an experiment which consists of the ${taskName}. Please respond to the stimuli by pressing keys ${keyList}. Press any key to continue.`;
+            }
+            
+            const newInstructionsText = generateInstructionsText();
+            
+            instructionsComponents.forEach(component => {
+                try {
+                    const data = JSON.parse(component.dataset.componentData || '{}');
+                    if (data.type === 'html-keyboard-response' && data.stimulus.includes('This is an experiment')) {
+                        // This appears to be our auto-generated instructions, update it
+                        data.stimulus = newInstructionsText;
+                        component.dataset.componentData = JSON.stringify(data);
+                    }
+                } catch (e) {
+                    console.warn('Could not parse component data:', e);
+                }
+            });
+        }
+        
+        function previewComponent(button) {
+            // Get the component data from the closest timeline component
+            const component = button.closest('.timeline-component');
+            if (!component) {
+                console.warn('No component found for preview');
+                return;
+            }
+            
+            let componentData;
+            try {
+                componentData = JSON.parse(component.dataset.componentData || '{}');
+
+                // Legacy cleanup: groups are implicit; drop obsolete flag if present
+                delete componentData.enable_groups;
+
+                console.log('Parsed component data for preview:', componentData);
+                console.log('Component type detected:', componentData?.type);
+            } catch (e) {
+                console.warn('Could not parse component data for preview:', e);
+                componentData = {};
+            }
+            
+            // Show preview using the ComponentPreview system
+            if (window.componentPreview) {
+                window.componentPreview.showPreview(componentData);
+            } else {
+                console.warn('ComponentPreview not available');
+            }
+        }
+        
+        function addSampleRDMTrial() {
+            // Create a sample RDM trial for testing
+            const timelineContainer = document.getElementById('timelineComponents');
+            if (!timelineContainer) return;
+            
+            const sampleTrial = document.createElement('div');
+            sampleTrial.className = 'timeline-component card mb-2';
+            sampleTrial.innerHTML = `
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center">
+                            <div class="drag-handle me-2" style="cursor: move; color: #ccc;">
+                                <i class="fas fa-grip-vertical"></i>
+                            </div>
+                            <div>
+                                <h6 class="card-title mb-1">RDM Trial</h6>
+                                <small class="text-muted">Coherence: 0.50, Direction: 0°</small>
+                            </div>
+                        </div>
+                        <div class="btn-group" role="group">
+                            <button class="btn btn-sm btn-outline-info" onclick="previewComponent(this)" title="Preview">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="editComponent(this)" title="Edit">
+                                <i class="fas fa-pencil-alt"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="removeComponent(this)" title="Delete">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            timelineContainer.appendChild(sampleTrial);
+        }
+        
+        function editComponent(button) {
+            // Get the component element and its data
+            const component = button.closest('.timeline-component');
+            if (!component) {
+                console.warn('No component found for editing');
+                return;
+            }
+            
+            // Parse component data
+            let componentData;
+            try {
+                componentData = JSON.parse(component.dataset.componentData || '{}');
+
+                // Legacy cleanup (in case older saved components still carry it)
+                delete componentData.enable_groups;
+
+                console.log('Editing component data:', componentData);
+            } catch (e) {
+                console.warn('Could not parse component data:', e);
+                return;
+            }
+            
+            // Simple, direct editing based on component type like Figma prototype
+            if (componentData.type === 'html-keyboard-response') {
+                showInstructionsEditor(component, componentData);
+            } else {
+                // Use TimelineBuilder system for other components
+                if (window.jsonBuilderInstance && window.jsonBuilderInstance.timelineBuilder) {
+                    window.jsonBuilderInstance.setEditingComponent(component);
+                    
+                    const componentObj = {
+                        type: componentData.type || 'unknown',
+                        name: componentData.type || 'Component',
+                        parameters: { ...componentData }
+                    };
+                    
+                    delete componentObj.parameters.type;
+                    
+                    // Drop obsolete flag (no UI toggle, no validator toggle, no persistence)
+                    delete componentObj.parameters.enable_groups;
+                    
+                    const timelineComponents = document.querySelectorAll('.timeline-component');
+                    const index = Array.from(timelineComponents).indexOf(component);
+                    
+                    window.jsonBuilderInstance.timelineBuilder.showParameterModal(componentObj, index);
+                } else {
+                    console.warn('TimelineBuilder not available');
+                }
+            }
+        }
+        
+        function showInstructionsEditor(component, componentData) {
+            // Enhanced instructions editor with timing and response parameters
+            const modal = document.getElementById('parameterModal');
+            const modalTitle = document.getElementById('parameterModalTitle');
+            const modalBody = document.getElementById('parameterModalBody');
+            
+            // Store reference for saving
+            window.editingInstructionsComponent = component;
+            
+            modalTitle.innerHTML = '<i class="fas fa-info-circle"></i> Edit Instructions';
+            
+            // Get current values from component data
+            const currentStimulus = componentData.stimulus || '';
+            const currentChoices = componentData.choices || 'ALL_KEYS';
+            const currentPrompt = componentData.prompt || '';
+            const currentStimulusDuration = componentData.stimulus_duration || null;
+            const currentTrialDuration = componentData.trial_duration || null;
+            const currentResponseEnds = componentData.response_ends_trial !== undefined ? componentData.response_ends_trial : true;
+            
+            modalBody.innerHTML = `
+                <div class="space-y-4">
+                    <div class="mb-3">
+                        <label for="instructionsText" class="form-label">Instructions Text</label>
+                        <textarea id="instructionsText" class="form-control" rows="6" 
+                                  placeholder="Enter instructions for participants...">${currentStimulus}</textarea>
+                        <div class="form-text">This text will be shown to participants before the experiment.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="promptText" class="form-label">Prompt Text (Optional)</label>
+                        <input type="text" id="promptText" class="form-control" 
+                               placeholder="Additional text shown below instructions..." value="${currentPrompt}">
+                        <div class="form-text">Optional prompt text displayed below the main instructions.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="instructionsResponseKeys" class="form-label">Response Keys</label>
+                        <select id="instructionsResponseKeys" class="form-select">
+                            <option value="ALL_KEYS" ${currentChoices === 'ALL_KEYS' ? 'selected' : ''}>Any Key</option>
+                            <option value="space" ${currentChoices === 'space' ? 'selected' : ''}>Spacebar Only</option>
+                            <option value="enter" ${currentChoices === 'enter' ? 'selected' : ''}>Enter Key Only</option>
+                            <option value="f,j" ${currentChoices === 'f,j' ? 'selected' : ''}>F and J Keys</option>
+                            <option value="ArrowLeft,ArrowRight" ${currentChoices === 'ArrowLeft,ArrowRight' ? 'selected' : ''}>Left and Right Arrows</option>
+                        </select>
+                        <div class="form-text">Which keys participants can press to continue.</div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="stimulusDuration" class="form-label">Stimulus Duration (ms)</label>
+                                <input type="number" id="stimulusDuration" class="form-control" 
+                                       placeholder="Leave empty for unlimited" value="${currentStimulusDuration || ''}" 
+                                       min="100" max="30000">
+                                <div class="form-text">How long to show instructions (blank = unlimited).</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="trialDuration" class="form-label">Trial Duration (ms)</label>
+                                <input type="number" id="trialDuration" class="form-control" 
+                                       placeholder="Leave empty for unlimited" value="${currentTrialDuration || ''}" 
+                                       min="500" max="60000">
+                                <div class="form-text">Maximum time allowed for response (blank = unlimited).</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="responseEnds" ${currentResponseEnds ? 'checked' : ''}>
+                            <label class="form-check-label" for="responseEnds">
+                                Response Ends Trial
+                            </label>
+                        </div>
+                        <div class="form-text">Whether pressing a key immediately ends the trial.</div>
+                    </div>
+                </div>
+            `;
+            
+            // Setup save handler
+            const saveBtn = document.getElementById('saveParametersBtn');
+            if (saveBtn) {
+                saveBtn.onclick = saveInstructionsComponent;
+            }
+            
+            // Show modal
+            const bootstrapModal = new bootstrap.Modal(modal);
+            bootstrapModal.show();
+            
+            console.log('Loaded instructions editor with:', { stimulus: currentStimulus, choices: currentChoices });
+        }
+        
+        function saveInstructionsComponent() {
+            if (!window.editingInstructionsComponent) return;
+            
+            const instructionsText = document.getElementById('instructionsText').value;
+            const responseKeys = document.getElementById('instructionsResponseKeys').value;
+            const promptText = document.getElementById('promptText').value;
+            const stimulusDuration = document.getElementById('stimulusDuration').value;
+            const trialDuration = document.getElementById('trialDuration').value;
+            const responseEnds = document.getElementById('responseEnds').checked;
+            
+            // Update component data
+            const updatedData = {
+                type: 'html-keyboard-response',
+                stimulus: instructionsText,
+                choices: responseKeys,
+                prompt: promptText,
+                stimulus_duration: stimulusDuration ? parseInt(stimulusDuration) : null,
+                trial_duration: trialDuration ? parseInt(trialDuration) : null,
+                response_ends_trial: responseEnds
+            };
+            
+            // Save to DOM element
+            window.editingInstructionsComponent.dataset.componentData = JSON.stringify(updatedData);
+            
+            // Update JSON
+            if (window.jsonBuilderInstance) {
+                window.jsonBuilderInstance.updateJSON();
+            }
+            
+            // Close modal
+            const modal = document.getElementById('parameterModal');
+            const bootstrapModal = bootstrap.Modal.getInstance(modal);
+            if (bootstrapModal) {
+                bootstrapModal.hide();
+            }
+            
+            console.log('Saved instructions component:', updatedData);
+        }
+        
+        function removeComponent(button) {
+            const component = button.closest('.timeline-component');
+            const timelineContainer = document.getElementById('timelineComponents');
+            
+            component.remove();
+            
+            // Show empty state if no components remain
+            if (timelineContainer) {
+                const remainingComponents = timelineContainer.querySelectorAll('.timeline-component');
+                const emptyState = timelineContainer.querySelector('.empty-timeline');
+                
+                if (remainingComponents.length === 0 && emptyState) {
+                    emptyState.style.display = 'block';
+                }
+            }
+            
+            // Update JSON
+            if (window.jsonBuilderInstance) {
+                window.jsonBuilderInstance.updateJSON();
+            }
+        }
+        
+        function editRDMTrial(button) {
+            // Extract trial information and populate modal
+            const trialCard = button.closest('.timeline-component');
+            const titleElement = trialCard.querySelector('.card-title');
+            const detailsElement = trialCard.querySelector('.text-muted');
+            
+            console.log('Editing RDM trial:', titleElement.textContent);
+            
+            // Set the component being edited in the JSON builder instance
+            if (window.jsonBuilderInstance) {
+                window.jsonBuilderInstance.setEditingComponent(trialCard);
+            }
+            
+            // Populate modal with RDM-specific parameters
+            populateRDMModal(trialCard);
+            
+            // Open parameter editing modal
+            const modal = new bootstrap.Modal(document.getElementById('parameterModal'));
+            modal.show();
+        }
+        
+        function populateRDMModal(trialCard) {
+            const modalTitle = document.getElementById('parameterModalTitle');
+            const modalBody = document.getElementById('parameterModalBody');
+            
+            // Set modal title
+            modalTitle.innerHTML = '<i class="fas fa-cogs"></i> RDM Trial Parameters';
+            
+            // Create RDM parameter form
+            modalBody.innerHTML = `
+                <div class="row">
+                    <div class="col-12">
+                        <h6 class="fw-bold border-bottom pb-2 mb-3">Display Parameters</h6>
+                        
+                        <!-- Canvas Settings -->
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <label for="modalCanvasWidth" class="form-label">Canvas Width</label>
+                                <input type="number" class="form-control" id="modalCanvasWidth" value="600" min="400" max="1920">
+                            </div>
+                            <div class="col-6">
+                                <label for="modalCanvasHeight" class="form-label">Canvas Height</label>
+                                <input type="number" class="form-control" id="modalCanvasHeight" value="600" min="300" max="1080">
+                            </div>
+                        </div>
+                        
+                        <!-- Aperture Settings -->
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <label for="modalApertureShape" class="form-label">Aperture Shape</label>
+                                <select class="form-select" id="modalApertureShape">
+                                    <option value="circle" selected>Circle</option>
+                                    <option value="rectangle">Rectangle</option>
+                                    <option value="ellipse">Ellipse</option>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label for="modalApertureDiameter" class="form-label">Aperture Diameter (px)</label>
+                                <input type="number" class="form-control" id="modalApertureDiameter" value="350" min="50" max="800">
+                            </div>
+                        </div>
+                        
+                        <h6 class="fw-bold border-bottom pb-2 mb-3 mt-4">Dot Configuration</h6>
+                        
+                        <!-- Basic Dot Parameters -->
+                        <div class="row mb-3">
+                            <div class="col-4">
+                                <label for="modalTotalDots" class="form-label">Total Dots</label>
+                                <input type="number" class="form-control" id="modalTotalDots" value="150" min="10" max="1000">
+                            </div>
+                            <div class="col-4">
+                                <label for="modalDotSize" class="form-label">Dot Size (px)</label>
+                                <input type="number" class="form-control" id="modalDotSize" value="4" min="1" max="20">
+                            </div>
+                            <div class="col-4">
+                                <label for="modalDotLifetime" class="form-label">Lifetime (frames)</label>
+                                <input type="number" class="form-control" id="modalDotLifetime" value="5" min="1" max="30">
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="modalDotColor" class="form-label">Dot Color</label>
+                            <input type="color" class="form-control form-control-color" id="modalDotColor" value="#FFFFFF">
+                        </div>
+                        
+                        <!-- Dot Groups -->
+                        <div id="modalDotGroupsContainer" class="border rounded p-3 bg-light mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="fw-bold">Dot Groups</span>
+                                <button type="button" class="btn btn-sm btn-primary" id="modalAddDotGroupBtn">
+                                    <i class="fas fa-plus"></i> Add Group
+                                </button>
+                            </div>
+                            <div id="modalDotGroupsList">
+                                <!-- Groups will be added dynamically -->
+                            </div>
+                        </div>
+                        
+                        <h6 class="fw-bold border-bottom pb-2 mb-3 mt-4">Motion Configuration</h6>
+                        
+                        <!-- Motion Parameters -->
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <label for="modalMotionCoherence" class="form-label">Coherence</label>
+                                <input type="range" class="form-range" id="modalMotionCoherence" min="0" max="1" step="0.01" value="0.5">
+                                <small class="text-muted d-block" id="modalCoherenceValue">0.50</small>
+                            </div>
+                            <div class="col-6">
+                                <label for="modalMotionDirection" class="form-label">Direction (°)</label>
+                                <input type="number" class="form-control" id="modalMotionDirection" value="0" min="0" max="360">
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <label for="modalMotionSpeed" class="form-label">Speed (px/frame)</label>
+                                <input type="number" class="form-control" id="modalMotionSpeed" value="6" min="1" max="20">
+                            </div>
+                            <div class="col-6">
+                                <label for="modalNoiseType" class="form-label">Noise Type</label>
+                                <select class="form-select" id="modalNoiseType">
+                                    <option value="random_direction" selected>Random Direction</option>
+                                    <option value="random_position">Random Position</option>
+                                    <option value="random_walk">Random Walk</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <h6 class="fw-bold border-bottom pb-2 mb-3 mt-4">Timing Configuration</h6>
+                        
+                        <!-- Timing Parameters -->
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <label for="modalStimulusDuration" class="form-label">Stimulus Duration (ms)</label>
+                                <input type="number" class="form-control" id="modalStimulusDuration" value="1500" min="100" max="10000">
+                            </div>
+                            <div class="col-6">
+                                <label for="modalResponseDeadline" class="form-label">Response Deadline (ms)</label>
+                                <input type="number" class="form-control" id="modalResponseDeadline" value="2500" min="500" max="15000">
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <label for="modalInterTrialInterval" class="form-label">Inter-Trial Interval (ms)</label>
+                                <input type="number" class="form-control" id="modalInterTrialInterval" value="1200" min="200" max="5000">
+                            </div>
+                            <div class="col-6">
+                                <label for="modalFixationDuration" class="form-label">Fixation Duration (ms)</label>
+                                <input type="number" class="form-control" id="modalFixationDuration" value="500" min="100" max="2000">
+                            </div>
+                        </div>
+                        
+                        <!-- Fixation -->
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="modalEnableFixation" checked>
+                            <label class="form-check-label" for="modalEnableFixation">
+                                Enable Fixation Cross
+                            </label>
+                        </div>
+                        
+                        <h6 class="fw-bold border-bottom pb-2 mb-3 mt-4">Response Configuration</h6>
+                        
+                        <!-- Response Parameters -->
+                        <div class="mb-3">
+                            <label for="modalResponseKeys" class="form-label">Response Keys</label>
+                            <input type="text" class="form-control" id="modalResponseKeys" value="f,j" placeholder="e.g., f,j or ArrowLeft,ArrowRight">
+                            <small class="text-muted">Comma-separated key names</small>
+                        </div>
+                        
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="modalRequireResponse" checked>
+                            <label class="form-check-label" for="modalRequireResponse">
+                                Require Response
+                            </label>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <label for="modalCustomResponse" class="form-label">Custom Response</label>
+                                <select class="form-select" id="modalCustomResponse">
+                                    <option value="none" selected>None</option>
+                                    <option value="group_1">Group 1</option>
+                                    <option value="group_2">Group 2</option>
+                                </select>
+                                <small class="text-muted">Set which group the response should target.</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Load existing parameters if they exist
+            loadComponentParametersIntoModal(trialCard);
+            
+            // Initialize modal-specific functionality
+            initializeModalRDMControls();
+        }
+        
+        function loadComponentParametersIntoModal(component) {
+            // Start with experiment-wide defaults
+            const experimentDefaults = window.jsonBuilderInstance?.getCurrentRDMParameters() || {};
+            console.log('Experiment defaults:', experimentDefaults);
+            
+            // Check if component has saved parameters
+            const storedData = component.dataset.componentData;
+            let parameters = { ...experimentDefaults }; // Start with experiment defaults
+            
+            if (storedData) {
+                try {
+                    const componentParams = JSON.parse(storedData);
+
+                    // Legacy cleanup before merge
+                    delete componentParams.enable_groups;
+
+                    // Override defaults with component-specific parameters
+                    parameters = { ...parameters, ...componentParams };
+                    console.log('Component overrides:', componentParams);
+                } catch (e) {
+                    console.warn('Could not load component parameters:', e);
+                }
+            }
+            
+            // Legacy cleanup after merge (belt + suspenders)
+            delete parameters.enable_groups;
+            
+            console.log('Final parameters to load:', parameters);
+            
+            // Load parameters into modal form fields
+            const setValue = (id, value) => {
+                const element = document.getElementById(id);
+                if (element && value !== undefined) {
+                    console.log(`Setting ${id} = ${value}`);
+                    element.value = value;
+                    
+                    // Trigger input event for sliders to update display values
+                    if (element.type === 'range') {
+                        element.dispatchEvent(new Event('input'));
+                    }
+                } else if (!element) {
+                    console.warn(`Element with id "${id}" not found`);
+                }
+            };
+            
+            setValue('modalCanvasWidth', parameters.canvas_width);
+            setValue('modalCanvasHeight', parameters.canvas_height);
+            setValue('modalBackgroundColor', parameters.background_color);
+            setValue('modalDotSize', parameters.dot_size);
+            setValue('modalDotColor', parameters.dot_color);
+            setValue('modalTotalDots', parameters.total_dots);
+            setValue('modalMotionCoherence', parameters.coherence);
+            setValue('modalMotionDirection', parameters.coherent_direction);
+            setValue('modalMotionSpeed', parameters.speed);
+            setValue('modalDotLifetime', parameters.lifetime_frames);
+        }
+        
+        function initializeModalRDMControls() {
+            // Coherence slider interaction
+            const coherenceSlider = document.getElementById('modalMotionCoherence');
+            const coherenceValue = document.getElementById('modalCoherenceValue');
+            
+            if (coherenceSlider && coherenceValue) {
+                coherenceSlider.addEventListener('input', function() {
+                    coherenceValue.textContent = parseFloat(this.value).toFixed(2);
+                });
+            }
+            
+            // Dot groups functionality for modal
+            const groupsContainer = document.getElementById('modalDotGroupsContainer');
+            const addGroupBtn = document.getElementById('modalAddDotGroupBtn');
+            
+            if (addGroupBtn) {
+                addGroupBtn.addEventListener('click', addModalDotGroup);
+            }
+
+            // Ensure groups UI is visible by default (no toggle)
+            if (groupsContainer) {
+                groupsContainer.style.display = 'block';
+            }
+        }
+        
+        function addModalDotGroup() {
+            const groupsList = document.getElementById('modalDotGroupsList');
+            const groupNumber = groupsList.children.length + 1;
+            
+            const groupElement = document.createElement('div');
+            groupElement.className = 'dot-group-item border rounded p-2 mb-2 bg-white';
+            groupElement.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0 text-primary">Group ${groupNumber}</h6>
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-modal-group-btn">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+                
+                <div class="row">
+                    <div class="col-6">
+                        <label class="form-label small">Percentage</label>
+                        <input type="number" class="form-control form-control-sm modal-group-percentage" min="0" max="100" step="1" value="50">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small">Color</label>
+                        <input type="color" class="form-control form-control-color form-control-sm modal-group-color" value="${getGroupColor(groupNumber)}">
+                    </div>
+                </div>
+                
+                <div class="row mt-2">
+                    <div class="col-4">
+                        <label class="form-label small">Size (px)</label>
+                        <input type="number" class="form-control form-control-sm modal-group-size" min="1" max="20" value="4">
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label small">Coherence</label>
+                        <input type="number" class="form-control form-control-sm modal-group-coherence" min="0" max="1" step="0.01" value="${groupNumber === 1 ? '0.2' : '0.8'}">
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label small">Direction (°)</label>
+                        <input type="number" class="form-control form-control-sm modal-group-direction" min="0" max="360" value="${groupNumber === 1 ? '0' : '180'}">
+                    </div>
+                </div>
+                
+                <div class="row mt-2">
+                    <div class="col-6">
+                        <label class="form-label small">Distribution</label>
+                        <select class="form-select form-select-sm modal-group-distribution">
+                            <option value="random" selected>Random</option>
+                            <option value="clustered">Clustered</option>
+                            <option value="uniform">Uniform</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small">Z-Order</label>
+                        <input type="number" class="form-control form-control-sm modal-group-z-order" min="0" max="10" value="0">
+                    </div>
+                </div>
+            `;
+            
+            // Add remove functionality
+            const removeBtn = groupElement.querySelector('.remove-modal-group-btn');
+            removeBtn.addEventListener('click', function() {
+                groupElement.remove();
+                updateModalGroupNumbers();
+            });
+            
+            groupsList.appendChild(groupElement);
+            updateModalGroupNumbers();
+        }
+        
+        function updateModalGroupNumbers() {
+            const groups = document.querySelectorAll('#modalDotGroupsList .dot-group-item');
+            groups.forEach((group, index) => {
+                group.querySelector('h6').textContent = `Group ${index + 1}`;
+            });
+        }
+        
+        function getGroupColor(groupNumber) {
+            const colors = ['#FF0066', '#0066FF', '#00FF66', '#FFFF00', '#FF6600', '#6600FF'];
+            return colors[(groupNumber - 1) % colors.length];
+        }
+        
+        function removeRDMTrial(button) {
+            if (confirm('Are you sure you want to remove this trial?')) {
+                const component = button.closest('.timeline-component');
+                component.remove();
+                
+                // Update JSON after removal
+                if (window.jsonBuilderInstance) {
+                    window.jsonBuilderInstance.updateJSON();
+                }
+            }
+        }
+    </script>
+</body>
+</html>

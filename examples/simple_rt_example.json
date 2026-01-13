@@ -1,0 +1,88 @@
+{
+  "experiment_type": "trial-based",
+  "experiment_name": "Simple Reaction Time Task",
+  "description": "Basic reaction time measurement with visual stimulus",
+  "num_trials": 40,
+  "default_iti": 1000,
+  "randomize_order": true,
+  "data_collection": {
+    "reaction-time": true,
+    "accuracy": true,
+    "mouse-tracking": false,
+    "keyboard-tracking": false,
+    "eye-tracking": false
+  },
+  "timeline": [
+    {
+      "type": "instructions",
+      "pages": [
+        "<h2>Welcome to the Reaction Time Experiment</h2><p>In this experiment, you will see a fixation cross (+) in the center of the screen.</p><p>When the cross appears, press the <strong>SPACEBAR</strong> as quickly as possible.</p>",
+        "<p>Try to respond as quickly and accurately as possible.</p><p>Click 'Next' when you are ready to begin the practice trials.</p>"
+      ],
+      "show_clickable_nav": true,
+      "button_label_next": "Next",
+      "button_label_previous": "Previous"
+    },
+    {
+      "type": "html-keyboard-response",
+      "stimulus": "<div style='font-size: 60px; text-align: center;'>+</div>",
+      "choices": ["space"],
+      "trial_duration": 3000,
+      "stimulus_duration": null,
+      "prompt": "<p>Press SPACEBAR when you see the cross</p>",
+      "data": {
+        "task": "simple-rt",
+        "trial_type": "practice",
+        "correct_response": "space"
+      },
+      "repetitions": 5
+    },
+    {
+      "type": "html-keyboard-response",
+      "stimulus": "<h3>Practice Complete</h3><p>Now we will begin the main experiment.</p><p>Press SPACEBAR to continue.</p>",
+      "choices": ["space"],
+      "trial_duration": null
+    },
+    {
+      "type": "html-keyboard-response",
+      "stimulus": "<div style='font-size: 60px; text-align: center;'>+</div>",
+      "choices": ["space"],
+      "trial_duration": 3000,
+      "stimulus_duration": null,
+      "prompt": "<p>Press SPACEBAR when you see the cross</p>",
+      "data": {
+        "task": "simple-rt",
+        "trial_type": "main",
+        "correct_response": "space"
+      },
+      "repetitions": 40,
+      "timeline_variables": [
+        { "stimulus_delay": 500 },
+        { "stimulus_delay": 750 },
+        { "stimulus_delay": 1000 },
+        { "stimulus_delay": 1250 },
+        { "stimulus_delay": 1500 }
+      ],
+      "randomize_order": true
+    },
+    {
+      "type": "html-keyboard-response",
+      "stimulus": "<h2>Experiment Complete</h2><p>Thank you for participating!</p><p>Press any key to finish.</p>",
+      "choices": "ALL_KEYS",
+      "trial_duration": null
+    }
+  ],
+  "jsPsych_config": {
+    "show_progress_bar": true,
+    "message_progress_bar": "Completion Progress",
+    "auto_update_progress_bar": true,
+    "minimum_valid_rt": 100,
+    "on_finish": "function() { jatos.submitResultData(jsPsych.data.get().json()); }",
+    "on_close": "function() { jatos.abortStudy(); }"
+  },
+  "jatos_config": {
+    "study_assets_root": "/study_assets/",
+    "result_uploading": true,
+    "result_database": "JSON"
+  }
+}

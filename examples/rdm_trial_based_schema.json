@@ -1,0 +1,377 @@
+{
+  "experiment_meta": {
+    "name": "Random Dot Motion - Trial-Based Design",
+    "version": "1.0.0",
+    "description": "Discrete trial presentation of motion coherence task",
+    "author": "Experimental Psychology Lab", 
+    "created_date": "2025-12-17",
+    "jsPsych_version": "8.0+",
+    "estimated_duration": "12-15 minutes"
+  },
+
+  "experiment_type": "trial-based",
+  "timeline_type": "trial-based",
+
+  "data_collection": {
+    "reaction_time": {
+      "enabled": true,
+      "precision": "milliseconds",
+      "min_valid_rt": 200,
+      "max_valid_rt": 4000,
+      "collect_on": "response"
+    },
+    "accuracy": {
+      "enabled": true, 
+      "track_confidence": true,
+      "feedback_mode": "immediate",
+      "feedback_delay": 0
+    },
+    "mouse_tracking": {
+      "enabled": true,
+      "sampling_rate": 30,
+      "track_trajectory": true,
+      "track_clicks": false,
+      "normalize_coordinates": true
+    },
+    "eye_tracking": {
+      "enabled": false
+    }
+  },
+
+  "task_configuration": {
+    "has_practice_block": true,
+    "practice_trials": 8,
+    "has_breaks": true,
+    "break_interval": 30,
+    "has_cues": true,
+    "feedback_type": "combined",
+    "response_deadline": true,
+    "adaptive_procedure": {
+      "enabled": false
+    }
+  },
+
+  "display_parameters": {
+    "canvas": {
+      "width": 800,
+      "height": 600,
+      "background_color": "#404040",
+      "border": true,
+      "border_color": "#FFFFFF",
+      "fullscreen": false
+    },
+    "aperture": {
+      "shape": "circle",
+      "diameter": 300,
+      "center_x": 400,
+      "center_y": 300,
+      "border_width": 3,
+      "border_color": "#FFFFFF",
+      "mask_outside": true
+    },
+    "fixation": {
+      "enabled": true,
+      "type": "dot",
+      "size": 8,
+      "color": "#FF0000",
+      "duration": "pre_stimulus_only"
+    }
+  },
+
+  "dot_parameters": {
+    "population": {
+      "total_dots": 150,
+      "dot_groups": [
+        {
+          "group_id": "coherent",
+          "proportion": "coherence_dependent",
+          "color": "#FFFFFF", 
+          "size": 4,
+          "shape": "circle"
+        },
+        {
+          "group_id": "random",
+          "proportion": "coherence_dependent",
+          "color": "#FFFFFF",
+          "size": 4, 
+          "shape": "circle"
+        }
+      ],
+      "density": "uniform"
+    },
+    
+    "appearance": {
+      "dot_size": 4,
+      "dot_color": "#FFFFFF",
+      "anti_aliasing": true,
+      "opacity": 0.9,
+      "luminance": 240
+    },
+    
+    "lifecycle": {
+      "dot_lifetime": {
+        "enabled": true,
+        "min_lifetime": 3,
+        "max_lifetime": 8,
+        "unit": "frames"
+      },
+      "regeneration": {
+        "method": "random_position",
+        "maintain_density": true,
+        "avoid_fixation": true,
+        "avoidance_radius": 30
+      }
+    }
+  },
+
+  "motion_parameters": {
+    "global_motion": {
+      "coherence": "trial_variable",
+      "direction": "trial_variable", 
+      "speed": 6,
+      "motion_type": "linear"
+    },
+    
+    "noise_motion": {
+      "type": "random_direction",
+      "step_size": 6,
+      "direction_change_probability": 1.0
+    },
+    
+    "boundary_behavior": {
+      "edge_behavior": "wrap",
+      "aperture_behavior": "wrap"
+    }
+  },
+
+  "temporal_parameters": {
+    "timing": {
+      "frame_rate": 75,
+      "stimulus_duration": 1500,
+      "pre_stimulus_fixation": 750,
+      "post_stimulus_blank": 250,
+      "inter_trial_interval": 1200,
+      "response_timeout": 2500
+    },
+    
+    "motion_onset": {
+      "delay": 100,
+      "ramp_duration": 100,
+      "ramp_type": "sigmoid"
+    }
+  },
+
+  "response_parameters": {
+    "response_type": "keyboard",
+    
+    "keyboard_responses": {
+      "choices": ["f", "j"],
+      "choice_mapping": {
+        "f": "leftward",
+        "j": "rightward"
+      },
+      "require_response": true,
+      "response_deadline": 2500,
+      "response_window": "during_and_after_stimulus"
+    },
+    
+    "confidence_rating": {
+      "enabled": true,
+      "scale": "1-4",
+      "labels": ["Very Unsure", "Unsure", "Sure", "Very Sure"],
+      "prompt": "How confident are you?",
+      "required": true,
+      "timeout": 4000
+    },
+    
+    "response_feedback": {
+      "correct_feedback": "Correct!",
+      "incorrect_feedback": "Incorrect",
+      "timeout_feedback": "Please respond faster",
+      "feedback_duration": 1000,
+      "show_rt": true,
+      "show_accuracy": false
+    }
+  },
+
+  "trial_structure": {
+    "coherence_levels": [0.05, 0.1, 0.2, 0.4, 0.8],
+    "directions": [0, 180],
+    
+    "trial_types": [
+      {
+        "trial_id": "low_coherence_right",
+        "coherence": [0.05, 0.1],
+        "direction": 0,
+        "correct_response": "j",
+        "difficulty": "hard",
+        "weight": 0.2
+      },
+      {
+        "trial_id": "low_coherence_left", 
+        "coherence": [0.05, 0.1],
+        "direction": 180,
+        "correct_response": "f",
+        "difficulty": "hard", 
+        "weight": 0.2
+      },
+      {
+        "trial_id": "medium_coherence_right",
+        "coherence": [0.2, 0.4],
+        "direction": 0,
+        "correct_response": "j",
+        "difficulty": "medium",
+        "weight": 0.3
+      },
+      {
+        "trial_id": "medium_coherence_left",
+        "coherence": [0.2, 0.4], 
+        "direction": 180,
+        "correct_response": "f",
+        "difficulty": "medium",
+        "weight": 0.3
+      },
+      {
+        "trial_id": "high_coherence_right",
+        "coherence": 0.8,
+        "direction": 0,
+        "correct_response": "j",
+        "difficulty": "easy",
+        "weight": 0.1
+      },
+      {
+        "trial_id": "high_coherence_left",
+        "coherence": 0.8,
+        "direction": 180, 
+        "correct_response": "f",
+        "difficulty": "easy",
+        "weight": 0.1
+      }
+    ],
+    
+    "randomization": {
+      "method": "balanced_latin_square",
+      "block_size": 30,
+      "constraints": {
+        "max_consecutive_same_direction": 3,
+        "max_consecutive_same_difficulty": 4,
+        "balance_conditions": true
+      }
+    },
+    
+    "trial_count": {
+      "practice_trials": 8,
+      "main_trials": 150,
+      "trials_per_condition": 15
+    }
+  },
+
+  "cue_parameters": {
+    "spatial_cue": {
+      "enabled": true,
+      "cue_type": "arrow",
+      "cue_timing": "pre_stimulus",
+      "cue_duration": 200,
+      "cue_validity": 0.75,
+      "cue_positions": ["left", "right"],
+      "cue_size": 20,
+      "cue_color": "#FFFF00"
+    },
+    
+    "temporal_cue": {
+      "enabled": true,
+      "cue_type": "tone",
+      "cue_timing": -300,
+      "cue_parameters": {
+        "frequency": 800,
+        "duration": 100,
+        "volume": 0.5
+      }
+    }
+  },
+
+  "block_structure": {
+    "blocks": [
+      {
+        "block_id": "practice",
+        "block_type": "practice", 
+        "trial_count": 8,
+        "feedback": "detailed",
+        "break_after": false
+      },
+      {
+        "block_id": "main_block_1",
+        "block_type": "experimental",
+        "trial_count": 50, 
+        "feedback": "accuracy_only",
+        "break_after": true,
+        "break_duration": 30000
+      },
+      {
+        "block_id": "main_block_2", 
+        "block_type": "experimental",
+        "trial_count": 50,
+        "feedback": "accuracy_only",
+        "break_after": true,
+        "break_duration": 30000
+      },
+      {
+        "block_id": "main_block_3",
+        "block_type": "experimental", 
+        "trial_count": 50,
+        "feedback": "accuracy_only",
+        "break_after": false
+      }
+    ]
+  },
+
+  "validation_rules": {
+    "coherence": {
+      "min": 0.0,
+      "max": 1.0,
+      "type": "float"
+    },
+    "direction": {
+      "values": [0, 45, 90, 135, 180, 225, 270, 315],
+      "type": "integer"
+    },
+    "stimulus_duration": {
+      "min": 100,
+      "max": 10000,
+      "type": "integer"
+    },
+    "total_dots": {
+      "min": 10,
+      "max": 500,
+      "type": "integer"  
+    },
+    "frame_rate": {
+      "values": [60, 75, 90, 120],
+      "type": "integer"
+    }
+  },
+
+  "analysis_parameters": {
+    "primary_measures": ["accuracy", "reaction_time", "confidence"],
+    "exclusion_criteria": {
+      "min_accuracy": 0.5,
+      "max_rt": 4000,
+      "min_rt": 200,
+      "exclude_practice": true
+    },
+    "psychometric_analysis": {
+      "enabled": true,
+      "fit_function": "weibull",
+      "threshold_criterion": 0.82,
+      "bootstrap_iterations": 1000
+    }
+  },
+
+  "export_settings": {
+    "jsPsych_compatibility": "8.0+",
+    "jatos_integration": true,
+    "data_format": "json",
+    "include_trial_data": true,
+    "include_summary_stats": true
+  }
+}

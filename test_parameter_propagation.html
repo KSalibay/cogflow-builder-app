@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Parameter Propagation</title>
+</head>
+<body>
+    <h1>Testing Parameter Propagation Fix</h1>
+    
+    <!-- Test form inputs -->
+    <div>
+        <label>Motion coherence (0-1):</label>
+        <input type="number" id="rdm_coherence" value="0.8" step="any">
+    </div>
+    <div>
+        <label>Motion direction in degrees (0-359):</label>
+        <input type="number" id="rdm_direction" value="90" step="any">
+    </div>
+    <div>
+        <label>Dot movement speed:</label>
+        <input type="number" id="rdm_speed" value="8" step="any">
+    </div>
+    
+    <button onclick="testParameterPropagation()">Test Parameter Propagation</button>
+    <div id="result"></div>
+
+    <script>
+        // Mock the JsonBuilder getCurrentRDMParameters method
+        const mockJsonBuilder = {
+            getCurrentRDMParameters() {
+                return {
+                    rdm_coherence: parseFloat(document.getElementById('rdm_coherence').value),
+                    rdm_direction: parseFloat(document.getElementById('rdm_direction').value), 
+                    rdm_speed: parseFloat(document.getElementById('rdm_speed').value),
+                    rdm_stimulus_duration: 1500,
+                    rdm_total_dots: 150,
+                    rdm_dot_size: 4,
+                    rdm_aperture_diameter: 350
+                };
+            }
+        };
+
+        // Mock TimelineBuilder's getExperimentDefault method
+        function getExperimentDefault(paramName) {
+            // Get the current experiment-wide RDM settings
+            const experimentDefaults = mockJsonBuilder.getCurrentRDMParameters();
+            
+            // Map parameter names from form IDs to schema parameter names if needed
+            const parameterMappings = {
+                'coherence': 'rdm_coherence',
+                'direction': 'rdm_direction', 
+                'speed': 'rdm_speed',
+                'stimulus_duration': 'rdm_stimulus_duration',
+                'total_dots': 'rdm_total_dots',
+                'dot_size': 'rdm_dot_size',
+                'aperture_diameter': 'rdm_aperture_diameter'
+            };
+            
+            const formFieldName = parameterMappings[paramName];
+            if (formFieldName && experimentDefaults.hasOwnProperty(formFieldName)) {
+                return experimentDefaults[formFieldName];
+            }
+            
+            return undefined;
+        }
+
+        function testParameterPropagation() {
+            // Test the mapping for different parameters
+            const testCases = [
+                'coherence',
+                'direction', 
+                'speed',
+                'stimulus_duration',
+                'total_dots',
+                'dot_size',
+                'aperture_diameter'
+            ];
+
+            let results = '<h3>Test Results:</h3><ul>';
+            
+            for (const param of testCases) {
+                const value = getExperimentDefault(param);
+                results += `<li><strong>${param}:</strong> ${value !== undefined ? value : 'undefined'}</li>`;
+            }
+            
+            results += '</ul>';
+            results += '<h3>Experiment Defaults:</h3><pre>' + JSON.stringify(mockJsonBuilder.getCurrentRDMParameters(), null, 2) + '</pre>';
+            
+            document.getElementById('result').innerHTML = results;
+        }
+    </script>
+</body>
+</html>

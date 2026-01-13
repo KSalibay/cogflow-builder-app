@@ -1,0 +1,305 @@
+{
+  "experiment_meta": {
+    "name": "Random Dot Motion - Coherence Threshold",
+    "version": "1.0.0", 
+    "description": "Motion coherence detection task with psychophysical staircase",
+    "author": "Experimental Psychology Lab",
+    "created_date": "2025-12-17",
+    "jsPsych_version": "8.0+",
+    "estimated_duration": "15-20 minutes"
+  },
+
+  "experiment_type": "continuous",
+  "timeline_type": "frame-based",
+
+  "data_collection": {
+    "reaction_time": {
+      "enabled": true,
+      "precision": "milliseconds", 
+      "min_valid_rt": 100,
+      "max_valid_rt": 5000,
+      "collect_on": "stimulus_offset"
+    },
+    "accuracy": {
+      "enabled": true,
+      "track_confidence": false,
+      "feedback_mode": "delayed",
+      "feedback_delay": 500
+    },
+    "mouse_tracking": {
+      "enabled": false,
+      "sampling_rate": 60,
+      "track_trajectory": true,
+      "normalize_coordinates": true
+    },
+    "eye_tracking": {
+      "enabled": false,
+      "sampling_rate": 30,
+      "aoi_definitions": [
+        {"name": "fixation", "x": 400, "y": 300, "radius": 50},
+        {"name": "stimulus_area", "x": 400, "y": 300, "radius": 200}
+      ]
+    }
+  },
+
+  "task_configuration": {
+    "has_practice_block": true,
+    "practice_trials": 10,
+    "has_breaks": true,
+    "break_interval": 40,
+    "has_cues": false,
+    "feedback_type": "accuracy_only",
+    "response_deadline": true,
+    "adaptive_procedure": {
+      "enabled": true,
+      "method": "quest", 
+      "target_accuracy": 0.82,
+      "step_size": 0.05
+    }
+  },
+
+  "display_parameters": {
+    "canvas": {
+      "width": 800,
+      "height": 600,
+      "background_color": "#808080",
+      "border": false,
+      "fullscreen": false
+    },
+    "aperture": {
+      "shape": "circle",
+      "diameter": 400,
+      "center_x": 400,
+      "center_y": 300,
+      "border_width": 2,
+      "border_color": "#FFFFFF",
+      "mask_outside": true
+    },
+    "fixation": {
+      "enabled": true,
+      "type": "cross",
+      "size": 10,
+      "color": "#FFFFFF",
+      "thickness": 2,
+      "duration": "continuous"
+    }
+  },
+
+  "dot_parameters": {
+    "population": {
+      "total_dots": 200,
+      "dot_groups": [
+        {
+          "group_id": "signal",
+          "proportion": 1.0,
+          "color": "#FFFFFF",
+          "size": 3,
+          "shape": "circle"
+        }
+      ],
+      "density": "uniform",
+      "spatial_distribution": "random"
+    },
+    
+    "appearance": {
+      "dot_size": 3,
+      "dot_color": "#FFFFFF", 
+      "anti_aliasing": true,
+      "opacity": 1.0,
+      "luminance": 255,
+      "size_variation": {
+        "enabled": false
+      },
+      "color_variation": {
+        "enabled": false
+      }
+    },
+    
+    "lifecycle": {
+      "dot_lifetime": {
+        "enabled": true,
+        "min_lifetime": 5,
+        "max_lifetime": 15,
+        "unit": "frames"
+      },
+      "regeneration": {
+        "method": "random_position",
+        "maintain_density": true
+      }
+    }
+  },
+
+  "motion_parameters": {
+    "global_motion": {
+      "coherence": 0.5,
+      "direction": 0,
+      "speed": 5,
+      "motion_type": "linear",
+      "reference_frame": "lab"
+    },
+    
+    "noise_motion": {
+      "type": "random_direction",
+      "step_size": 5,
+      "direction_change_probability": 1.0,
+      "speed_variation": 0.0
+    },
+    
+    "advanced_motion": {
+      "motion_curves": {
+        "enabled": false
+      },
+      "acceleration": {
+        "enabled": false
+      },
+      "gravity_points": {
+        "enabled": false
+      }
+    },
+    
+    "boundary_behavior": {
+      "edge_behavior": "wrap",
+      "aperture_behavior": "regenerate", 
+      "collision_detection": false
+    }
+  },
+
+  "temporal_parameters": {
+    "timing": {
+      "frame_rate": 60,
+      "stimulus_duration": 2000,
+      "pre_stimulus_blank": 500,
+      "post_stimulus_blank": 1000,
+      "inter_trial_interval": 1500,
+      "frame_duration": 16.67,
+      "update_interval": 1
+    },
+    
+    "dynamic_changes": {
+      "coherence_changes": {
+        "enabled": false
+      },
+      "direction_changes": {
+        "enabled": false
+      },
+      "speed_changes": {
+        "enabled": false
+      }
+    },
+    
+    "motion_onset": {
+      "delay": 0,
+      "ramp_duration": 0,
+      "ramp_type": "linear"
+    }
+  },
+
+  "response_parameters": {
+    "response_type": "keyboard",
+    
+    "keyboard_responses": {
+      "choices": ["ArrowLeft", "ArrowRight"],
+      "choice_mapping": {
+        "ArrowLeft": "leftward",
+        "ArrowRight": "rightward"
+      },
+      "require_response": true,
+      "response_deadline": 3000,
+      "response_window": "stimulus_offset"
+    },
+    
+    "mouse_responses": {
+      "enabled": false
+    },
+    
+    "confidence_rating": {
+      "enabled": false
+    },
+    
+    "response_feedback": {
+      "correct_feedback": "✓",
+      "incorrect_feedback": "✗", 
+      "timeout_feedback": "Too slow!",
+      "feedback_duration": 800,
+      "feedback_position": "center"
+    }
+  },
+
+  "trial_structure": {
+    "trial_types": [
+      {
+        "trial_id": "rightward_motion",
+        "coherence": "adaptive",
+        "direction": 0,
+        "correct_response": "ArrowRight",
+        "weight": 0.5
+      },
+      {
+        "trial_id": "leftward_motion",
+        "coherence": "adaptive", 
+        "direction": 180,
+        "correct_response": "ArrowLeft",
+        "weight": 0.5
+      }
+    ],
+    
+    "randomization": {
+      "method": "permuted_block",
+      "block_size": 20,
+      "constraints": {
+        "max_consecutive_same": 4,
+        "balance_conditions": true
+      }
+    },
+    
+    "trial_count": {
+      "practice_trials": 10,
+      "main_trials": 200,
+      "max_trials": 300,
+      "convergence_criterion": "threshold_stability"
+    }
+  },
+
+  "cue_parameters": {
+    "spatial_cue": {
+      "enabled": false
+    },
+    "temporal_cue": {
+      "enabled": false  
+    },
+    "directional_cue": {
+      "enabled": false
+    }
+  },
+
+  "validation_rules": {
+    "coherence": {
+      "min": 0.0,
+      "max": 1.0,
+      "type": "float"
+    },
+    "direction": {
+      "min": 0,
+      "max": 360, 
+      "type": "integer"
+    },
+    "speed": {
+      "min": 0.1,
+      "max": 50.0,
+      "type": "float"
+    },
+    "total_dots": {
+      "min": 1,
+      "max": 1000,
+      "type": "integer"
+    }
+  },
+
+  "export_settings": {
+    "jsPsych_compatibility": "8.0+",
+    "jatos_integration": true,
+    "data_format": "json",
+    "include_metadata": true,
+    "compress_output": false
+  }
+}

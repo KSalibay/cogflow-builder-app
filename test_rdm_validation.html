@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test RDM Validation</title>
+</head>
+<body>
+    <h1>Testing RDM Component Validation</h1>
+    <div id="results"></div>
+
+    <script src="src/schemas/RDMTaskSchema.js"></script>
+    <script src="src/schemas/JSPsychSchemas.js"></script>
+    
+    <script>
+        // Test the RDM component validation
+        function runTests() {
+            const resultsDiv = document.getElementById('results');
+            
+            // Create schema instances
+            const rdmSchema = new RDMTaskSchema();
+            const jspsychSchemas = new JSPsychSchemas();
+            
+            // Test 1: Valid RDM trial
+            const validRDMTrial = {
+                type: 'rdm-trial',
+                coherence: 0.5,
+                direction: 90,
+                speed: 6,
+                stimulus_duration: 1500,
+                total_dots: 150
+            };
+            
+            console.log('Testing valid RDM trial...');
+            const result1 = rdmSchema.validateComponent(validRDMTrial, 'rdm-trial');
+            console.log('Valid RDM Trial Result:', result1);
+            
+            // Test 2: Invalid RDM trial (missing parameters)
+            const invalidRDMTrial = {
+                type: 'rdm-trial',
+                coherence: 0.5
+                // Missing required parameters
+            };
+            
+            console.log('Testing invalid RDM trial...');
+            const result2 = rdmSchema.validateComponent(invalidRDMTrial, 'rdm-trial');
+            console.log('Invalid RDM Trial Result:', result2);
+            
+            // Test 3: Test timeline validation with RDM components
+            const testConfig = {
+                experiment_type: 'custom',
+                timeline: [
+                    validRDMTrial,
+                    invalidRDMTrial
+                ]
+            };
+            
+            console.log('Testing timeline validation...');
+            const result3 = jspsychSchemas.validate(testConfig);
+            console.log('Timeline Validation Result:', result3);
+            
+            // Display results
+            resultsDiv.innerHTML = `
+                <h2>Test Results</h2>
+                <h3>1. Valid RDM Trial</h3>
+                <p>Valid: ${result1.valid}</p>
+                <p>Errors: ${result1.errors.join(', ') || 'None'}</p>
+                <p>Warnings: ${result1.warnings.join(', ') || 'None'}</p>
+                
+                <h3>2. Invalid RDM Trial</h3>
+                <p>Valid: ${result2.valid}</p>
+                <p>Errors: ${result2.errors.join(', ')}</p>
+                <p>Warnings: ${result2.warnings.join(', ') || 'None'}</p>
+                
+                <h3>3. Timeline Validation</h3>
+                <p>Valid: ${result3.valid}</p>
+                <p>Errors: ${result3.errors.join('; ')}</p>
+                <p>Warnings: ${result3.warnings.join('; ') || 'None'}</p>
+            `;
+        }
+        
+        // Run tests when page loads
+        window.addEventListener('load', runTests);
+    </script>
+</body>
+</html>

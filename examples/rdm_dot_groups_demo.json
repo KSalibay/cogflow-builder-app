@@ -1,0 +1,243 @@
+{
+  "experiment_meta": {
+    "name": "Dot Groups Demo - Competing Motion",
+    "version": "1.0.0",
+    "description": "Demonstration of multi-group RDM with competing motion directions and different coherence levels",
+    "author": "Psychology Lab",
+    "created_date": "2025-12-17",
+    "jsPsych_version": "8.0+"
+  },
+
+  "experiment_type": "trial-based",
+  
+  "data_collection": {
+    "reaction_time": { "enabled": true },
+    "accuracy": { "enabled": true },
+    "mouse_tracking": { "enabled": false }
+  },
+
+  "display_parameters": {
+    "canvas_width": 800,
+    "canvas_height": 600,
+    "background_color": "#404040"
+  },
+
+  "trial_timeline": [
+    {
+      "trial_id": "demo_competing_motion",
+      "trial_type": "experimental",
+      "condition": "dual_color_competition",
+      "description": "50% blue dots (low coherence left) vs 50% red dots (high coherence right)",
+      "parameters": {
+        "dots.groups.enabled": true,
+        "dots.groups.group_definitions": [
+          {
+            "group_id": "blue_weak_left",
+            "percentage": 50.0,
+            "color": "#0066FF",
+            "size": 4,
+            "motion_properties": {
+              "coherence_override": true,
+              "coherence": 0.2,
+              "direction_override": true, 
+              "direction": 180,
+              "speed_override": false
+            },
+            "distribution": "random",
+            "z_order": 0
+          },
+          {
+            "group_id": "red_strong_right",
+            "percentage": 50.0,
+            "color": "#FF0066", 
+            "size": 4,
+            "motion_properties": {
+              "coherence_override": true,
+              "coherence": 0.8,
+              "direction_override": true,
+              "direction": 0,
+              "speed_override": false
+            },
+            "distribution": "random",
+            "z_order": 1
+          }
+        ],
+        "dots.groups.overlap_handling": "independent",
+        "timing.stimulus_duration": 2000,
+        "response.task_instruction": "Which direction dominates?"
+      }
+    },
+    {
+      "trial_id": "demo_attention_cue",
+      "trial_type": "experimental", 
+      "condition": "spatial_attention",
+      "description": "30% green target dots (clustered) vs 70% gray distractor noise",
+      "parameters": {
+        "dots.groups.enabled": true,
+        "dots.groups.group_definitions": [
+          {
+            "group_id": "target_cluster",
+            "percentage": 30.0,
+            "color": "#00FF00",
+            "size": 6,
+            "motion_properties": {
+              "coherence_override": true,
+              "coherence": 0.7,
+              "direction_override": true,
+              "direction": 45,
+              "speed_override": true,
+              "speed": 8
+            },
+            "distribution": "clustered",
+            "cluster_center": [300, 200],
+            "cluster_radius": 80,
+            "z_order": 2
+          },
+          {
+            "group_id": "distractor_noise", 
+            "percentage": 70.0,
+            "color": "#CCCCCC",
+            "size": 3,
+            "motion_properties": {
+              "coherence_override": true,
+              "coherence": 0.0,
+              "direction_override": false,
+              "speed_override": true,
+              "speed": 4
+            },
+            "distribution": "uniform",
+            "z_order": 0
+          }
+        ],
+        "dots.groups.overlap_handling": "priority_based",
+        "timing.stimulus_duration": 1800,
+        "response.task_instruction": "Attend only to the green cluster"
+      }
+    },
+    {
+      "trial_id": "demo_triple_competition",
+      "trial_type": "experimental",
+      "condition": "three_way_competition", 
+      "description": "Three groups competing: red up, blue down, yellow right",
+      "parameters": {
+        "dots.groups.enabled": true,
+        "dots.groups.group_definitions": [
+          {
+            "group_id": "red_up",
+            "percentage": 33.3,
+            "color": "#FF0000",
+            "size": 5,
+            "motion_properties": {
+              "coherence_override": true,
+              "coherence": 0.4,
+              "direction_override": true,
+              "direction": 90,
+              "speed_override": false
+            },
+            "distribution": "random",
+            "z_order": 0
+          },
+          {
+            "group_id": "blue_down",
+            "percentage": 33.3, 
+            "color": "#0000FF",
+            "size": 5,
+            "motion_properties": {
+              "coherence_override": true,
+              "coherence": 0.6,
+              "direction_override": true,
+              "direction": 270,
+              "speed_override": false
+            },
+            "distribution": "random",
+            "z_order": 1
+          },
+          {
+            "group_id": "yellow_right",
+            "percentage": 33.4,
+            "color": "#FFFF00",
+            "size": 5,
+            "motion_properties": {
+              "coherence_override": true,
+              "coherence": 0.5,
+              "direction_override": true,
+              "direction": 0,
+              "speed_override": false
+            },
+            "distribution": "random",
+            "z_order": 2
+          }
+        ],
+        "dots.groups.overlap_handling": "independent",
+        "timing.stimulus_duration": 2500,
+        "response.choices": ["ArrowUp", "ArrowDown", "ArrowRight"],
+        "response.task_instruction": "Choose the strongest motion direction"
+      }
+    },
+    {
+      "trial_id": "demo_feature_attention",
+      "trial_type": "experimental",
+      "condition": "feature_based_attention",
+      "description": "Large fast dots vs small slow dots - attend to size or speed",
+      "parameters": {
+        "dots.groups.enabled": true,
+        "dots.groups.group_definitions": [
+          {
+            "group_id": "large_fast",
+            "percentage": 50.0,
+            "color": "#FF8800",
+            "size": 8,
+            "motion_properties": {
+              "coherence_override": true,
+              "coherence": 0.3,
+              "direction_override": true,
+              "direction": 45,
+              "speed_override": true,
+              "speed": 10
+            },
+            "distribution": "random",
+            "z_order": 1
+          },
+          {
+            "group_id": "small_slow",
+            "percentage": 50.0,
+            "color": "#8800FF", 
+            "size": 2,
+            "motion_properties": {
+              "coherence_override": true,
+              "coherence": 0.7,
+              "direction_override": true,
+              "direction": 225,
+              "speed_override": true,
+              "speed": 3
+            },
+            "distribution": "random",
+            "z_order": 0
+          }
+        ],
+        "dots.groups.overlap_handling": "size_priority",
+        "timing.stimulus_duration": 2200,
+        "response.task_instruction": "Report the direction of the [large/small] dots"
+      }
+    }
+  ],
+
+  "experimental_design": {
+    "block_structure": "single_block",
+    "randomization": "full_random",
+    "repetitions": 1
+  },
+
+  "validation": {
+    "group_percentage_sum": "must_equal_100",
+    "color_uniqueness": "recommended",
+    "coherence_range": [0.0, 1.0],
+    "cluster_within_aperture": "enforce"
+  },
+
+  "export_settings": {
+    "format": "jsPsych_8_groups",
+    "include_group_metadata": true,
+    "separate_group_data": true
+  }
+}
