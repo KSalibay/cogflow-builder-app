@@ -45,19 +45,151 @@ class JSPsychSchemas {
         };
     }
 
+    getCommonTrialParameters() {
+        return {
+            detection_response_task_enabled: {
+                type: this.parameterTypes.BOOL,
+                default: false,
+                description: 'Enable/disable Detection Response Task (DRT) overlay for this component (handled by interpreter)'
+            }
+        };
+    }
+
     /**
      * Initialize plugin schemas based on jsPsych plugins
      */
     initializePluginSchemas() {
         return {
+            'flanker-trial': {
+                name: 'flanker-trial',
+                description: 'Flanker trial/frame (stimulus + scoring implemented by interpreter)',
+                parameters: {
+                    stimulus_type: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'arrows',
+                        options: ['arrows', 'letters', 'symbols', 'custom'],
+                        description: 'What kind of stimuli to display (arrows vs letters/symbols/custom strings)'
+                    },
+                    target_direction: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'left',
+                        options: ['left', 'right'],
+                        description: 'Target direction (for arrow-style flankers)'
+                    },
+                    target_stimulus: {
+                        type: this.parameterTypes.STRING,
+                        default: 'H',
+                        description: 'Center stimulus when stimulus_type is letters/symbols/custom'
+                    },
+                    distractor_stimulus: {
+                        type: this.parameterTypes.STRING,
+                        default: 'S',
+                        description: 'Distractor stimulus used when congruency = incongruent (letters/symbols/custom)'
+                    },
+                    neutral_stimulus: {
+                        type: this.parameterTypes.STRING,
+                        default: '–',
+                        description: 'Neutral flanker stimulus used when congruency = neutral'
+                    },
+                    congruency: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'congruent',
+                        options: ['congruent', 'incongruent', 'neutral'],
+                        description: 'Congruency condition'
+                    },
+                    show_fixation_dot: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        description: 'Show a small fixation dot under the center stimulus'
+                    },
+                    show_fixation_cross_between_trials: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        description: 'Show a fixation cross between trials (during ITI/inter-stimulus)'
+                    },
+                    left_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'f',
+                        description: 'Response key mapped to left'
+                    },
+                    right_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'j',
+                        description: 'Response key mapped to right'
+                    },
+                    stimulus_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 800,
+                        description: 'Stimulus display duration (ms)'
+                    },
+                    trial_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 1500,
+                        description: 'Total trial duration (ms)'
+                    },
+                    iti_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 500,
+                        description: 'Inter-trial interval (ms)'
+                    }
+                }
+            },
+
+            'sart-trial': {
+                name: 'sart-trial',
+                description: 'SART trial/frame (go/no-go logic implemented by interpreter)',
+                parameters: {
+                    digit: {
+                        type: this.parameterTypes.INT,
+                        default: 1,
+                        description: 'Digit to display (0-9)'
+                    },
+                    nogo_digit: {
+                        type: this.parameterTypes.INT,
+                        default: 3,
+                        description: 'No-go digit (withhold response)'
+                    },
+                    go_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'space',
+                        description: 'Response key for go trials'
+                    },
+                    stimulus_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 250,
+                        description: 'Digit display duration (ms)'
+                    },
+                    mask_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 900,
+                        description: 'Mask duration after digit (ms)'
+                    },
+                    trial_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 1150,
+                        description: 'Total trial duration (ms)'
+                    },
+                    iti_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        description: 'Inter-trial interval (ms)'
+                    }
+                }
+            },
+
             'block': {
                 name: 'block',
                 description: 'Generate many trials from parameter windows/ranges (compact representation for large experiments)',
                 parameters: {
+                    detection_response_task_enabled: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        description: 'Enable/disable Detection Response Task (DRT) overlay for this block (handled by interpreter)'
+                    },
                     block_component_type: {
                         type: this.parameterTypes.SELECT,
                         default: 'rdm-trial',
-                        options: ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups'],
+                        options: ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups', 'flanker-trial', 'sart-trial'],
                         required: true,
                         description: 'What component type this block generates'
                     },
@@ -83,18 +215,21 @@ class JSPsychSchemas {
                     dot_color: {
                         type: this.parameterTypes.COLOR,
                         default: '#FFFFFF',
+                        blockTarget: 'rdm-*',
                         description: 'Dot color (hex). For dot-groups blocks, set Group 1/2 colors below.'
                     },
 
                     transition_duration: {
                         type: this.parameterTypes.INT,
                         default: 500,
+                        blockTarget: 'rdm-*',
                         description: 'Continuous mode only: duration of the transition to the next condition (ms)'
                     },
                     transition_type: {
                         type: this.parameterTypes.SELECT,
                         default: 'both',
                         options: ['both', 'color', 'speed'],
+                        blockTarget: 'rdm-*',
                         description: 'Continuous mode only: transition type (color = gradient, speed = slow/fast, both = combine)'
                     },
 
@@ -104,50 +239,59 @@ class JSPsychSchemas {
                         type: this.parameterTypes.SELECT,
                         default: 'inherit',
                         options: ['inherit', 'keyboard', 'mouse', 'touch', 'voice', 'custom'],
+                        blockTarget: 'rdm-*',
                         description: 'Override response device for this block (inherit uses experiment defaults)'
                     },
                     response_keys: {
                         type: this.parameterTypes.STRING,
                         default: '',
+                        blockTarget: 'rdm-*',
                         description: 'Comma-separated keys for keyboard responses (blank = inherit)'
                     },
                     require_response_mode: {
                         type: this.parameterTypes.SELECT,
                         default: 'inherit',
                         options: ['inherit', 'true', 'false'],
+                        blockTarget: 'rdm-*',
                         description: 'Override require_response for this block'
                     },
                     end_condition_on_response_mode: {
                         type: this.parameterTypes.SELECT,
                         default: 'inherit',
                         options: ['inherit', 'true', 'false'],
+                        blockTarget: 'rdm-*',
                         description: 'Continuous mode only: end the current condition immediately after a response'
                     },
                     feedback_mode: {
                         type: this.parameterTypes.SELECT,
                         default: 'inherit',
                         options: ['inherit', 'off', 'corner-text', 'arrow', 'custom'],
+                        blockTarget: 'rdm-*',
                         description: 'Override response feedback for this block (inherit uses experiment defaults)'
                     },
                     feedback_duration_ms: {
                         type: this.parameterTypes.INT,
                         default: 500,
+                        blockTarget: 'rdm-*',
                         description: 'Feedback duration (ms) when feedback_mode is enabled (corner-text/arrow/custom)'
                     },
                     mouse_segments: {
                         type: this.parameterTypes.INT,
                         default: 2,
+                        blockTarget: 'rdm-*',
                         description: 'Mouse response: number of aperture segments (used when response_device = mouse)'
                     },
                     mouse_start_angle_deg: {
                         type: this.parameterTypes.FLOAT,
                         default: 0,
+                        blockTarget: 'rdm-*',
                         description: 'Mouse response: segment start angle offset in degrees (0 = right)'
                     },
                     mouse_selection_mode: {
                         type: this.parameterTypes.SELECT,
                         default: 'click',
                         options: ['click', 'hover'],
+                        blockTarget: 'rdm-*',
                         description: 'Mouse response: how a segment selection is registered'
                     },
 
@@ -305,6 +449,173 @@ class JSPsychSchemas {
                         blockTarget: 'rdm-dot-groups',
                         description: 'RDM Groups: group 1 percentage max (0-100)'
                     },
+
+                    // Flanker block windows/values
+                    flanker_congruency_options: {
+                        type: this.parameterTypes.STRING,
+                        default: 'congruent,incongruent',
+                        blockTarget: 'flanker-trial',
+                        description: 'Flanker: comma-separated congruency options to sample from'
+                    },
+                    flanker_target_direction_options: {
+                        type: this.parameterTypes.STRING,
+                        default: 'left,right',
+                        blockTarget: 'flanker-trial',
+                        description: 'Flanker: comma-separated target directions to sample from'
+                    },
+                    flanker_stimulus_type: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'arrows',
+                        options: ['arrows', 'letters', 'symbols', 'custom'],
+                        blockTarget: 'flanker-trial',
+                        description: 'Flanker: stimulus type'
+                    },
+                    flanker_target_stimulus_options: {
+                        type: this.parameterTypes.STRING,
+                        default: 'H',
+                        blockTarget: 'flanker-trial',
+                        description: 'Flanker: comma-separated possible center stimuli (letters/symbols/custom)'
+                    },
+                    flanker_distractor_stimulus_options: {
+                        type: this.parameterTypes.STRING,
+                        default: 'S',
+                        blockTarget: 'flanker-trial',
+                        description: 'Flanker: comma-separated possible distractor stimuli (letters/symbols/custom)'
+                    },
+                    flanker_neutral_stimulus_options: {
+                        type: this.parameterTypes.STRING,
+                        default: '–',
+                        blockTarget: 'flanker-trial',
+                        description: 'Flanker: comma-separated neutral flanker stimuli'
+                    },
+                    flanker_left_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'f',
+                        blockTarget: 'flanker-trial',
+                        description: 'Flanker: response key mapped to left'
+                    },
+                    flanker_right_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'j',
+                        blockTarget: 'flanker-trial',
+                        description: 'Flanker: response key mapped to right'
+                    },
+                    flanker_show_fixation_dot: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        blockTarget: 'flanker-trial',
+                        description: 'Flanker: show fixation dot under center stimulus'
+                    },
+                    flanker_show_fixation_cross_between_trials: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        blockTarget: 'flanker-trial',
+                        description: 'Flanker: show fixation cross between trials'
+                    },
+                    flanker_stimulus_duration_min: {
+                        type: this.parameterTypes.INT,
+                        default: 200,
+                        blockTarget: 'flanker-trial',
+                        description: 'Flanker: stimulus duration min (ms)'
+                    },
+                    flanker_stimulus_duration_max: {
+                        type: this.parameterTypes.INT,
+                        default: 800,
+                        blockTarget: 'flanker-trial',
+                        description: 'Flanker: stimulus duration max (ms)'
+                    },
+                    flanker_trial_duration_min: {
+                        type: this.parameterTypes.INT,
+                        default: 1000,
+                        blockTarget: 'flanker-trial',
+                        description: 'Flanker: trial duration min (ms)'
+                    },
+                    flanker_trial_duration_max: {
+                        type: this.parameterTypes.INT,
+                        default: 2000,
+                        blockTarget: 'flanker-trial',
+                        description: 'Flanker: trial duration max (ms)'
+                    },
+                    flanker_iti_min: {
+                        type: this.parameterTypes.INT,
+                        default: 200,
+                        blockTarget: 'flanker-trial',
+                        description: 'Flanker: ITI min (ms)'
+                    },
+                    flanker_iti_max: {
+                        type: this.parameterTypes.INT,
+                        default: 800,
+                        blockTarget: 'flanker-trial',
+                        description: 'Flanker: ITI max (ms)'
+                    },
+
+                    // SART block windows/values
+                    sart_digit_options: {
+                        type: this.parameterTypes.STRING,
+                        default: '1,2,3,4,5,6,7,8,9',
+                        blockTarget: 'sart-trial',
+                        description: 'SART: comma-separated digits to sample from'
+                    },
+                    sart_nogo_digit: {
+                        type: this.parameterTypes.INT,
+                        default: 3,
+                        blockTarget: 'sart-trial',
+                        description: 'SART: no-go digit (withhold response)'
+                    },
+                    sart_go_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'space',
+                        blockTarget: 'sart-trial',
+                        description: 'SART: response key for GO trials'
+                    },
+                    sart_stimulus_duration_min: {
+                        type: this.parameterTypes.INT,
+                        default: 150,
+                        blockTarget: 'sart-trial',
+                        description: 'SART: stimulus duration min (ms)'
+                    },
+                    sart_stimulus_duration_max: {
+                        type: this.parameterTypes.INT,
+                        default: 400,
+                        blockTarget: 'sart-trial',
+                        description: 'SART: stimulus duration max (ms)'
+                    },
+                    sart_mask_duration_min: {
+                        type: this.parameterTypes.INT,
+                        default: 600,
+                        blockTarget: 'sart-trial',
+                        description: 'SART: mask duration min (ms)'
+                    },
+                    sart_mask_duration_max: {
+                        type: this.parameterTypes.INT,
+                        default: 1200,
+                        blockTarget: 'sart-trial',
+                        description: 'SART: mask duration max (ms)'
+                    },
+                    sart_trial_duration_min: {
+                        type: this.parameterTypes.INT,
+                        default: 800,
+                        blockTarget: 'sart-trial',
+                        description: 'SART: total trial duration min (ms)'
+                    },
+                    sart_trial_duration_max: {
+                        type: this.parameterTypes.INT,
+                        default: 2000,
+                        blockTarget: 'sart-trial',
+                        description: 'SART: total trial duration max (ms)'
+                    },
+                    sart_iti_min: {
+                        type: this.parameterTypes.INT,
+                        default: 200,
+                        blockTarget: 'sart-trial',
+                        description: 'SART: ITI min (ms)'
+                    },
+                    sart_iti_max: {
+                        type: this.parameterTypes.INT,
+                        default: 800,
+                        blockTarget: 'sart-trial',
+                        description: 'SART: ITI max (ms)'
+                    },
                     group_1_coherence_min: {
                         type: this.parameterTypes.FLOAT,
                         default: 0.1,
@@ -460,6 +771,47 @@ class JSPsychSchemas {
                     response: { type: this.parameterTypes.KEY },
                     rt: { type: this.parameterTypes.INT },
                     correct: { type: this.parameterTypes.BOOL, optional: true }
+                }
+            },
+
+            'survey-response': {
+                name: 'survey-response',
+                description: 'Collect survey/questionnaire responses in a single HTML form',
+                parameters: {
+                    title: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Survey',
+                        description: 'Survey title/header'
+                    },
+                    instructions: {
+                        type: this.parameterTypes.HTML_STRING,
+                        default: '',
+                        description: 'Optional instructions shown above the form'
+                    },
+                    submit_label: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Continue',
+                        description: 'Submit button text'
+                    },
+                    allow_empty_on_timeout: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        description: 'If true, allow continuing with empty responses after timeout_ms'
+                    },
+                    timeout_ms: {
+                        type: this.parameterTypes.INT,
+                        default: null,
+                        description: 'Optional timeout in ms for auto-continue (null/omitted = off)'
+                    },
+                    questions: {
+                        type: this.parameterTypes.COMPLEX,
+                        required: true,
+                        description: 'Array of question objects (id, type, prompt, required, and type-specific fields)'
+                    }
+                },
+                data: {
+                    responses: { type: this.parameterTypes.OBJECT, optional: true },
+                    rt: { type: this.parameterTypes.INT, optional: true }
                 }
             },
 
@@ -660,7 +1012,7 @@ class JSPsychSchemas {
                 optional_fields: [
                     'num_trials', 'default_iti', 'randomize_order', 
                     'on_finish', 'on_trial_start', 'on_trial_finish',
-                    'data_collection', 'experiment_type'
+                    'data_collection', 'experiment_type', 'task_type'
                 ],
                 validation_rules: {
                     timeline: { 
@@ -685,7 +1037,7 @@ class JSPsychSchemas {
                 required_fields: ['timeline', 'frame_rate'],
                 optional_fields: [
                     'duration', 'update_interval', 'on_frame_update',
-                    'data_collection', 'experiment_type'
+                    'data_collection', 'experiment_type', 'task_type'
                 ],
                 validation_rules: {
                     timeline: { 
@@ -718,7 +1070,7 @@ class JSPsychSchemas {
                     'num_trials', 'default_iti', 'randomize_order', 
                     'stimulus_width', 'stimulus_height', 'background_color',
                     'on_finish', 'on_trial_start', 'on_trial_finish',
-                    'data_collection', 'experiment_type'
+                    'data_collection', 'experiment_type', 'task_type'
                 ],
                 validation_rules: {
                     timeline: { 
@@ -753,7 +1105,7 @@ class JSPsychSchemas {
             'custom': {
                 required_fields: ['timeline'],
                 optional_fields: [
-                    'experiment_type', 'data_collection', 
+                    'experiment_type', 'data_collection', 'task_type',
                     'on_finish', 'on_trial_start', 'on_trial_finish'
                 ],
                 validation_rules: {
@@ -780,6 +1132,17 @@ class JSPsychSchemas {
                 errors.push('Missing required field: experiment_type');
             } else if (!this.experimentSchemas[config.experiment_type]) {
                 errors.push(`Invalid experiment type: ${config.experiment_type}`);
+            }
+
+            // Validate task type (experiment-wide)
+            const knownTaskTypes = ['rdm', 'sart', 'flanker', 'stroop', 'nback', 'simon', 'custom'];
+            if (config.task_type === undefined || config.task_type === null || config.task_type === '') {
+                warnings.push('Missing recommended field: task_type');
+            } else if (typeof config.task_type !== 'string') {
+                errors.push(`task_type should be string, got ${typeof config.task_type}`);
+            } else if (!knownTaskTypes.includes(config.task_type)) {
+                // Allow forward-compatible task additions without hard failing
+                warnings.push(`Unknown task_type '${config.task_type}' (known: ${knownTaskTypes.join(', ')})`);
             }
 
             // Validate experiment-specific requirements
@@ -899,6 +1262,117 @@ class JSPsychSchemas {
             const pluginValidation = this.validateTrialAgainstSchema(trial, schema, index);
             errors.push(...pluginValidation.errors);
             warnings.push(...pluginValidation.warnings);
+
+            // Component-specific deep validation
+            if (trial.type === 'survey-response') {
+                const surveyValidation = this.validateSurveyResponse(trial, index);
+                errors.push(...surveyValidation.errors);
+                warnings.push(...surveyValidation.warnings);
+            }
+        });
+
+        return { errors, warnings };
+    }
+
+    validateSurveyResponse(trial, trialIndex) {
+        const errors = [];
+        const warnings = [];
+
+        const allowEmpty = !!trial?.allow_empty_on_timeout;
+        const timeoutRaw = trial?.timeout_ms;
+        const hasTimeout = timeoutRaw !== undefined && timeoutRaw !== null && timeoutRaw !== '';
+        const timeout = hasTimeout ? Number(timeoutRaw) : null;
+
+        if (allowEmpty) {
+            if (timeout === null || !Number.isFinite(timeout) || timeout <= 0) {
+                errors.push(`Trial ${trialIndex}: survey-response allow_empty_on_timeout=true requires a positive timeout_ms`);
+            }
+        } else {
+            // If timeout is provided but allowEmpty is false, it's harmless; just warn.
+            if (hasTimeout && Number.isFinite(timeout) && timeout > 0) {
+                warnings.push(`Trial ${trialIndex}: survey-response has timeout_ms set but allow_empty_on_timeout is false (timeout will be ignored)`);
+            }
+        }
+
+        const questions = trial?.questions;
+        if (!Array.isArray(questions)) {
+            errors.push(`Trial ${trialIndex}: survey-response 'questions' must be an array`);
+            return { errors, warnings };
+        }
+        if (questions.length === 0) {
+            warnings.push(`Trial ${trialIndex}: survey-response has no questions`);
+            return { errors, warnings };
+        }
+
+        const seenIds = new Set();
+        const knownTypes = new Set(['likert', 'radio', 'text', 'slider', 'number']);
+
+        questions.forEach((q, qi) => {
+            if (!q || typeof q !== 'object') {
+                errors.push(`Trial ${trialIndex} question ${qi}: must be an object`);
+                return;
+            }
+
+            const id = (q.id ?? '').toString().trim();
+            const type = (q.type ?? '').toString().trim();
+            const prompt = (q.prompt ?? '').toString().trim();
+
+            if (!id) {
+                errors.push(`Trial ${trialIndex} question ${qi}: missing id`);
+            } else if (seenIds.has(id)) {
+                errors.push(`Trial ${trialIndex} question ${qi}: duplicate id '${id}'`);
+            } else {
+                seenIds.add(id);
+            }
+
+            if (!type) {
+                errors.push(`Trial ${trialIndex} question ${qi} (${id || 'no-id'}): missing type`);
+            } else if (!knownTypes.has(type)) {
+                warnings.push(`Trial ${trialIndex} question ${qi} (${id || 'no-id'}): unknown type '${type}'`);
+            }
+
+            if (!prompt) {
+                warnings.push(`Trial ${trialIndex} question ${qi} (${id || 'no-id'}): empty prompt`);
+            }
+
+            if (type === 'likert' || type === 'radio') {
+                if (!Array.isArray(q.options) || q.options.length < 2) {
+                    errors.push(`Trial ${trialIndex} question ${qi} (${id || 'no-id'}): '${type}' requires options (at least 2)`);
+                }
+            }
+
+            if (type === 'slider') {
+                const min = Number(q.min);
+                const max = Number(q.max);
+                const step = Number(q.step);
+                if (!Number.isFinite(min) || !Number.isFinite(max) || min >= max) {
+                    errors.push(`Trial ${trialIndex} question ${qi} (${id || 'no-id'}): slider requires numeric min < max`);
+                }
+                if (!Number.isFinite(step) || step <= 0) {
+                    errors.push(`Trial ${trialIndex} question ${qi} (${id || 'no-id'}): slider requires positive step`);
+                }
+            }
+
+            if (type === 'number') {
+                if (q.min !== undefined && q.min !== null && q.min !== '' && !Number.isFinite(Number(q.min))) {
+                    errors.push(`Trial ${trialIndex} question ${qi} (${id || 'no-id'}): number min must be numeric`);
+                }
+                if (q.max !== undefined && q.max !== null && q.max !== '' && !Number.isFinite(Number(q.max))) {
+                    errors.push(`Trial ${trialIndex} question ${qi} (${id || 'no-id'}): number max must be numeric`);
+                }
+                if (q.step !== undefined && q.step !== null && q.step !== '' && !Number.isFinite(Number(q.step))) {
+                    errors.push(`Trial ${trialIndex} question ${qi} (${id || 'no-id'}): number step must be numeric`);
+                }
+            }
+
+            if (type === 'text') {
+                if (q.rows !== undefined && q.rows !== null && q.rows !== '') {
+                    const rows = Number.parseInt(q.rows, 10);
+                    if (!Number.isFinite(rows) || rows < 1) {
+                        errors.push(`Trial ${trialIndex} question ${qi} (${id || 'no-id'}): rows must be an integer >= 1`);
+                    }
+                }
+            }
         });
 
         return { errors, warnings };
@@ -1098,12 +1572,26 @@ class JSPsychSchemas {
      * Get schema information for a specific plugin
      */
     getPluginSchema(pluginName) {
+        let schema = null;
+
         // Handle RDM components directly - don't depend on external RDMTaskSchema
         if (pluginName && pluginName.startsWith('rdm-')) {
-            return this.generateRDMPluginSchema(pluginName);
+            schema = this.generateRDMPluginSchema(pluginName);
+        } else {
+            schema = this.pluginSchemas[pluginName] || null;
         }
-        
-        return this.pluginSchemas[pluginName] || null;
+
+        if (!schema) return null;
+
+        // Inject common per-trial parameters for all plugins without mutating the base schema.
+        const common = this.getCommonTrialParameters();
+        return {
+            ...schema,
+            parameters: {
+                ...common,
+                ...(schema.parameters || {})
+            }
+        };
     }
 
     /**

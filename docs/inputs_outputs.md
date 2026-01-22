@@ -15,6 +15,7 @@ This document describes the *current* UI inputs and the JSON output produced by 
 ### Top-level keys
 
 - `experiment_type`: `trial-based` | `continuous`
+- `task_type`: `rdm` | `sart` | `flanker` | `stroop` | `nback` | `simon` | `custom`
 - `data_collection`: object of booleans
 - `timeline`: array of components (serialized from the DOM)
 - `display_parameters`, `aperture_parameters`, `dot_parameters`, `motion_parameters`, `timing_parameters`, `response_parameters`: experiment-wide defaults
@@ -53,6 +54,74 @@ Defaults export under `response_parameters`:
 Components export as plain objects with `type` and their parameters. For RDM components, per-item overrides export as:
 
 - `response_parameters_override`: response defaults merged with the override for that component/block
+
+Common per-component flags:
+
+- `detection_response_task_enabled`: boolean (default `false`) — enables a Detection Response Task (DRT) overlay for that component (handled by the interpreter app).
+
+### Survey response (`survey-response`)
+
+The builder supports inserting survey/questionnaire pages into the timeline. A survey exports as a single component object with a `questions` array:
+
+```json
+{
+  "type": "survey-response",
+  "detection_response_task_enabled": false,
+  "title": "Survey",
+  "instructions": "Please answer the following questions.",
+  "submit_label": "Continue",
+  "allow_empty_on_timeout": false,
+  "timeout_ms": null,
+  "questions": [
+    {
+      "id": "q1",
+      "type": "likert",
+      "prompt": "I found the task engaging.",
+      "options": ["Strongly disagree", "Disagree", "Neutral", "Agree", "Strongly agree"],
+      "required": true
+    },
+    {
+      "id": "q2",
+      "type": "radio",
+      "prompt": "Which condition did you prefer?",
+      "options": ["A", "B"],
+      "required": true
+    },
+    {
+      "id": "q3",
+      "type": "text",
+      "prompt": "Any comments?",
+      "multiline": true,
+      "rows": 4,
+      "placeholder": "",
+      "required": false
+    },
+    {
+      "id": "q4",
+      "type": "slider",
+      "prompt": "How confident are you?",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "min_label": "0",
+      "max_label": "100",
+      "required": true
+    },
+    {
+      "id": "q5",
+      "type": "number",
+      "prompt": "Age",
+      "min": 18,
+      "max": 99,
+      "step": 1,
+      "placeholder": "",
+      "required": true
+    }
+  ]
+}
+```
+
+The interpreter app should render this as a single HTML form and record responses keyed by `id`.
 
 ### Block shape
 

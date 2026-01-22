@@ -9,6 +9,7 @@ class JsonBuilder {
     constructor() {
         this.timeline = [];
         this.experimentType = 'trial-based';
+        this.currentTaskType = 'rdm';
         this.dataCollection = {
             'reaction-time': true,
             'accuracy': true,
@@ -30,6 +31,7 @@ class JsonBuilder {
         this.updateJSON = this.updateJSON.bind(this);
         this.onExperimentTypeChange = this.onExperimentTypeChange.bind(this);
         this.onDataCollectionChange = this.onDataCollectionChange.bind(this);
+        this.onTaskTypeChange = this.onTaskTypeChange.bind(this);
     }
 
     /**
@@ -71,12 +73,19 @@ class JsonBuilder {
         this.initializeModules();
         this.setupEventListeners();
 
+        // Track current task type for safe switching
+        this.currentTaskType = document.getElementById('taskType')?.value || 'rdm';
+
         // Ensure JS state matches the actual checkbox state on load
         this.syncDataCollectionFromUI();
 
-        this.updateExperimentTypeUI(); // Initialize parameter forms
+        this.updateExperimentTypeUI(); // Initialize parameter forms (task-scoped)
         this.loadComponentLibrary();
-        this.loadDefaultRDMTemplate();
+
+        // Only auto-load the RDM sample template when RDM is selected.
+        if (this.currentTaskType === 'rdm') {
+            this.loadDefaultRDMTemplate();
+        }
         this.updateJSON();
         
         console.log('PsychJSON Builder initialized successfully');
@@ -111,6 +120,12 @@ class JsonBuilder {
         document.querySelectorAll('.data-collection-checkbox').forEach(checkbox => {
             checkbox.addEventListener('change', this.onDataCollectionChange);
         });
+
+        // Task type dropdown
+        const taskTypeEl = document.getElementById('taskType');
+        if (taskTypeEl) {
+            taskTypeEl.addEventListener('change', this.onTaskTypeChange);
+        }
 
         // Main action buttons
         document.getElementById('addComponentBtn').addEventListener('click', () => {
@@ -150,6 +165,156 @@ class JsonBuilder {
         document.getElementById('previewComponentBtn').addEventListener('click', () => {
             this.previewCurrentComponent();
         });
+    }
+
+    /**
+     * Handle task type changes
+     */
+    onTaskTypeChange(event) {
+        const nextTaskType = event?.target?.value || 'rdm';
+        const prevTaskType = this.currentTaskType || 'rdm';
+
+        if (nextTaskType === prevTaskType) {
+            this.updateJSON();
+            return;
+        }
+
+        // Custom mode: do not auto-prune timeline.
+        if (nextTaskType !== 'custom') {
+            const incompatible = this.findIncompatibleTimelineComponents(nextTaskType);
+            if (incompatible.count > 0) {
+                const ok = confirm(
+                    `Switching task type to "${nextTaskType}" will remove ${incompatible.count} incompatible timeline item(s).\n\nContinue?`
+                );
+                if (!ok) {
+                    // Revert dropdown selection
+                    if (event?.target) event.target.value = prevTaskType;
+                    return;
+                }
+
+                this.removeIncompatibleTimelineComponents(nextTaskType);
+            }
+        }
+
+        this.currentTaskType = nextTaskType;
+
+        // Re-render task-scoped settings UI and component library
+        this.updateExperimentTypeUI();
+        this.loadComponentLibrary();
+
+        // If switching to a non-RDM task leaves the timeline empty, seed a starter timeline.
+        this.maybeInsertStarterTimeline(nextTaskType);
+
+        // If the component library modal is open, the DOM is already updated by loadComponentLibrary.
+        this.updateConditionalUI();
+        this.updateJSON();
+    }
+
+    maybeInsertStarterTimeline(taskType) {
+        if (taskType !== 'flanker' && taskType !== 'sart') return;
+
+        const timelineContainer = document.getElementById('timelineComponents');
+        if (!timelineContainer) return;
+
+        const hasAny = !!timelineContainer.querySelector('.timeline-component');
+        if (hasAny) return;
+
+        const defs = this.getComponentDefinitions();
+        const instructionsDef = defs.find(d => d.id === 'instructions');
+        const trialId = taskType === 'flanker' ? 'flanker-trial' : 'sart-trial';
+        const trialDef = defs.find(d => d.id === trialId);
+
+        if (instructionsDef) this.addComponentToTimeline(instructionsDef);
+        if (trialDef) this.addComponentToTimeline(trialDef);
+    }
+
+    /**
+     * Return list/count of incompatible timeline components for the given task type.
+     */
+    findIncompatibleTimelineComponents(taskType) {
+        const elements = Array.from(document.querySelectorAll('#timelineComponents .timeline-component'));
+        const incompatible = [];
+
+        for (const el of elements) {
+            const raw = el.dataset?.componentData;
+            let componentData = null;
+            try {
+                componentData = raw ? JSON.parse(raw) : null;
+            } catch {
+                componentData = null;
+            }
+
+            const type = componentData?.type || el.dataset?.componentType || '';
+            if (!type) continue;
+
+            if (!this.isComponentTypeAllowedForTask(type, componentData, taskType)) {
+                incompatible.push({ element: el, type });
+            }
+        }
+
+        return { count: incompatible.length, items: incompatible };
+    }
+
+    /**
+     * Remove incompatible timeline components for the given task type.
+     */
+    removeIncompatibleTimelineComponents(taskType) {
+        const incompatible = this.findIncompatibleTimelineComponents(taskType);
+        for (const item of incompatible.items) {
+            item.element.remove();
+        }
+
+        // Restore empty state if needed
+        const timelineContainer = document.getElementById('timelineComponents');
+        if (timelineContainer) {
+            const hasAny = timelineContainer.querySelector('.timeline-component');
+            const emptyState = timelineContainer.querySelector('.empty-timeline');
+            if (emptyState) emptyState.style.display = hasAny ? 'none' : '';
+        }
+    }
+
+    /**
+     * Decide if a component is allowed under a task type.
+     */
+    isComponentTypeAllowedForTask(type, componentData, taskType) {
+        // Always allow generic components
+        const alwaysAllowed = new Set([
+            'html-keyboard-response',
+            'html-button-response',
+            'image-keyboard-response',
+            'survey-response',
+            'instructions'
+        ]);
+        if (alwaysAllowed.has(type)) return true;
+
+        // Custom: do not restrict
+        if (taskType === 'custom') return true;
+
+        if (taskType === 'rdm') {
+            // RDM allows everything we define, including other tasks for experimentation.
+            return true;
+        }
+
+        if (taskType === 'flanker') {
+            if (type === 'flanker-trial') return true;
+            if (type === 'block') {
+                const innerType = componentData?.block_component_type;
+                return innerType === 'flanker-trial';
+            }
+            return false;
+        }
+
+        if (taskType === 'sart') {
+            if (type === 'sart-trial') return true;
+            if (type === 'block') {
+                const innerType = componentData?.block_component_type;
+                return innerType === 'sart-trial';
+            }
+            return false;
+        }
+
+        // Default: be conservative
+        return false;
     }
 
     /**
@@ -221,6 +386,130 @@ class JsonBuilder {
      */
     showTrialBasedParameters() {
         const container = document.getElementById('parameterForms');
+        const taskType = document.getElementById('taskType')?.value || 'rdm';
+
+        const taskSpecificDefaultsHtml = (taskType === 'flanker')
+            ? `
+            <div class="parameter-group" id="flankerExperimentParameters">
+                <div class="group-title d-flex justify-content-between align-items-center">
+                    <div>
+                        <span>Flanker Experiment Settings</span>
+                        <small class="text-muted d-block">Default values for Flanker components</small>
+                    </div>
+                    <button class="btn btn-sm btn-info" id="previewTaskDefaultsBtn" onclick="window.componentPreview?.showPreview(window.jsonBuilderInstance?.getCurrentFlankerDefaults())">
+                        <i class="fas fa-eye"></i> Preview Defaults
+                    </button>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Stimulus Type:</label>
+                    <select class="form-control parameter-input" id="flankerStimulusType">
+                        <option value="arrows" selected>Arrows</option>
+                        <option value="letters">Letters</option>
+                        <option value="symbols">Symbols</option>
+                        <option value="custom">Custom</option>
+                    </select>
+                    <div class="parameter-help">Applies to newly-added Flanker trials/blocks</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Target Stimulus:</label>
+                    <input type="text" class="form-control parameter-input" id="flankerTargetStimulus" value="H">
+                    <div class="parameter-help">Used when stimulus type is letters/symbols/custom</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Distractor Stimulus:</label>
+                    <input type="text" class="form-control parameter-input" id="flankerDistractorStimulus" value="S">
+                    <div class="parameter-help">Used when congruency = incongruent (letters/symbols/custom)</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Neutral Stimulus:</label>
+                    <input type="text" class="form-control parameter-input" id="flankerNeutralStimulus" value="–">
+                    <div class="parameter-help">Used when congruency = neutral</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Fixation Dot:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="flankerShowFixationDot">
+                            <label class="form-check-label" for="flankerShowFixationDot">Show dot under center stimulus</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Between-trials Fixation:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="flankerShowFixationCrossBetweenTrials">
+                            <label class="form-check-label" for="flankerShowFixationCrossBetweenTrials">Show fixation cross during ITI</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Left Key:</label>
+                    <input type="text" class="form-control parameter-input" id="flankerLeftKey" value="f">
+                    <div class="parameter-help">Default key for "left" responses</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Right Key:</label>
+                    <input type="text" class="form-control parameter-input" id="flankerRightKey" value="j">
+                    <div class="parameter-help">Default key for "right" responses</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Stimulus Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="flankerStimulusDurationMs" value="800" min="0" max="10000">
+                    <div class="parameter-help">Default stimulus display duration</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Trial Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="flankerTrialDurationMs" value="1500" min="0" max="30000">
+                    <div class="parameter-help">Default total trial duration</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">ITI (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="flankerItiMs" value="500" min="0" max="10000">
+                    <div class="parameter-help">Default inter-trial interval</div>
+                </div>
+            </div>
+            `
+            : (taskType === 'sart')
+            ? `
+            <div class="parameter-group" id="sartExperimentParameters">
+                <div class="group-title d-flex justify-content-between align-items-center">
+                    <div>
+                        <span>SART Experiment Settings</span>
+                        <small class="text-muted d-block">Default values for SART components</small>
+                    </div>
+                    <button class="btn btn-sm btn-info" id="previewTaskDefaultsBtn" onclick="window.componentPreview?.showPreview(window.jsonBuilderInstance?.getCurrentSartDefaults())">
+                        <i class="fas fa-eye"></i> Preview Defaults
+                    </button>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Go Key:</label>
+                    <input type="text" class="form-control parameter-input" id="sartGoKey" value="space">
+                    <div class="parameter-help">Default response key for GO trials</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">No-Go Digit:</label>
+                    <input type="number" class="form-control parameter-input" id="sartNoGoDigit" value="3" min="0" max="9">
+                    <div class="parameter-help">Digit that signals a NO-GO trial</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Stimulus Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="sartStimulusDurationMs" value="250" min="0" max="10000">
+                    <div class="parameter-help">Default digit display duration</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Mask Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="sartMaskDurationMs" value="900" min="0" max="10000">
+                    <div class="parameter-help">Default mask duration after digit</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">ITI (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="sartItiMs" value="0" min="0" max="10000">
+                    <div class="parameter-help">Default inter-trial interval</div>
+                </div>
+            </div>
+            `
+            : '';
         
         const html = `
             <div class="parameter-group">
@@ -246,6 +535,7 @@ class JsonBuilder {
                 </div>
             </div>
             
+            ${taskType === 'rdm' ? `
             <!-- RDM-specific experiment parameters -->
             <div class="parameter-group" id="rdmExperimentParameters">
                 <div class="group-title d-flex justify-content-between align-items-center">
@@ -428,6 +718,9 @@ class JsonBuilder {
                     </div>
                 </div>
             </div>
+            ` : ''}
+
+            ${taskSpecificDefaultsHtml}
         `;
         
         container.innerHTML = html;
@@ -463,6 +756,130 @@ class JsonBuilder {
      */
     showContinuousParameters() {
         const container = document.getElementById('parameterForms');
+        const taskType = document.getElementById('taskType')?.value || 'rdm';
+
+        const taskSpecificDefaultsHtml = (taskType === 'flanker')
+            ? `
+            <div class="parameter-group" id="flankerExperimentParameters">
+                <div class="group-title d-flex justify-content-between align-items-center">
+                    <div>
+                        <span>Flanker Experiment Settings</span>
+                        <small class="text-muted d-block">Default values for Flanker components</small>
+                    </div>
+                    <button class="btn btn-sm btn-info" id="previewTaskDefaultsBtn" onclick="window.componentPreview?.showPreview(window.jsonBuilderInstance?.getCurrentFlankerDefaults())">
+                        <i class="fas fa-eye"></i> Preview Defaults
+                    </button>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Stimulus Type:</label>
+                    <select class="form-control parameter-input" id="flankerStimulusType">
+                        <option value="arrows" selected>Arrows</option>
+                        <option value="letters">Letters</option>
+                        <option value="symbols">Symbols</option>
+                        <option value="custom">Custom</option>
+                    </select>
+                    <div class="parameter-help">Applies to newly-added Flanker trials/blocks</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Target Stimulus:</label>
+                    <input type="text" class="form-control parameter-input" id="flankerTargetStimulus" value="H">
+                    <div class="parameter-help">Used when stimulus type is letters/symbols/custom</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Distractor Stimulus:</label>
+                    <input type="text" class="form-control parameter-input" id="flankerDistractorStimulus" value="S">
+                    <div class="parameter-help">Used when congruency = incongruent (letters/symbols/custom)</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Neutral Stimulus:</label>
+                    <input type="text" class="form-control parameter-input" id="flankerNeutralStimulus" value="–">
+                    <div class="parameter-help">Used when congruency = neutral</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Fixation Dot:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="flankerShowFixationDot">
+                            <label class="form-check-label" for="flankerShowFixationDot">Show dot under center stimulus</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Between-trials Fixation:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="flankerShowFixationCrossBetweenTrials">
+                            <label class="form-check-label" for="flankerShowFixationCrossBetweenTrials">Show fixation cross during ITI</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Left Key:</label>
+                    <input type="text" class="form-control parameter-input" id="flankerLeftKey" value="f">
+                    <div class="parameter-help">Default key for "left" responses</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Right Key:</label>
+                    <input type="text" class="form-control parameter-input" id="flankerRightKey" value="j">
+                    <div class="parameter-help">Default key for "right" responses</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Stimulus Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="flankerStimulusDurationMs" value="800" min="0" max="10000">
+                    <div class="parameter-help">Default stimulus display duration</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Trial Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="flankerTrialDurationMs" value="1500" min="0" max="30000">
+                    <div class="parameter-help">Default total trial duration</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">ITI (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="flankerItiMs" value="500" min="0" max="10000">
+                    <div class="parameter-help">Default inter-trial interval</div>
+                </div>
+            </div>
+            `
+            : (taskType === 'sart')
+            ? `
+            <div class="parameter-group" id="sartExperimentParameters">
+                <div class="group-title d-flex justify-content-between align-items-center">
+                    <div>
+                        <span>SART Experiment Settings</span>
+                        <small class="text-muted d-block">Default values for SART components</small>
+                    </div>
+                    <button class="btn btn-sm btn-info" id="previewTaskDefaultsBtn" onclick="window.componentPreview?.showPreview(window.jsonBuilderInstance?.getCurrentSartDefaults())">
+                        <i class="fas fa-eye"></i> Preview Defaults
+                    </button>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Go Key:</label>
+                    <input type="text" class="form-control parameter-input" id="sartGoKey" value="space">
+                    <div class="parameter-help">Default response key for GO trials</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">No-Go Digit:</label>
+                    <input type="number" class="form-control parameter-input" id="sartNoGoDigit" value="3" min="0" max="9">
+                    <div class="parameter-help">Digit that signals a NO-GO trial</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Stimulus Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="sartStimulusDurationMs" value="250" min="0" max="10000">
+                    <div class="parameter-help">Default digit display duration</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Mask Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="sartMaskDurationMs" value="900" min="0" max="10000">
+                    <div class="parameter-help">Default mask duration after digit</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">ITI (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="sartItiMs" value="0" min="0" max="10000">
+                    <div class="parameter-help">Default inter-trial interval</div>
+                </div>
+            </div>
+            `
+            : '';
         
         const html = `
             <div class="parameter-group">
@@ -483,7 +900,8 @@ class JsonBuilder {
                     <div class="parameter-help">Parameter update interval in milliseconds</div>
                 </div>
             </div>
-            
+
+            ${taskType === 'rdm' ? `
             <!-- RDM-specific experiment parameters for continuous -->
             <div class="parameter-group" id="rdmExperimentParameters">
                 <div class="group-title d-flex justify-content-between align-items-center">
@@ -660,6 +1078,9 @@ class JsonBuilder {
                     </div>
                 </div>
             </div>
+            ` : ''}
+
+            ${taskSpecificDefaultsHtml}
         `;
         
         container.innerHTML = html;
@@ -710,6 +1131,138 @@ class JsonBuilder {
      */
     getComponentDefinitions() {
         const taskType = document.getElementById('taskType')?.value || 'rdm';
+        const unitName = (this.experimentType === 'continuous') ? 'Frame' : 'Trial';
+
+        const createBlockComponentDef = (currentTaskType) => {
+            const baseOptions = (currentTaskType === 'flanker')
+                ? ['flanker-trial']
+                : (currentTaskType === 'sart')
+                    ? ['sart-trial']
+                    : ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups'];
+
+            const defaultType = baseOptions[0] || 'rdm-trial';
+
+            const commonParams = {
+                block_component_type: { type: 'select', default: defaultType, options: baseOptions },
+                block_length: { type: 'number', default: 100, min: 1, max: 50000 },
+                sampling_mode: { type: 'select', default: 'per-trial', options: ['per-trial', 'per-block'] },
+                seed: { type: 'string', default: '' },
+                detection_response_task_enabled: { type: 'boolean', default: false }
+            };
+
+            const flankerOnlyParams = {
+                flanker_stimulus_type: { type: 'select', default: 'arrows', options: ['arrows', 'letters', 'symbols', 'custom'] },
+                flanker_target_stimulus_options: { type: 'string', default: 'H' },
+                flanker_distractor_stimulus_options: { type: 'string', default: 'S' },
+                flanker_neutral_stimulus_options: { type: 'string', default: '–' },
+                flanker_left_key: { type: 'string', default: 'f' },
+                flanker_right_key: { type: 'string', default: 'j' },
+                flanker_show_fixation_dot: { type: 'boolean', default: false },
+                flanker_show_fixation_cross_between_trials: { type: 'boolean', default: false },
+                flanker_congruency_options: { type: 'string', default: 'congruent,incongruent' },
+                flanker_target_direction_options: { type: 'string', default: 'left,right' },
+                flanker_stimulus_duration_min: { type: 'number', default: 200, min: 0, max: 10000 },
+                flanker_stimulus_duration_max: { type: 'number', default: 800, min: 0, max: 10000 },
+                flanker_trial_duration_min: { type: 'number', default: 1000, min: 0, max: 60000 },
+                flanker_trial_duration_max: { type: 'number', default: 2000, min: 0, max: 60000 },
+                flanker_iti_min: { type: 'number', default: 200, min: 0, max: 10000 },
+                flanker_iti_max: { type: 'number', default: 800, min: 0, max: 10000 }
+            };
+
+            const sartOnlyParams = {
+                sart_digit_options: { type: 'string', default: '1,2,3,4,5,6,7,8,9' },
+                sart_nogo_digit: { type: 'number', default: 3, min: 0, max: 9 },
+                sart_go_key: { type: 'string', default: 'space' },
+                sart_stimulus_duration_min: { type: 'number', default: 150, min: 0, max: 10000 },
+                sart_stimulus_duration_max: { type: 'number', default: 400, min: 0, max: 10000 },
+                sart_mask_duration_min: { type: 'number', default: 600, min: 0, max: 10000 },
+                sart_mask_duration_max: { type: 'number', default: 1200, min: 0, max: 10000 },
+                sart_trial_duration_min: { type: 'number', default: 800, min: 0, max: 60000 },
+                sart_trial_duration_max: { type: 'number', default: 2000, min: 0, max: 60000 },
+                sart_iti_min: { type: 'number', default: 200, min: 0, max: 10000 },
+                sart_iti_max: { type: 'number', default: 800, min: 0, max: 10000 }
+            };
+
+            // RDM-only params remain in RDM mode; Flanker/SART blocks should not inherit the RDM UI surface.
+            const rdmOnlyParams = {
+                // Dot color (used for simple trial/practice/adaptive; dot-groups uses per-group colors)
+                dot_color: { type: 'COLOR', default: '#FFFFFF' },
+
+                // Continuous mode transitions (applied when experiment_type = continuous)
+                transition_duration: { type: 'number', default: 500, min: 0, max: 20000 },
+                transition_type: { type: 'select', default: 'both', options: ['both', 'color', 'speed'] },
+
+                // Per-block response overrides
+                response_device: { type: 'select', default: 'inherit', options: ['inherit', 'keyboard', 'mouse', 'touch', 'voice', 'custom'] },
+                response_keys: { type: 'string', default: '' },
+                require_response_mode: { type: 'select', default: 'inherit', options: ['inherit', 'true', 'false'] },
+                mouse_segments: { type: 'number', default: 2, min: 1, max: 12 },
+                mouse_start_angle_deg: { type: 'number', default: 0, min: 0, max: 359 },
+                mouse_selection_mode: { type: 'select', default: 'click', options: ['click', 'hover'] },
+
+                // rdm-trial windows
+                coherence_min: { type: 'number', default: 0.2, min: 0, max: 1, step: 0.01 },
+                coherence_max: { type: 'number', default: 0.8, min: 0, max: 1, step: 0.01 },
+                direction_options: { type: 'string', default: '0,180' },
+                speed_min: { type: 'number', default: 4, min: 0, max: 50 },
+                speed_max: { type: 'number', default: 10, min: 0, max: 50 },
+
+                // rdm-practice windows
+                practice_coherence_min: { type: 'number', default: 0.5, min: 0, max: 1, step: 0.01 },
+                practice_coherence_max: { type: 'number', default: 0.9, min: 0, max: 1, step: 0.01 },
+                practice_direction_options: { type: 'string', default: '0,180' },
+                practice_feedback_duration_min: { type: 'number', default: 750, min: 0, max: 5000 },
+                practice_feedback_duration_max: { type: 'number', default: 1500, min: 0, max: 5000 },
+
+                // rdm-adaptive windows
+                adaptive_initial_coherence_min: { type: 'number', default: 0.05, min: 0, max: 1, step: 0.01 },
+                adaptive_initial_coherence_max: { type: 'number', default: 0.2, min: 0, max: 1, step: 0.01 },
+                adaptive_algorithm: { type: 'select', default: 'quest', options: ['quest', 'staircase', 'simple'] },
+                adaptive_step_size_min: { type: 'number', default: 0.02, min: 0.001, max: 0.5, step: 0.001 },
+                adaptive_step_size_max: { type: 'number', default: 0.08, min: 0.001, max: 0.5, step: 0.001 },
+                adaptive_target_performance: { type: 'number', default: 0.82, min: 0.5, max: 1, step: 0.01 },
+
+                // rdm-dot-groups windows
+                group_1_percentage_min: { type: 'number', default: 40, min: 0, max: 100 },
+                group_1_percentage_max: { type: 'number', default: 60, min: 0, max: 100 },
+                group_1_color: { type: 'COLOR', default: '#FF0066' },
+                group_1_coherence_min: { type: 'number', default: 0.1, min: 0, max: 1, step: 0.01 },
+                group_1_coherence_max: { type: 'number', default: 0.5, min: 0, max: 1, step: 0.01 },
+                group_1_direction_options: { type: 'string', default: '0,180' },
+                group_1_speed_min: { type: 'number', default: 4, min: 0, max: 50 },
+                group_1_speed_max: { type: 'number', default: 10, min: 0, max: 50 },
+                group_2_coherence_min: { type: 'number', default: 0.5, min: 0, max: 1, step: 0.01 },
+                group_2_coherence_max: { type: 'number', default: 0.9, min: 0, max: 1, step: 0.01 },
+                group_2_color: { type: 'COLOR', default: '#0066FF' },
+                group_2_direction_options: { type: 'string', default: '0,180' },
+                group_2_speed_min: { type: 'number', default: 4, min: 0, max: 50 },
+                group_2_speed_max: { type: 'number', default: 10, min: 0, max: 50 },
+
+                // Dot-groups cue border / target
+                response_target_group: { type: 'select', default: 'none', options: ['none', 'group_1', 'group_2'] },
+                cue_border_mode: { type: 'select', default: 'off', options: ['off', 'target-group-color', 'custom'] },
+                cue_border_color: { type: 'COLOR', default: '#FFFFFF' },
+                cue_border_width: { type: 'number', default: 4, min: 0, max: 20 }
+            };
+
+            const perTaskParams = (currentTaskType === 'flanker')
+                ? flankerOnlyParams
+                : (currentTaskType === 'sart')
+                    ? sartOnlyParams
+                    : rdmOnlyParams;
+
+            return {
+                id: 'block',
+                name: 'Block',
+                icon: 'fas fa-layer-group',
+                description: 'Compactly represent many generated trials using parameter windows (ranges)',
+                category: 'advanced',
+                parameters: {
+                    ...commonParams,
+                    ...perTaskParams
+                }
+            };
+        };
         
         const baseComponents = [
             {
@@ -736,8 +1289,120 @@ class JsonBuilder {
                     trial_duration: null,
                     response_ends_trial: true
                 }
+            },
+            {
+                id: 'survey-response',
+                name: 'Survey Response',
+                icon: 'fas fa-clipboard-list',
+                description: 'Collect questionnaire/survey responses in a single form',
+                category: 'survey',
+                type: 'survey-response',
+                parameters: {
+                    title: { type: 'string', default: 'Survey' },
+                    instructions: { type: 'string', default: 'Please answer the following questions.' },
+                    submit_label: { type: 'string', default: 'Continue' },
+                    // Optional timeout behavior: allow continuing without responses after timeout_ms
+                    allow_empty_on_timeout: { type: 'boolean', default: false },
+                    timeout_ms: { type: 'number', default: null, min: 0, max: 600000 },
+                    questions: {
+                        type: 'COMPLEX',
+                        default: [
+                            {
+                                id: 'q1',
+                                type: 'likert',
+                                prompt: 'I found the task engaging.',
+                                options: ['Strongly disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly agree'],
+                                required: true
+                            }
+                        ]
+                    }
+                }
             }
         ];
+
+        // For Flanker and SART, show only task-appropriate components.
+        if (taskType === 'flanker' || taskType === 'sart') {
+            if (taskType === 'flanker') {
+                baseComponents.push({
+                    id: 'flanker-trial',
+                    name: `Flanker ${unitName}`,
+                    icon: 'fas fa-arrows-alt-h',
+                    description: 'Flanker trial/frame (interpreter implements stimulus + scoring)',
+                    category: 'task',
+                    parameters: {
+                        target_direction: { type: 'select', default: 'left', options: ['left', 'right'] },
+                        congruency: { type: 'select', default: 'congruent', options: ['congruent', 'incongruent', 'neutral'] },
+                        left_key: { type: 'string', default: 'f' },
+                        right_key: { type: 'string', default: 'j' },
+                        stimulus_duration_ms: { type: 'number', default: 800, min: 0, max: 10000 },
+                        trial_duration_ms: { type: 'number', default: 1500, min: 0, max: 30000 },
+                        iti_ms: { type: 'number', default: 500, min: 0, max: 10000 }
+                    }
+                });
+            }
+
+            if (taskType === 'sart') {
+                baseComponents.push({
+                    id: 'sart-trial',
+                    name: `SART ${unitName}`,
+                    icon: 'fas fa-stopwatch',
+                    description: 'SART trial/frame (interpreter implements go/no-go logic)',
+                    category: 'task',
+                    parameters: {
+                        stimulus_type: { type: 'select', default: 'arrows', options: ['arrows', 'letters', 'symbols', 'custom'] },
+                        digit: { type: 'number', default: 1, min: 0, max: 9 },
+                        target_stimulus: { type: 'string', default: 'H' },
+                        distractor_stimulus: { type: 'string', default: 'S' },
+                        neutral_stimulus: { type: 'string', default: '–' },
+                        nogo_digit: { type: 'number', default: 3, min: 0, max: 9 },
+                        show_fixation_dot: { type: 'boolean', default: false },
+                        show_fixation_cross_between_trials: { type: 'boolean', default: false },
+                        go_key: { type: 'string', default: 'space' },
+                        stimulus_duration_ms: { type: 'number', default: 250, min: 0, max: 10000 },
+                        mask_duration_ms: { type: 'number', default: 900, min: 0, max: 10000 },
+                        trial_duration_ms: { type: 'number', default: 1150, min: 0, max: 30000 },
+                        iti_ms: { type: 'number', default: 0, min: 0, max: 10000 }
+                    }
+                });
+            }
+
+            // HTML-based components
+            baseComponents.push(
+                {
+                    id: 'html-keyboard-response',
+                    name: 'HTML + Keyboard',
+                    icon: 'fas fa-keyboard',
+                    description: 'Show HTML content and collect keyboard response',
+                    category: 'basic',
+                    parameters: {
+                        stimulus: { type: 'string', default: '<p>Press a key to continue.</p>' },
+                        choices: { type: 'select', default: 'ALL_KEYS', options: ['ALL_KEYS', 'space', 'enter', 'escape'] },
+                        prompt: { type: 'string', default: '' },
+                        stimulus_duration: { type: 'number', default: null, min: 0, max: 30000 },
+                        trial_duration: { type: 'number', default: null, min: 0, max: 60000 },
+                        response_ends_trial: { type: 'boolean', default: true }
+                    }
+                },
+                {
+                    id: 'image-keyboard-response',
+                    name: 'Image + Keyboard',
+                    icon: 'fas fa-image',
+                    description: 'Show image and collect keyboard response',
+                    category: 'stimulus',
+                    parameters: {
+                        stimulus: { type: 'string', default: 'img/sample.jpg' },
+                        choices: { type: 'array', default: ['f', 'j'] },
+                        stimulus_duration: { type: 'number', default: null },
+                        trial_duration: { type: 'number', default: null }
+                    }
+                }
+            );
+
+            // Block (task-scoped)
+            baseComponents.push(createBlockComponentDef(taskType));
+
+            return baseComponents;
+        }
 
         // Add task-specific components
         if (taskType === 'rdm') {
@@ -889,7 +1554,7 @@ class JsonBuilder {
             );
         }
 
-        // Add generic stimulus components
+        // Add generic stimulus components (RDM mode)
         baseComponents.push(
             {
                 id: 'image-keyboard-response',
@@ -1014,7 +1679,12 @@ class JsonBuilder {
             const instructionsComponent = document.createElement('div');
             instructionsComponent.className = 'timeline-component card mb-2';
             instructionsComponent.dataset.componentType = 'html-keyboard-response';
-            instructionsComponent.dataset.componentData = JSON.stringify(componentDef.data);
+            // Ensure detection-response-task flag exists for traceability
+            const instructionsData = {
+                ...(componentDef.data || {}),
+                detection_response_task_enabled: !!(componentDef.data?.detection_response_task_enabled ?? false)
+            };
+            instructionsComponent.dataset.componentData = JSON.stringify(instructionsData);
             
             instructionsComponent.innerHTML = `
                 <div class="card-body">
@@ -1061,6 +1731,16 @@ class JsonBuilder {
                 name: componentDef.name,
                 ...this.getDefaultParameters(componentDef.parameters || {})
             };
+
+            // Apply task-level defaults to new components (so the settings panel actually matters).
+            if (componentDef.id === 'flanker-trial') {
+                Object.assign(componentData, this.getFlankerDefaultsForNewComponent());
+            }
+
+            // Ensure detection-response-task flag exists for traceability
+            if (componentData.detection_response_task_enabled === undefined) {
+                componentData.detection_response_task_enabled = false;
+            }
             componentElement.dataset.componentData = JSON.stringify(componentData);
             
             componentElement.innerHTML = `
@@ -1151,19 +1831,23 @@ class JsonBuilder {
      * Generate JSON configuration
      */
     generateJSON() {
+        const taskType = document.getElementById('taskType')?.value || 'rdm';
         const config = {
             experiment_type: this.experimentType,
+            task_type: taskType,
             data_collection: { ...this.dataCollection },
             timeline: this.getTimelineFromDOM()
         };
 
-        // Add RDM-specific parameters
-        config.display_parameters = this.getRDMDisplayParameters();
-        config.aperture_parameters = this.getRDMApertureParameters();
-        config.dot_parameters = this.getRDMDotParameters();
-        config.motion_parameters = this.getRDMMotionParameters();
-        config.timing_parameters = this.getRDMTimingParameters();
-        config.response_parameters = this.getRDMResponseParameters();
+        // Add task-specific defaults
+        if (taskType === 'rdm') {
+            config.display_parameters = this.getRDMDisplayParameters();
+            config.aperture_parameters = this.getRDMApertureParameters();
+            config.dot_parameters = this.getRDMDotParameters();
+            config.motion_parameters = this.getRDMMotionParameters();
+            config.timing_parameters = this.getRDMTimingParameters();
+            config.response_parameters = this.getRDMResponseParameters();
+        }
 
         // Add experimental control parameters to match Figma prototype
         config.frame_rate = 60;
@@ -1199,32 +1883,131 @@ class JsonBuilder {
             }
         }
 
-        // Add RDM experiment-wide settings
-        const canvasWidth = document.getElementById('canvasWidth')?.value;
-        const canvasHeight = document.getElementById('canvasHeight')?.value;
-        const backgroundColor = document.getElementById('backgroundColor')?.value;
-        const fixationDuration = document.getElementById('fixationDuration')?.value;
-        const responseKeys = document.getElementById('responseKeys')?.value;
+        // Export task-specific experiment-wide settings
+        if (taskType === 'rdm') {
+            const canvasWidth = document.getElementById('canvasWidth')?.value;
+            const canvasHeight = document.getElementById('canvasHeight')?.value;
+            const backgroundColor = document.getElementById('backgroundColor')?.value;
+            const fixationDuration = document.getElementById('fixationDuration')?.value;
+            const responseKeys = document.getElementById('responseKeys')?.value;
 
-        if (canvasWidth || canvasHeight || backgroundColor) {
-            config.display_settings = {
-                canvas_width: canvasWidth ? parseInt(canvasWidth) : 600,
-                canvas_height: canvasHeight ? parseInt(canvasHeight) : 600,
-                background_color: backgroundColor || '#404040'
+            if (canvasWidth || canvasHeight || backgroundColor) {
+                config.display_settings = {
+                    canvas_width: canvasWidth ? parseInt(canvasWidth) : 600,
+                    canvas_height: canvasHeight ? parseInt(canvasHeight) : 600,
+                    background_color: backgroundColor || '#404040'
+                };
+            }
+
+            if (fixationDuration) {
+                config.fixation_duration = parseInt(fixationDuration);
+            }
+
+            // Only export response keys when the default response device is keyboard.
+            const defaultDevice = document.getElementById('defaultResponseDevice')?.value || 'keyboard';
+            if (defaultDevice === 'keyboard' && responseKeys) {
+                config.response_keys = responseKeys.split(',').map(key => key.trim());
+            }
+        }
+
+        if (taskType === 'flanker') {
+            const leftKey = document.getElementById('flankerLeftKey')?.value;
+            const rightKey = document.getElementById('flankerRightKey')?.value;
+            const stimulusDuration = document.getElementById('flankerStimulusDurationMs')?.value;
+            const trialDuration = document.getElementById('flankerTrialDurationMs')?.value;
+            const itiMs = document.getElementById('flankerItiMs')?.value;
+
+            config.flanker_settings = {
+                left_key: leftKey || 'f',
+                right_key: rightKey || 'j',
+                stimulus_type: document.getElementById('flankerStimulusType')?.value || 'arrows',
+                target_stimulus: document.getElementById('flankerTargetStimulus')?.value || 'H',
+                distractor_stimulus: document.getElementById('flankerDistractorStimulus')?.value || 'S',
+                neutral_stimulus: document.getElementById('flankerNeutralStimulus')?.value || '–',
+                show_fixation_dot: !!document.getElementById('flankerShowFixationDot')?.checked,
+                show_fixation_cross_between_trials: !!document.getElementById('flankerShowFixationCrossBetweenTrials')?.checked,
+                stimulus_duration_ms: stimulusDuration ? parseInt(stimulusDuration) : 800,
+                trial_duration_ms: trialDuration ? parseInt(trialDuration) : 1500,
+                iti_ms: itiMs ? parseInt(itiMs) : 500
             };
         }
 
-        if (fixationDuration) {
-            config.fixation_duration = parseInt(fixationDuration);
-        }
+        if (taskType === 'sart') {
+            const goKey = document.getElementById('sartGoKey')?.value;
+            const nogoDigit = document.getElementById('sartNoGoDigit')?.value;
+            const stimulusDuration = document.getElementById('sartStimulusDurationMs')?.value;
+            const maskDuration = document.getElementById('sartMaskDurationMs')?.value;
+            const itiMs = document.getElementById('sartItiMs')?.value;
 
-        // Only export response keys when the default response device is keyboard.
-        const defaultDevice = document.getElementById('defaultResponseDevice')?.value || 'keyboard';
-        if (defaultDevice === 'keyboard' && responseKeys) {
-            config.response_keys = responseKeys.split(',').map(key => key.trim());
+            config.sart_settings = {
+                go_key: goKey || 'space',
+                nogo_digit: nogoDigit !== undefined && nogoDigit !== null && `${nogoDigit}` !== '' ? parseInt(nogoDigit) : 3,
+                stimulus_duration_ms: stimulusDuration ? parseInt(stimulusDuration) : 250,
+                mask_duration_ms: maskDuration ? parseInt(maskDuration) : 900,
+                iti_ms: itiMs ? parseInt(itiMs) : 0
+            };
         }
 
         return config;
+    }
+
+    /**
+     * Build a preview payload for the current Flanker defaults.
+     */
+    getCurrentFlankerDefaults() {
+        return {
+            type: 'flanker-trial',
+            name: 'Flanker Defaults',
+            left_key: document.getElementById('flankerLeftKey')?.value || 'f',
+            right_key: document.getElementById('flankerRightKey')?.value || 'j',
+            stimulus_type: document.getElementById('flankerStimulusType')?.value || 'arrows',
+            target_stimulus: document.getElementById('flankerTargetStimulus')?.value || 'H',
+            distractor_stimulus: document.getElementById('flankerDistractorStimulus')?.value || 'S',
+            neutral_stimulus: document.getElementById('flankerNeutralStimulus')?.value || '–',
+            show_fixation_dot: !!document.getElementById('flankerShowFixationDot')?.checked,
+            show_fixation_cross_between_trials: !!document.getElementById('flankerShowFixationCrossBetweenTrials')?.checked,
+            target_direction: 'left',
+            congruency: 'congruent',
+            stimulus_duration_ms: parseInt(document.getElementById('flankerStimulusDurationMs')?.value || '800', 10),
+            trial_duration_ms: parseInt(document.getElementById('flankerTrialDurationMs')?.value || '1500', 10),
+            iti_ms: parseInt(document.getElementById('flankerItiMs')?.value || '500', 10),
+            detection_response_task_enabled: false
+        };
+    }
+
+    getFlankerDefaultsForNewComponent() {
+        // Defaults panel values; used when adding new Flanker timeline items.
+        return {
+            stimulus_type: document.getElementById('flankerStimulusType')?.value || 'arrows',
+            target_stimulus: document.getElementById('flankerTargetStimulus')?.value || 'H',
+            distractor_stimulus: document.getElementById('flankerDistractorStimulus')?.value || 'S',
+            neutral_stimulus: document.getElementById('flankerNeutralStimulus')?.value || '–',
+            show_fixation_dot: !!document.getElementById('flankerShowFixationDot')?.checked,
+            show_fixation_cross_between_trials: !!document.getElementById('flankerShowFixationCrossBetweenTrials')?.checked,
+            left_key: document.getElementById('flankerLeftKey')?.value || 'f',
+            right_key: document.getElementById('flankerRightKey')?.value || 'j',
+            stimulus_duration_ms: parseInt(document.getElementById('flankerStimulusDurationMs')?.value || '800', 10),
+            trial_duration_ms: parseInt(document.getElementById('flankerTrialDurationMs')?.value || '1500', 10),
+            iti_ms: parseInt(document.getElementById('flankerItiMs')?.value || '500', 10)
+        };
+    }
+
+    /**
+     * Build a preview payload for the current SART defaults.
+     */
+    getCurrentSartDefaults() {
+        return {
+            type: 'sart-trial',
+            name: 'SART Defaults',
+            digit: 1,
+            nogo_digit: parseInt(document.getElementById('sartNoGoDigit')?.value || '3', 10),
+            go_key: document.getElementById('sartGoKey')?.value || 'space',
+            stimulus_duration_ms: parseInt(document.getElementById('sartStimulusDurationMs')?.value || '250', 10),
+            mask_duration_ms: parseInt(document.getElementById('sartMaskDurationMs')?.value || '900', 10),
+            trial_duration_ms: 1150,
+            iti_ms: parseInt(document.getElementById('sartItiMs')?.value || '0', 10),
+            detection_response_task_enabled: false
+        };
     }
 
     getDefaultTransitionSettings() {
@@ -1262,6 +2045,15 @@ class JsonBuilder {
                 
                 const componentData = JSON.parse(rawData);
                 console.log('Parsed component data:', componentData);
+
+                // Defensive: if a save path accidentally dropped `type`, recover it from the
+                // timeline element metadata so export/validation still works.
+                if (!componentData.type) {
+                    const fallbackType = element.dataset.componentType;
+                    if (fallbackType) {
+                        componentData.type = fallbackType;
+                    }
+                }
                 
                 const transformed = this.transformComponent(componentData);
                 console.log('Transformed component:', transformed);
@@ -1287,6 +2079,7 @@ class JsonBuilder {
             // Instructions components store parameters directly on the component object
             const instructionsComponent = {
                 type: component.type,
+                detection_response_task_enabled: !!(component.detection_response_task_enabled ?? false),
                 stimulus: component.stimulus,
                 choices: component.choices,
                 prompt: component.prompt,
@@ -1328,6 +2121,11 @@ class JsonBuilder {
         }
 
         console.log('Base component before RDM check:', baseComponent);
+
+        // Ensure detection-response-task flag is always present for traceability
+        if (baseComponent.detection_response_task_enabled === undefined) {
+            baseComponent.detection_response_task_enabled = false;
+        }
 
         // Special handling for Block components (compact range/window representation)
         if (baseComponent.type === 'block') {
@@ -1504,10 +2302,98 @@ class JsonBuilder {
 
             if (g1Color) values.group_1_color = g1Color;
             if (g2Color) values.group_2_color = g2Color;
+        } else if (componentType === 'flanker-trial') {
+            // Generic task fields; interpreter defines how these are rendered/scored.
+            const parseStringList = (raw) => {
+                if (raw === undefined || raw === null) return [];
+                return raw
+                    .toString()
+                    .split(',')
+                    .map(s => s.trim())
+                    .filter(Boolean);
+            };
+
+            const congruency = parseStringList(blockComponent.flanker_congruency_options);
+            if (congruency && congruency.length > 0) {
+                values.congruency = Array.from(new Set(congruency));
+            }
+
+            const stimType = (blockComponent.flanker_stimulus_type ?? 'arrows').toString().trim();
+            const stimTypeNorm = stimType.toLowerCase();
+            const isArrows = (stimTypeNorm === '' || stimTypeNorm === 'arrows');
+            if (stimType) {
+                values.stimulus_type = stimType;
+            }
+
+            if (isArrows) {
+                const dirs = parseStringList(blockComponent.flanker_target_direction_options);
+                if (dirs && dirs.length > 0) {
+                    values.target_direction = Array.from(new Set(dirs));
+                }
+            } else {
+                const targetStim = parseStringList(blockComponent.flanker_target_stimulus_options);
+                if (targetStim.length > 0) {
+                    values.target_stimulus = Array.from(new Set(targetStim));
+                }
+
+                const distractorStim = parseStringList(blockComponent.flanker_distractor_stimulus_options);
+                if (distractorStim.length > 0) {
+                    values.distractor_stimulus = Array.from(new Set(distractorStim));
+                }
+
+                const neutralStim = parseStringList(blockComponent.flanker_neutral_stimulus_options);
+                if (neutralStim.length > 0) {
+                    values.neutral_stimulus = Array.from(new Set(neutralStim));
+                }
+            }
+
+            const lk = (blockComponent.flanker_left_key ?? '').toString().trim();
+            const rk = (blockComponent.flanker_right_key ?? '').toString().trim();
+            if (lk) values.left_key = lk;
+            if (rk) values.right_key = rk;
+
+            values.show_fixation_dot = !!(blockComponent.flanker_show_fixation_dot ?? false);
+            values.show_fixation_cross_between_trials = !!(blockComponent.flanker_show_fixation_cross_between_trials ?? false);
+
+            addWindow('stimulus_duration_ms', blockComponent.flanker_stimulus_duration_min, blockComponent.flanker_stimulus_duration_max);
+            addWindow('trial_duration_ms', blockComponent.flanker_trial_duration_min, blockComponent.flanker_trial_duration_max);
+            addWindow('iti_ms', blockComponent.flanker_iti_min, blockComponent.flanker_iti_max);
+        } else if (componentType === 'sart-trial') {
+            const parseIntList = (raw) => {
+                if (raw === undefined || raw === null) return [];
+                return raw
+                    .toString()
+                    .split(',')
+                    .map(s => s.trim())
+                    .filter(Boolean)
+                    .map(s => Number.parseInt(s, 10))
+                    .filter(n => Number.isFinite(n));
+            };
+
+            const digits = parseIntList(blockComponent.sart_digit_options);
+            if (digits.length > 0) {
+                values.digit = Array.from(new Set(digits));
+            }
+
+            const nogo = Number.parseInt(blockComponent.sart_nogo_digit, 10);
+            if (Number.isFinite(nogo)) {
+                values.nogo_digit = nogo;
+            }
+
+            const goKey = (blockComponent.sart_go_key ?? '').toString().trim();
+            if (goKey) {
+                values.go_key = goKey;
+            }
+
+            addWindow('stimulus_duration_ms', blockComponent.sart_stimulus_duration_min, blockComponent.sart_stimulus_duration_max);
+            addWindow('mask_duration_ms', blockComponent.sart_mask_duration_min, blockComponent.sart_mask_duration_max);
+            addWindow('trial_duration_ms', blockComponent.sart_trial_duration_min, blockComponent.sart_trial_duration_max);
+            addWindow('iti_ms', blockComponent.sart_iti_min, blockComponent.sart_iti_max);
         }
 
         const out = {
             type: 'block',
+            detection_response_task_enabled: !!(blockComponent.detection_response_task_enabled ?? false),
             component_type: componentType,
             length: length,
             sampling_mode: samplingMode,
@@ -1713,6 +2599,8 @@ class JsonBuilder {
         const transformed = {
             type: component.type
         };
+
+        transformed.detection_response_task_enabled = !!(component.detection_response_task_enabled ?? false);
 
         // Preserve response override if it was generated upstream
         if (component.response_parameters_override) {
@@ -1990,7 +2878,8 @@ class JsonBuilder {
             this.templates[name] = {
                 timeline: [...this.timeline],
                 experimentType: this.experimentType,
-                dataCollection: { ...this.dataCollection }
+                dataCollection: { ...this.dataCollection },
+                taskType: document.getElementById('taskType')?.value || 'rdm'
             };
             
             // Save to localStorage
@@ -2026,6 +2915,11 @@ class JsonBuilder {
             this.timeline = [...template.timeline];
             this.experimentType = template.experimentType;
             this.dataCollection = { ...template.dataCollection };
+
+            // Restore task type dropdown (if present)
+            if (template.taskType) {
+                this.setElementValue('taskType', template.taskType);
+            }
             
             // Update UI
             this.updateExperimentTypeUI();
@@ -2094,12 +2988,14 @@ class JsonBuilder {
 
         // Store the template
         this.currentExperiment = defaultRDM;
+
+        // Ensure task type defaults to RDM
+        this.setElementValue('taskType', 'rdm');
         
         // Populate UI with default values
         this.populateRDMUI();
-        
-        // Add sample trials to timeline
-        this.addSampleTrials();
+
+        // Timeline should start empty; researchers can load a template instead.
     }
 
     /**
@@ -2193,6 +3089,11 @@ class JsonBuilder {
      * Add sample trials to the timeline
      */
     addSampleTrials() {
+        const taskType = document.getElementById('taskType')?.value || 'rdm';
+        if (taskType !== 'rdm') {
+            return;
+        }
+
         const trials = [
             { name: "Practice - High Coherence", coherence: 0.8, direction: 0, color: "#FFFF00" },
             { name: "Practice - High Coherence", coherence: 0.8, direction: 180, color: "#FFFF00" },
@@ -2246,7 +3147,7 @@ class JsonBuilder {
                         </div>
                         <div>
                             <h6 class="card-title mb-1">${trial.name}</h6>
-                            <small class="text-muted">Coherence: ${trial.coherence}, Direction: ${trial.direction}°</small>
+                            <small class="text-muted">RDM Trial</small>
                             <div class="mt-1">
                                 <span class="badge bg-secondary">Trial ${index}</span>
                                 <span class="badge" style="background-color: ${trial.color}; color: #000000;">●</span>
@@ -2323,6 +3224,14 @@ class JsonBuilder {
      * Save parameters from modal
      */
     saveParameters() {
+        // Prefer the schema-driven save path (TimelineBuilder). The legacy save logic below
+        // only collected a fixed set of RDM fields and could overwrite dataset.componentData
+        // without preserving critical fields like `type`, which can break Block export.
+        if (this.timelineBuilder && typeof this.timelineBuilder.saveComponentParameters === 'function') {
+            this.timelineBuilder.saveComponentParameters();
+            return;
+        }
+
         // Get the currently edited component (stored when modal was opened)
         const currentComponent = this.currentEditingComponent;
         if (!currentComponent) {
@@ -2346,12 +3255,45 @@ class JsonBuilder {
             lifetime_frames: this.getModalValue('modalDotLifetime', 60, 'int'),
             noise_type: 'random_direction'
         };
-        
+
+        // Legacy fallback: merge into existing component data and preserve `type`.
+        let existing = {};
+        try {
+            existing = JSON.parse(currentComponent.dataset.componentData || '{}') || {};
+        } catch {
+            existing = {};
+        }
+
+        const preservedType = existing.type || currentComponent.dataset.componentType;
+        const preservedName = existing.name;
+
+        let updated;
+        if (existing.parameters && typeof existing.parameters === 'object') {
+            updated = {
+                type: preservedType,
+                name: preservedName,
+                ...existing,
+                parameters: {
+                    ...existing.parameters,
+                    ...parameters
+                }
+            };
+        } else {
+            updated = {
+                type: preservedType,
+                name: preservedName,
+                ...existing,
+                ...parameters
+            };
+        }
+
         // Store parameters in the component's data attribute
-        currentComponent.dataset.componentData = JSON.stringify(parameters);
+        currentComponent.dataset.componentData = JSON.stringify(updated);
         
         // Update the component's visual display
-        this.updateComponentDisplay(currentComponent, parameters);
+        if (typeof parameters.coherence === 'number' && typeof parameters.coherent_direction === 'number' && typeof parameters.total_dots === 'number') {
+            this.updateComponentDisplay(currentComponent, parameters);
+        }
         
         // Close the modal
         const modal = bootstrap.Modal.getInstance(document.getElementById('parameterModal'));
@@ -2395,10 +3337,8 @@ class JsonBuilder {
         const descriptionElement = component.querySelector('.text-muted');
         const badgeContainer = component.querySelector('.mt-1');
         
-        if (titleElement && descriptionElement) {
-            // Update the description with key parameters
-            descriptionElement.textContent = `Coherence: ${parameters.coherence.toFixed(2)}, Direction: ${parameters.coherent_direction}°, Dots: ${parameters.total_dots}`;
-        }
+        // Cosmetic: do not render parameter summaries in the timeline cards.
+        // Keep the existing description/type text unchanged.
         
         // Add a "configured" badge to show this component has custom parameters
         if (badgeContainer) {
@@ -2435,6 +3375,50 @@ class JsonBuilder {
             return;
         }
 
+        // Determine component type being edited (so previews route correctly)
+        let componentType = 'psychophysics-rdm';
+        let componentName = undefined;
+        let storedData = null;
+        try {
+            if (this.currentEditingComponent?.dataset?.componentData) {
+                storedData = JSON.parse(this.currentEditingComponent.dataset.componentData);
+                if (storedData?.type) componentType = storedData.type;
+                if (storedData?.name) componentName = storedData.name;
+            }
+        } catch (e) {
+            console.warn('Could not parse currentEditingComponent for preview type:', e);
+        }
+
+        // If stored type is missing, fall back to the timeline element metadata
+        if ((!componentType || componentType === 'psychophysics-rdm') && this.currentEditingComponent?.dataset?.componentType) {
+            componentType = this.currentEditingComponent.dataset.componentType;
+        }
+
+        // Survey-response has a custom editor (questions list) and cannot be previewed
+        // by scraping generic input ids.
+        if (componentType === 'survey-response') {
+            if (!this.timelineBuilder || typeof this.timelineBuilder.collectSurveyResponseFromModal !== 'function') {
+                console.error('TimelineBuilder survey collector not available');
+                return;
+            }
+
+            const survey = this.timelineBuilder.collectSurveyResponseFromModal(modalBody);
+            const previewData = {
+                type: 'survey-response',
+                name: componentName || storedData?.name || 'Survey Response',
+                ...(storedData && typeof storedData === 'object' ? storedData : {}),
+                ...survey
+            };
+
+            console.log('Preview data for component type:', previewData.type, previewData);
+            if (window.componentPreview) {
+                window.componentPreview.showPreview(previewData);
+            } else {
+                console.error('ComponentPreview not found');
+            }
+            return;
+        }
+
         // Collect current form values
         const inputs = modalBody.querySelectorAll('input, textarea, select');
         const currentParams = {};
@@ -2465,18 +3449,7 @@ class JsonBuilder {
 
         console.log('Preview parameters from form:', currentParams);
 
-        // Determine component type being edited (so dot-groups preview actually renders groups)
-        let componentType = 'psychophysics-rdm';
-        let componentName = undefined;
-        try {
-            if (this.currentEditingComponent?.dataset?.componentData) {
-                const stored = JSON.parse(this.currentEditingComponent.dataset.componentData);
-                if (stored?.type) componentType = stored.type;
-                if (stored?.name) componentName = stored.name;
-            }
-        } catch (e) {
-            console.warn('Could not parse currentEditingComponent for preview type:', e);
-        }
+        // componentType/componentName already resolved above
 
         // Instructions component - simple structure
         if (currentParams.instructionsText !== undefined) {

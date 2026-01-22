@@ -90,6 +90,12 @@ class ComponentPreview {
             // Instructions component - show the actual stimulus text
             const stimulusText = componentData.stimulus || 'No instructions text provided';
             this.showInstructionsPreview(stimulusText, componentData);
+        } else if (componentType === 'flanker-trial') {
+            this.showFlankerPreview(componentData);
+        } else if (componentType === 'sart-trial') {
+            this.showSartPreview(componentData);
+        } else if (componentType === 'survey-response') {
+            this.showSurveyPreview(componentData);
         } else if (componentType === 'block') {
             this.showBlockPreview(componentData);
         } else if (componentType.includes('rdm') || 
@@ -101,6 +107,335 @@ class ComponentPreview {
             console.warn('Unknown component type for preview:', componentType);
             this.showGenericPreview(componentData);
         }
+    }
+
+    showFlankerPreview(componentData) {
+        const previewModal = this.getPreviewModal();
+        if (!previewModal) return;
+        const { modal } = previewModal;
+
+        const escape = (s) => {
+            return (s ?? '')
+                .toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        };
+
+        const congruency = (componentData?.congruency ?? 'congruent').toString();
+        const leftKey = (componentData?.left_key ?? 'f').toString();
+        const rightKey = (componentData?.right_key ?? 'j').toString();
+
+        const stimulusType = (componentData?.stimulus_type ?? 'arrows').toString();
+        const showFixationDot = !!(componentData?.show_fixation_dot ?? false);
+        const showFixationCrossBetweenTrials = !!(componentData?.show_fixation_cross_between_trials ?? false);
+
+        // Arrow mode (back-compat)
+        const targetDir = (componentData?.target_direction ?? 'left').toString();
+        const arrowLeft = '←';
+        const arrowRight = '→';
+
+        // Generic symbol mode
+        const targetStimulusRaw = (componentData?.target_stimulus ?? 'H').toString();
+        const distractorStimulusRaw = (componentData?.distractor_stimulus ?? 'S').toString();
+        const neutralStimulusRaw = (componentData?.neutral_stimulus ?? '–').toString();
+
+        let center;
+        let flank;
+
+        if (stimulusType === 'arrows') {
+            center = (targetDir === 'right') ? arrowRight : arrowLeft;
+            flank = center;
+            if (congruency === 'incongruent') {
+                flank = (center === arrowRight) ? arrowLeft : arrowRight;
+            } else if (congruency === 'neutral') {
+                flank = neutralStimulusRaw;
+            }
+        } else {
+            // Letters/symbols/custom: congruent = same as center; incongruent = distractor; neutral = neutral symbol
+            center = targetStimulusRaw;
+            flank = targetStimulusRaw;
+            if (congruency === 'incongruent') {
+                flank = distractorStimulusRaw;
+            } else if (congruency === 'neutral') {
+                flank = neutralStimulusRaw;
+            }
+        }
+
+        // Standard 5-item array: two flankers on each side
+        const stim = `${flank}${flank}${center}${flank}${flank}`;
+
+        const noteText = (componentData?._previewContextNote ?? '').toString();
+        const hasBlockSource = !!componentData?._blockPreviewSource;
+
+        const modalBody = document.querySelector('#componentPreviewModal .modal-body');
+        if (modalBody) {
+            modalBody.innerHTML = `
+                <div class="p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h5 class="mb-1">Flanker Preview</h5>
+                            <div class="small text-muted">Lightweight renderer (safe to reuse in interpreter)</div>
+                            ${noteText ? `<div class="small text-muted">${escape(noteText)}</div>` : ''}
+                        </div>
+                        <div class="text-end small text-muted">
+                            <div><strong>Congruency:</strong> ${escape(congruency)}</div>
+                            <div><strong>Stimulus type:</strong> ${escape(stimulusType)}</div>
+                            ${stimulusType === 'arrows' ? `<div><strong>Target:</strong> ${escape(targetDir)}</div>` : ''}
+                        </div>
+                    </div>
+
+                    <div class="border rounded mt-3 p-4 d-flex justify-content-center align-items-center" style="background:#111; color:#fff; min-height: 160px;">
+                        <div class="text-center">
+                            <div style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 64px; letter-spacing: 0.25em;">
+                                ${escape(stim)}
+                            </div>
+                            ${showFixationDot ? `<div class="mt-2" style="font-size: 28px; line-height: 1; opacity: 0.9;">•</div>` : ''}
+                        </div>
+                    </div>
+
+                    ${showFixationCrossBetweenTrials ? `
+                        <div class="mt-3 border rounded p-3" style="background:#0b0b0b; color:#ddd;">
+                            <div class="small text-muted mb-2">Between-trials fixation</div>
+                            <div class="d-flex justify-content-center" style="font-size: 36px;">+</div>
+                        </div>
+                    ` : ''}
+
+                    <div class="mt-3 small text-muted">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                Response mapping: <strong>${escape(leftKey)}</strong> = left, <strong>${escape(rightKey)}</strong> = right.
+                                ${componentData?.detection_response_task_enabled ? '<br><span class="badge bg-warning text-dark">DRT enabled</span>' : ''}
+                            </div>
+                            ${hasBlockSource ? `<button type="button" class="btn btn-sm btn-outline-secondary" id="flankerResampleBtn"><i class="fas fa-dice"></i> Resample</button>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Optional block resample
+            if (hasBlockSource) {
+                const btn = modalBody.querySelector('#flankerResampleBtn');
+                if (btn) {
+                    btn.onclick = () => {
+                        const sampled = this.sampleComponentFromBlock(componentData._blockPreviewSource);
+                        const baseType = componentData._blockPreviewSource.block_component_type || componentData._blockPreviewSource.component_type || 'flanker-trial';
+                        const length = componentData._blockPreviewSource.block_length ?? componentData._blockPreviewSource.length ?? 0;
+                        const sampling = componentData._blockPreviewSource.sampling_mode || 'per-trial';
+                        sampled._previewContextNote = `Block sample → ${baseType} (length ${length}, ${sampling})`;
+                        sampled._blockPreviewSource = componentData._blockPreviewSource;
+                        this.showFlankerPreview(sampled);
+                    };
+                }
+            }
+        }
+
+        modal.show();
+    }
+
+    showSartPreview(componentData) {
+        const previewModal = this.getPreviewModal();
+        if (!previewModal) return;
+        const { modal } = previewModal;
+
+        const escape = (s) => {
+            return (s ?? '')
+                .toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        };
+
+        const digit = (componentData?.digit ?? 1);
+        const nogo = (componentData?.nogo_digit ?? 3);
+        const goKey = (componentData?.go_key ?? 'space').toString();
+        const isNoGo = Number(digit) === Number(nogo);
+
+        const noteText = (componentData?._previewContextNote ?? '').toString();
+        const hasBlockSource = !!componentData?._blockPreviewSource;
+
+        const modalBody = document.querySelector('#componentPreviewModal .modal-body');
+        if (modalBody) {
+            modalBody.innerHTML = `
+                <div class="p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h5 class="mb-1">SART Preview</h5>
+                            <div class="small text-muted">Lightweight renderer (safe to reuse in interpreter)</div>
+                            ${noteText ? `<div class="small text-muted">${escape(noteText)}</div>` : ''}
+                        </div>
+                        <div class="text-end small text-muted">
+                            <div><strong>Go key:</strong> ${escape(goKey)}</div>
+                            <div><strong>No-go digit:</strong> ${escape(nogo)}</div>
+                        </div>
+                    </div>
+
+                    <div class="border rounded mt-3 p-4 d-flex justify-content-center align-items-center" style="background:#111; color:#fff; min-height: 180px;">
+                        <div class="text-center">
+                            <div style="font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; font-size: 96px; line-height: 1;">
+                                ${escape(digit)}
+                            </div>
+                            <div class="mt-3 small ${isNoGo ? 'text-warning' : 'text-muted'}">
+                                ${isNoGo ? 'NO-GO (withhold response)' : `GO (press ${escape(goKey)})`}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-3 small text-muted">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                ${componentData?.detection_response_task_enabled ? '<span class="badge bg-warning text-dark">DRT enabled</span>' : ''}
+                            </div>
+                            ${hasBlockSource ? `<button type="button" class="btn btn-sm btn-outline-secondary" id="sartResampleBtn"><i class="fas fa-dice"></i> Resample</button>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            if (hasBlockSource) {
+                const btn = modalBody.querySelector('#sartResampleBtn');
+                if (btn) {
+                    btn.onclick = () => {
+                        const sampled = this.sampleComponentFromBlock(componentData._blockPreviewSource);
+                        const baseType = componentData._blockPreviewSource.block_component_type || componentData._blockPreviewSource.component_type || 'sart-trial';
+                        const length = componentData._blockPreviewSource.block_length ?? componentData._blockPreviewSource.length ?? 0;
+                        const sampling = componentData._blockPreviewSource.sampling_mode || 'per-trial';
+                        sampled._previewContextNote = `Block sample → ${baseType} (length ${length}, ${sampling})`;
+                        sampled._blockPreviewSource = componentData._blockPreviewSource;
+                        this.showSartPreview(sampled);
+                    };
+                }
+            }
+        }
+
+        modal.show();
+    }
+
+    showSurveyPreview(componentData) {
+        const previewModal = this.getPreviewModal();
+        if (!previewModal) return;
+        const { modal } = previewModal;
+
+        // Support both flat storage (preferred) and nested storage under `parameters`.
+        const title = componentData?.title ?? componentData?.parameters?.title ?? 'Survey';
+        const instructions = componentData?.instructions ?? componentData?.parameters?.instructions ?? '';
+        const submitLabel = componentData?.submit_label ?? componentData?.parameters?.submit_label ?? 'Continue';
+        const allowEmptyOnTimeout = !!(componentData?.allow_empty_on_timeout ?? componentData?.parameters?.allow_empty_on_timeout ?? false);
+        const timeoutMs = (componentData?.timeout_ms ?? componentData?.parameters?.timeout_ms ?? null);
+        const questions = Array.isArray(componentData?.questions)
+            ? componentData.questions
+            : (Array.isArray(componentData?.parameters?.questions) ? componentData.parameters.questions : []);
+
+        const escape = (s) => {
+            return (s ?? '')
+                .toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        };
+
+        const renderQuestion = (q) => {
+            const id = escape(q?.id || 'q');
+            const prompt = escape(q?.prompt || '');
+            const required = q?.required ? 'required' : '';
+            const type = (q?.type || 'text');
+
+            if (type === 'likert' || type === 'radio') {
+                const options = Array.isArray(q?.options) ? q.options : [];
+                const optionsHtml = options
+                    .map((opt, idx) => {
+                        const optEsc = escape(opt);
+                        const inputType = 'radio';
+                        return `
+                            <div class="form-check">
+                                <input class="form-check-input" type="${inputType}" name="${id}" id="${id}_${idx}" ${required}>
+                                <label class="form-check-label" for="${id}_${idx}">${optEsc}</label>
+                            </div>
+                        `;
+                    })
+                    .join('');
+                return `
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">${prompt || id}${q?.required ? ' *' : ''}</label>
+                        ${optionsHtml || '<div class="text-muted">(No options configured)</div>'}
+                    </div>
+                `;
+            }
+
+            if (type === 'slider') {
+                const min = Number.isFinite(Number(q?.min)) ? Number(q.min) : 0;
+                const max = Number.isFinite(Number(q?.max)) ? Number(q.max) : 100;
+                const step = Number.isFinite(Number(q?.step)) ? Number(q.step) : 1;
+                const minLabel = escape(q?.min_label || '');
+                const maxLabel = escape(q?.max_label || '');
+                return `
+                    <div class="mb-3">
+                        <label class="form-label fw-bold" for="${id}">${prompt || id}${q?.required ? ' *' : ''}</label>
+                        <input class="form-range" type="range" id="${id}" min="${min}" max="${max}" step="${step}" ${required}>
+                        <div class="d-flex justify-content-between small text-muted">
+                            <span>${minLabel || min}</span>
+                            <span>${maxLabel || max}</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (type === 'number') {
+                const minAttr = (q?.min !== undefined && q?.min !== null && q?.min !== '') ? `min="${escape(q.min)}"` : '';
+                const maxAttr = (q?.max !== undefined && q?.max !== null && q?.max !== '') ? `max="${escape(q.max)}"` : '';
+                const stepAttr = (q?.step !== undefined && q?.step !== null && q?.step !== '') ? `step="${escape(q.step)}"` : '';
+                const ph = escape(q?.placeholder || '');
+                return `
+                    <div class="mb-3">
+                        <label class="form-label fw-bold" for="${id}">${prompt || id}${q?.required ? ' *' : ''}</label>
+                        <input class="form-control" type="number" id="${id}" name="${id}" placeholder="${ph}" ${minAttr} ${maxAttr} ${stepAttr} ${required}>
+                    </div>
+                `;
+            }
+
+            // text
+            const multiline = !!q?.multiline;
+            const ph = escape(q?.placeholder || '');
+            const rows = Number.isFinite(Number(q?.rows)) ? Math.max(1, Number(q.rows)) : 3;
+            return `
+                <div class="mb-3">
+                    <label class="form-label fw-bold" for="${id}">${prompt || id}${q?.required ? ' *' : ''}</label>
+                    ${multiline
+                        ? `<textarea class="form-control" id="${id}" name="${id}" rows="${rows}" placeholder="${ph}" ${required}></textarea>`
+                        : `<input class="form-control" type="text" id="${id}" name="${id}" placeholder="${ph}" ${required}>`
+                    }
+                </div>
+            `;
+        };
+
+        const modalBody = document.querySelector('#componentPreviewModal .modal-body');
+        if (modalBody) {
+            modalBody.innerHTML = `
+                <div class="survey-preview-container">
+                    <h5 class="mb-1">${escape(title)}</h5>
+                    ${instructions ? `<p class="text-muted">${escape(instructions)}</p>` : ''}
+                    ${(allowEmptyOnTimeout && timeoutMs !== null && timeoutMs !== '')
+                        ? `<div class="alert alert-warning py-2 small mb-2">Auto-continue enabled after <strong>${escape(timeoutMs)}</strong> ms (unanswered = empty/null).</div>`
+                        : ''}
+                    <form onsubmit="return false;" class="mt-3">
+                        ${questions.map(renderQuestion).join('')}
+                        <button type="button" class="btn btn-primary">${escape(submitLabel)}</button>
+                        <div class="mt-2 small text-muted">
+                            Preview only — the interpreter app should capture and store responses by question id.
+                            ${questions.length === 0 ? '<br><strong>Note:</strong> No questions found on this component. (Expected `questions: [...]`.)' : ''}
+                        </div>
+                    </form>
+                </div>
+            `;
+        }
+
+        modal.show();
     }
 
     showBlockPreview(componentData) {
@@ -115,6 +450,16 @@ class ComponentPreview {
 
         sampled._previewContextNote = `Block sample → ${baseType} (length ${length}, ${sampling})`;
         sampled._blockPreviewSource = componentData;
+
+        if (baseType === 'flanker-trial') {
+            this.showFlankerPreview(sampled);
+            return;
+        }
+
+        if (baseType === 'sart-trial') {
+            this.showSartPreview(sampled);
+            return;
+        }
 
         this.showRDMPreview(sampled);
     }
@@ -190,6 +535,15 @@ class ComponentPreview {
             return arr[Math.max(0, Math.min(arr.length - 1, idx))];
         };
 
+        const parseStringList = (raw) => {
+            if (raw === undefined || raw === null) return [];
+            return raw
+                .toString()
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean);
+        };
+
         // Start with a minimal component data shape compatible with showRDMPreview()
         const sampled = { type: componentType };
 
@@ -259,6 +613,70 @@ class ComponentPreview {
             const fallback = (typeof blockData.dot_color === 'string' && blockData.dot_color.trim() !== '') ? blockData.dot_color : null;
             sampled.group_1_color = (typeof blockData.group_1_color === 'string' && blockData.group_1_color.trim() !== '') ? blockData.group_1_color : (fallback || '#FF0066');
             sampled.group_2_color = (typeof blockData.group_2_color === 'string' && blockData.group_2_color.trim() !== '') ? blockData.group_2_color : (fallback || '#0066FF');
+        } else if (componentType === 'flanker-trial') {
+            const congruency = parseStringList(blockData.flanker_congruency_options);
+            sampled.congruency = pickFromList(congruency, 'congruent');
+
+            // Optional stimulus type and symbol options
+            const stimType = (blockData.flanker_stimulus_type || 'arrows').toString();
+            sampled.stimulus_type = stimType;
+            const isArrows = stimType.trim().toLowerCase() === 'arrows' || stimType.trim() === '';
+
+            if (isArrows) {
+                const dirs = parseStringList(blockData.flanker_target_direction_options);
+                sampled.target_direction = pickFromList(dirs, 'left');
+            } else {
+                const tOpts = parseStringList(blockData.flanker_target_stimulus_options);
+                const dOpts = parseStringList(blockData.flanker_distractor_stimulus_options);
+                const nOpts = parseStringList(blockData.flanker_neutral_stimulus_options);
+                sampled.target_stimulus = pickFromList(tOpts, 'H');
+                sampled.distractor_stimulus = pickFromList(dOpts, 'S');
+                sampled.neutral_stimulus = pickFromList(nOpts, '–');
+            }
+
+            sampled.left_key = (blockData.flanker_left_key || 'f').toString();
+            sampled.right_key = (blockData.flanker_right_key || 'j').toString();
+            sampled.show_fixation_dot = !!(blockData.flanker_show_fixation_dot ?? false);
+            sampled.show_fixation_cross_between_trials = !!(blockData.flanker_show_fixation_cross_between_trials ?? false);
+
+            const stimMs = randInt(blockData.flanker_stimulus_duration_min, blockData.flanker_stimulus_duration_max);
+            if (stimMs !== null) sampled.stimulus_duration_ms = stimMs;
+
+            const trialMs = randInt(blockData.flanker_trial_duration_min, blockData.flanker_trial_duration_max);
+            if (trialMs !== null) sampled.trial_duration_ms = trialMs;
+
+            const iti = randInt(blockData.flanker_iti_min, blockData.flanker_iti_max);
+            if (iti !== null) sampled.iti_ms = iti;
+        } else if (componentType === 'sart-trial') {
+            const parseIntList = (raw) => {
+                if (raw === undefined || raw === null) return [];
+                return raw
+                    .toString()
+                    .split(',')
+                    .map(s => s.trim())
+                    .filter(Boolean)
+                    .map(s => Number.parseInt(s, 10))
+                    .filter(n => Number.isFinite(n));
+            };
+
+            const digits = parseIntList(blockData.sart_digit_options);
+            sampled.digit = pickFromList(digits, 1);
+
+            const nogo = Number.parseInt(blockData.sart_nogo_digit, 10);
+            if (Number.isFinite(nogo)) sampled.nogo_digit = nogo;
+
+            sampled.go_key = (blockData.sart_go_key || 'space').toString();
+
+            const stimMs = randInt(blockData.sart_stimulus_duration_min, blockData.sart_stimulus_duration_max);
+            if (stimMs !== null) sampled.stimulus_duration_ms = stimMs;
+            const maskMs = randInt(blockData.sart_mask_duration_min, blockData.sart_mask_duration_max);
+            if (maskMs !== null) sampled.mask_duration_ms = maskMs;
+
+            const trialMs = randInt(blockData.sart_trial_duration_min, blockData.sart_trial_duration_max);
+            if (trialMs !== null) sampled.trial_duration_ms = trialMs;
+
+            const iti = randInt(blockData.sart_iti_min, blockData.sart_iti_max);
+            if (iti !== null) sampled.iti_ms = iti;
         }
 
         return sampled;
@@ -463,7 +881,21 @@ class ComponentPreview {
     
     restoreRDMModalContent() {
         const modalBody = document.querySelector('#componentPreviewModal .modal-body');
-        if (modalBody && !modalBody.querySelector('canvas')) {
+        // Some legacy layouts (e.g. index.html initial markup) include a canvas but
+        // are missing newer controls like Block "Resample". Upgrade the modal body
+        // to the canonical RDM preview layout when required elements are absent.
+        const hasRdmCanvas = !!modalBody?.querySelector('#previewCanvas');
+        const hasRdmControls = !!modalBody?.querySelector('#startPreviewBtn')
+            && !!modalBody?.querySelector('#pausePreviewBtn')
+            && !!modalBody?.querySelector('#stopPreviewBtn')
+            && !!modalBody?.querySelector('#resetPreviewBtn');
+        const hasRdmExtras = !!modalBody?.querySelector('#previewContextNote')
+            && !!modalBody?.querySelector('#resamplePreviewBtn')
+            && !!modalBody?.querySelector('#previewParameters');
+
+        const needsRestore = !modalBody || !hasRdmCanvas || !hasRdmControls || !hasRdmExtras;
+
+        if (modalBody && needsRestore) {
             // Restore the original RDM preview content
             modalBody.innerHTML = `
                 <div class="d-flex justify-content-between align-items-center mb-3">

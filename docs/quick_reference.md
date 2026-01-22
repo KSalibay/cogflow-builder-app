@@ -7,6 +7,7 @@ This builder outputs a lightweight configuration object (see [../src/JsonBuilder
 ```json
 {
   "experiment_type": "trial-based",
+  "task_type": "rdm",
   "data_collection": {
     "reaction-time": true,
     "accuracy": true,

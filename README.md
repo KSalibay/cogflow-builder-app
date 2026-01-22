@@ -18,6 +18,7 @@ Core shape (abridged):
 ```json
 {
   "experiment_type": "trial-based",
+  "task_type": "rdm",
   "data_collection": {
     "reaction-time": true,
     "accuracy": true,

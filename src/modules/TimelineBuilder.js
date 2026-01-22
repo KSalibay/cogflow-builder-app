@@ -91,6 +91,11 @@ class TimelineBuilder {
             name: component.name,
             ...component.parameters
         };
+
+        // Ensure detection-response-task flag exists for traceability
+        if (componentData.detection_response_task_enabled === undefined) {
+            componentData.detection_response_task_enabled = false;
+        }
         componentElement.dataset.componentData = JSON.stringify(componentData);
         
         componentElement.innerHTML = `
@@ -158,6 +163,12 @@ class TimelineBuilder {
         console.log('Editing component:', component);
         console.log('Component type:', component.type);
 
+        // Custom editor for survey forms (complex nested question structure)
+        if (component.type === 'survey-response') {
+            this.showSurveyResponseParameterModal(component, componentElement, { modal, modalBody, modalTitle });
+            return;
+        }
+
         // Get component schema
         const schema = this.jsonBuilder.schemaValidator.getPluginSchema(component.type);
         
@@ -172,6 +183,347 @@ class TimelineBuilder {
         // Show modal
         const bootstrapModal = new bootstrap.Modal(modal);
         bootstrapModal.show();
+    }
+
+    showSurveyResponseParameterModal(component, componentElement, { modal, modalBody, modalTitle }) {
+        // Title
+        modalTitle.textContent = `Edit ${component.name || 'Survey Response'}`;
+
+        // Store component element reference in modal for saving
+        modal.setAttribute('data-component-element', 'stored');
+
+        const title = component.title ?? component.parameters?.title ?? 'Survey';
+        const instructions = component.instructions ?? component.parameters?.instructions ?? '';
+        const submitLabel = component.submit_label ?? component.parameters?.submit_label ?? 'Continue';
+        const detectionEnabled = !!(component.detection_response_task_enabled ?? component.parameters?.detection_response_task_enabled ?? false);
+        const allowEmptyOnTimeout = !!(component.allow_empty_on_timeout ?? component.parameters?.allow_empty_on_timeout ?? false);
+        const timeoutMs = (component.timeout_ms ?? component.parameters?.timeout_ms ?? null);
+        const questions = component.questions ?? component.parameters?.questions ?? [];
+
+        modalBody.innerHTML = `
+            <div class="mb-3">
+                <label class="form-label fw-bold">Title</label>
+                <input type="text" class="form-control" id="survey_title" value="${this.escapeHtmlAttr(String(title))}">
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-bold">Instructions</label>
+                <textarea class="form-control" id="survey_instructions" rows="3">${this.escapeHtml(String(instructions))}</textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-bold">Submit button label</label>
+                <input type="text" class="form-control" id="survey_submit_label" value="${this.escapeHtmlAttr(String(submitLabel))}">
+            </div>
+
+            <div class="border rounded p-2 mb-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="survey_detection_response_task_enabled" ${detectionEnabled ? 'checked' : ''}>
+                    <label class="form-check-label fw-bold" for="survey_detection_response_task_enabled">
+                        Enable Detection Response Task
+                    </label>
+                </div>
+                <small class="text-muted d-block mt-1">
+                    When enabled, the interpreter app may run the detection/DRT overlay for this timeline item.
+                </small>
+            </div>
+
+            <div class="border rounded p-2 mb-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="survey_allow_empty_on_timeout" ${allowEmptyOnTimeout ? 'checked' : ''}>
+                    <label class="form-check-label fw-bold" for="survey_allow_empty_on_timeout">
+                        Continue with empty responses after timeout
+                    </label>
+                </div>
+                <div class="row g-2 mt-1">
+                    <div class="col-md-4">
+                        <label class="form-label">Timeout (ms)</label>
+                        <input type="number" class="form-control" id="survey_timeout_ms" min="0" value="${timeoutMs === null ? '' : this.escapeHtmlAttr(String(timeoutMs))}" placeholder="(off)">
+                    </div>
+                    <div class="col-md-8 d-flex align-items-end">
+                        <small class="text-muted">
+                            When enabled, the interpreter may auto-advance after the timeout and store unanswered items as null/empty.
+                        </small>
+                    </div>
+                </div>
+            </div>
+
+            <hr />
+
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0">Questions</h6>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="survey_add_question">
+                    <i class="fas fa-plus"></i> Add Question
+                </button>
+            </div>
+            <div id="survey_questions" class="d-flex flex-column gap-2"></div>
+            <small class="text-muted d-block mt-2">
+                Supported types: likert, radio, text, slider, number. Responses are keyed by question id.
+            </small>
+        `;
+
+        // Toggle timeout input enable/disable
+        const allowTimeoutEl = modalBody.querySelector('#survey_allow_empty_on_timeout');
+        const timeoutEl = modalBody.querySelector('#survey_timeout_ms');
+        const syncTimeoutUi = () => {
+            if (!allowTimeoutEl || !timeoutEl) return;
+            timeoutEl.disabled = !allowTimeoutEl.checked;
+        };
+        if (allowTimeoutEl) {
+            allowTimeoutEl.addEventListener('change', syncTimeoutUi);
+        }
+        syncTimeoutUi();
+
+        const container = modalBody.querySelector('#survey_questions');
+        const addBtn = modalBody.querySelector('#survey_add_question');
+
+        const addQuestionEl = (q = {}) => {
+            const qType = (q.type || 'likert');
+            const qId = (q.id || 'q' + (container.children.length + 1));
+            const qPrompt = (q.prompt || '');
+            const required = !!q.required;
+
+            const optText = Array.isArray(q.options) ? q.options.join('\n') : (q.options || '');
+
+            const sliderMin = (q.min ?? 0);
+            const sliderMax = (q.max ?? 100);
+            const sliderStep = (q.step ?? 1);
+            const sliderMinLabel = (q.min_label ?? '');
+            const sliderMaxLabel = (q.max_label ?? '');
+
+            const textPlaceholder = (q.placeholder ?? '');
+            const multiline = !!q.multiline;
+            const rows = (q.rows ?? 3);
+
+            const numberMin = (q.min ?? '');
+            const numberMax = (q.max ?? '');
+            const numberStep = (q.step ?? 1);
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'survey-question border rounded p-2';
+            wrapper.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center">
+                    <strong>Question</strong>
+                    <button type="button" class="btn btn-sm btn-outline-danger" data-action="remove">Remove</button>
+                </div>
+                <div class="row g-2 mt-1">
+                    <div class="col-md-3">
+                        <label class="form-label">ID</label>
+                        <input type="text" class="form-control" data-field="id" value="${this.escapeHtmlAttr(String(qId))}">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Prompt</label>
+                        <input type="text" class="form-control" data-field="prompt" value="${this.escapeHtmlAttr(String(qPrompt))}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Type</label>
+                        <select class="form-select" data-field="type">
+                            <option value="likert">Likert scale</option>
+                            <option value="radio">Radio options</option>
+                            <option value="text">Text input</option>
+                            <option value="slider">Slider</option>
+                            <option value="number">Numeric input</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" data-field="required" ${required ? 'checked' : ''}>
+                    <label class="form-check-label">Required</label>
+                </div>
+
+                <div class="survey-type survey-type-likert mt-2" data-type-section="likert">
+                    <label class="form-label">Options (one per line)</label>
+                    <textarea class="form-control" rows="4" data-field="options">${this.escapeHtml(String(optText))}</textarea>
+                </div>
+
+                <div class="survey-type survey-type-radio mt-2" data-type-section="radio" style="display:none;">
+                    <label class="form-label">Options (one per line)</label>
+                    <textarea class="form-control" rows="4" data-field="options">${this.escapeHtml(String(optText))}</textarea>
+                </div>
+
+                <div class="survey-type survey-type-text mt-2" data-type-section="text" style="display:none;">
+                    <div class="row g-2">
+                        <div class="col-md-8">
+                            <label class="form-label">Placeholder</label>
+                            <input type="text" class="form-control" data-field="placeholder" value="${this.escapeHtmlAttr(String(textPlaceholder))}">
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" data-field="multiline" ${multiline ? 'checked' : ''}>
+                                <label class="form-check-label">Multiline</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Rows (if multiline)</label>
+                            <input type="number" class="form-control" data-field="rows" min="1" value="${this.escapeHtmlAttr(String(rows))}">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="survey-type survey-type-slider mt-2" data-type-section="slider" style="display:none;">
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <label class="form-label">Min</label>
+                            <input type="number" class="form-control" data-field="min" value="${this.escapeHtmlAttr(String(sliderMin))}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Max</label>
+                            <input type="number" class="form-control" data-field="max" value="${this.escapeHtmlAttr(String(sliderMax))}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Step</label>
+                            <input type="number" class="form-control" data-field="step" value="${this.escapeHtmlAttr(String(sliderStep))}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Min label (optional)</label>
+                            <input type="text" class="form-control" data-field="min_label" value="${this.escapeHtmlAttr(String(sliderMinLabel))}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Max label (optional)</label>
+                            <input type="text" class="form-control" data-field="max_label" value="${this.escapeHtmlAttr(String(sliderMaxLabel))}">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="survey-type survey-type-number mt-2" data-type-section="number" style="display:none;">
+                    <div class="row g-2">
+                        <div class="col-md-3">
+                            <label class="form-label">Min (optional)</label>
+                            <input type="number" class="form-control" data-field="min" value="${this.escapeHtmlAttr(String(numberMin))}">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Max (optional)</label>
+                            <input type="number" class="form-control" data-field="max" value="${this.escapeHtmlAttr(String(numberMax))}">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Step</label>
+                            <input type="number" class="form-control" data-field="step" value="${this.escapeHtmlAttr(String(numberStep))}">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Placeholder</label>
+                            <input type="text" class="form-control" data-field="placeholder" value="${this.escapeHtmlAttr(String(textPlaceholder))}">
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            const typeEl = wrapper.querySelector('[data-field="type"]');
+            if (typeEl) typeEl.value = qType;
+
+            const updateVisibility = () => {
+                const t = (typeEl?.value || 'likert');
+                wrapper.querySelectorAll('[data-type-section]').forEach(sec => {
+                    const secType = sec.getAttribute('data-type-section');
+                    sec.style.display = (secType === t) ? '' : 'none';
+                });
+            };
+
+            if (typeEl) typeEl.addEventListener('change', updateVisibility);
+            updateVisibility();
+
+            const removeBtn = wrapper.querySelector('[data-action="remove"]');
+            if (removeBtn) {
+                removeBtn.addEventListener('click', () => {
+                    wrapper.remove();
+                });
+            }
+
+            container.appendChild(wrapper);
+        };
+
+        (Array.isArray(questions) ? questions : []).forEach(q => addQuestionEl(q));
+        if (container.children.length === 0) {
+            addQuestionEl({ type: 'likert', id: 'q1', prompt: '', options: ['Strongly disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly agree'], required: true });
+        }
+
+        if (addBtn) {
+            addBtn.addEventListener('click', () => addQuestionEl({ type: 'likert', prompt: '', required: false }));
+        }
+
+        const bootstrapModal = new bootstrap.Modal(modal);
+        bootstrapModal.show();
+    }
+
+    collectSurveyResponseFromModal(modalBody) {
+        const title = modalBody.querySelector('#survey_title')?.value ?? 'Survey';
+        const instructions = modalBody.querySelector('#survey_instructions')?.value ?? '';
+        const submit_label = modalBody.querySelector('#survey_submit_label')?.value ?? 'Continue';
+
+        const detection_response_task_enabled = !!modalBody.querySelector('#survey_detection_response_task_enabled')?.checked;
+
+        const allow_empty_on_timeout = !!modalBody.querySelector('#survey_allow_empty_on_timeout')?.checked;
+        const timeoutRaw = modalBody.querySelector('#survey_timeout_ms')?.value;
+        const timeout_ms = (timeoutRaw === undefined || timeoutRaw === null || timeoutRaw === '')
+            ? null
+            : Number(timeoutRaw);
+
+        const questions = [];
+        const questionEls = modalBody.querySelectorAll('.survey-question');
+
+        const parseLines = (raw) => {
+            return raw
+                .toString()
+                .split(/\r?\n/)
+                .map(s => s.trim())
+                .filter(Boolean);
+        };
+
+        questionEls.forEach((el, idx) => {
+            const type = (el.querySelector('[data-field="type"]')?.value || 'likert').trim();
+            const idRaw = (el.querySelector('[data-field="id"]')?.value || '').trim();
+            const id = idRaw || `q${idx + 1}`;
+            const prompt = (el.querySelector('[data-field="prompt"]')?.value || '').trim();
+            const required = !!el.querySelector('[data-field="required"]')?.checked;
+
+            const q = { id, type, prompt, required };
+
+            if (type === 'likert' || type === 'radio') {
+                const optionsRaw = el.querySelector(`[data-type-section="${type}"] [data-field="options"]`)?.value || '';
+                q.options = parseLines(optionsRaw);
+            } else if (type === 'text') {
+                q.placeholder = (el.querySelector('[data-type-section="text"] [data-field="placeholder"]')?.value || '').toString();
+                q.multiline = !!el.querySelector('[data-type-section="text"] [data-field="multiline"]')?.checked;
+                const rowsRaw = el.querySelector('[data-type-section="text"] [data-field="rows"]')?.value;
+                const rows = Number.parseInt(rowsRaw, 10);
+                if (Number.isFinite(rows)) q.rows = rows;
+            } else if (type === 'slider') {
+                const min = Number(el.querySelector('[data-type-section="slider"] [data-field="min"]')?.value);
+                const max = Number(el.querySelector('[data-type-section="slider"] [data-field="max"]')?.value);
+                const step = Number(el.querySelector('[data-type-section="slider"] [data-field="step"]')?.value);
+                if (Number.isFinite(min)) q.min = min;
+                if (Number.isFinite(max)) q.max = max;
+                if (Number.isFinite(step)) q.step = step;
+                q.min_label = (el.querySelector('[data-type-section="slider"] [data-field="min_label"]')?.value || '').toString();
+                q.max_label = (el.querySelector('[data-type-section="slider"] [data-field="max_label"]')?.value || '').toString();
+            } else if (type === 'number') {
+                const minRaw = el.querySelector('[data-type-section="number"] [data-field="min"]')?.value;
+                const maxRaw = el.querySelector('[data-type-section="number"] [data-field="max"]')?.value;
+                const stepRaw = el.querySelector('[data-type-section="number"] [data-field="step"]')?.value;
+                const min = Number(minRaw);
+                const max = Number(maxRaw);
+                const step = Number(stepRaw);
+                if (minRaw !== '' && Number.isFinite(min)) q.min = min;
+                if (maxRaw !== '' && Number.isFinite(max)) q.max = max;
+                if (Number.isFinite(step)) q.step = step;
+                q.placeholder = (el.querySelector('[data-type-section="number"] [data-field="placeholder"]')?.value || '').toString();
+            }
+
+            questions.push(q);
+        });
+
+        return { title, instructions, submit_label, detection_response_task_enabled, allow_empty_on_timeout, timeout_ms, questions };
+    }
+
+    escapeHtmlAttr(str) {
+        return this.escapeHtml(str).replace(/\"/g, '&quot;');
+    }
+
+    escapeHtml(str) {
+        return str
+            .toString()
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
 
     generateParameterForm(component, schema) {
@@ -531,23 +883,92 @@ class TimelineBuilder {
 
         // Block: show only fields matching selected block component type
         const blockTypeEl = formContainer.querySelector('#param_block_component_type');
+
+        // Task-scoped block types (keep the library constrained per task)
+        if (blockTypeEl) {
+            const currentTaskType = document.getElementById('taskType')?.value || 'rdm';
+            const allowed = (currentTaskType === 'flanker')
+                ? ['flanker-trial']
+                : (currentTaskType === 'sart')
+                    ? ['sart-trial']
+                    : ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups'];
+
+            // Rebuild options if the schema contains extra entries.
+            const currentValue = blockTypeEl.value;
+            blockTypeEl.innerHTML = allowed
+                .map(v => `<option value="${v}">${v}</option>`)
+                .join('');
+
+            if (allowed.includes(currentValue)) {
+                blockTypeEl.value = currentValue;
+            } else {
+                blockTypeEl.value = allowed[0] || currentValue;
+            }
+        }
+
         const updateBlockVisibility = () => {
             if (!blockTypeEl) return;
             const selected = blockTypeEl.value;
 
             formContainer.querySelectorAll('[data-block-target]').forEach(el => {
                 const target = el.getAttribute('data-block-target');
-                const show = (target === selected);
+                const matches = (rawTarget, selectedValue) => {
+                    if (!rawTarget) return false;
+                    const parts = rawTarget
+                        .split(',')
+                        .map(s => s.trim())
+                        .filter(Boolean);
+
+                    for (const p of parts) {
+                        if (p.endsWith('*')) {
+                            const prefix = p.slice(0, -1);
+                            if (selectedValue.startsWith(prefix)) return true;
+                        } else if (p === selectedValue) {
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+
+                const show = matches(target, selected);
                 el.style.display = show ? '' : 'none';
                 el.querySelectorAll('input, select, textarea').forEach(i => {
                     i.disabled = !show;
                 });
             });
+
+            // Flanker block: show direction options only for arrow stimuli.
+            if (selected === 'flanker-trial') {
+                const stimTypeEl = formContainer.querySelector('#param_flanker_stimulus_type');
+                const stimTypeRaw = (stimTypeEl ? stimTypeEl.value : 'arrows');
+                const stimType = (stimTypeRaw ?? 'arrows').toString().trim().toLowerCase();
+                const isArrows = (stimType === '' || stimType === 'arrows');
+
+                const setParamVisible = (paramName, visible) => {
+                    const row = formContainer.querySelector(`[data-param-name="${paramName}"]`);
+                    if (!row) return;
+                    row.style.display = visible ? '' : 'none';
+                    row.querySelectorAll('input, select, textarea').forEach(i => {
+                        i.disabled = !visible;
+                    });
+                };
+
+                setParamVisible('flanker_target_direction_options', isArrows);
+                setParamVisible('flanker_target_stimulus_options', !isArrows);
+                setParamVisible('flanker_distractor_stimulus_options', !isArrows);
+                setParamVisible('flanker_neutral_stimulus_options', !isArrows);
+            }
         };
 
         if (blockTypeEl) {
             blockTypeEl.addEventListener('change', updateBlockVisibility);
             updateBlockVisibility();
+
+            // When editing a Flanker block, stimulus type changes should re-evaluate visibility.
+            const stimTypeEl = formContainer.querySelector('#param_flanker_stimulus_type');
+            if (stimTypeEl) {
+                stimTypeEl.addEventListener('change', updateBlockVisibility);
+            }
         }
     }
 
@@ -562,8 +983,49 @@ class TimelineBuilder {
 
         console.log('Saving parameters for component:', this.jsonBuilder.currentEditingComponent);
 
-        // Collect form data
         const modalBody = document.getElementById('parameterModalBody');
+
+        // Read current component data first so we can special-case complex editors.
+        let currentData = {};
+        try {
+            currentData = JSON.parse(this.jsonBuilder.currentEditingComponent.dataset.componentData || '{}') || {};
+        } catch (e) {
+            currentData = {};
+        }
+
+        // Ensure we have the essential fields
+        if (!currentData.type) {
+            console.error('Warning: Component missing type field!', currentData);
+            // Try to recover from dataset.componentType as fallback
+            const fallbackType = this.jsonBuilder.currentEditingComponent.dataset.componentType;
+            if (fallbackType) {
+                currentData.type = fallbackType;
+                console.log('Recovered type from componentType:', fallbackType);
+            }
+        }
+
+        // Survey editor uses a custom DOM (not param_* inputs)
+        if (currentData.type === 'survey-response') {
+            const survey = this.collectSurveyResponseFromModal(modalBody);
+            const updatedData = {
+                type: currentData.type,
+                name: currentData.name || 'Survey Response',
+                ...currentData,
+                ...survey
+            };
+
+            this.jsonBuilder.currentEditingComponent.dataset.componentData = JSON.stringify(updatedData);
+            this.jsonBuilder.updateJSON();
+
+            const paramModal = document.getElementById('parameterModal');
+            const bootstrapModal = bootstrap.Modal.getInstance(paramModal);
+            if (bootstrapModal) {
+                bootstrapModal.hide();
+            }
+            return;
+        }
+
+        // Collect form data
         const inputs = modalBody.querySelectorAll('input, textarea, select');
         const newParameters = {};
 
@@ -599,20 +1061,8 @@ class TimelineBuilder {
 
         // Update the DOM element's data
         try {
-            const currentData = JSON.parse(this.jsonBuilder.currentEditingComponent.dataset.componentData || '{}');
             console.log('Current component data before save:', currentData);
-            
-            // Ensure we have the essential fields
-            if (!currentData.type) {
-                console.error('Warning: Component missing type field!', currentData);
-                // Try to recover from dataset.componentType as fallback
-                const fallbackType = this.jsonBuilder.currentEditingComponent.dataset.componentType;
-                if (fallbackType) {
-                    currentData.type = fallbackType;
-                    console.log('Recovered type from componentType:', fallbackType);
-                }
-            }
-            
+
             let updatedData;
             
             // Check if this component uses nested parameters structure
