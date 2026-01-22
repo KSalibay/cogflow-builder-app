@@ -136,6 +136,13 @@ class JsonBuilder {
             this.exportJSON();
         });
 
+        const saveJsonBtn = document.getElementById('saveJsonBtn');
+        if (saveJsonBtn) {
+            saveJsonBtn.addEventListener('click', () => {
+                this.saveJSON();
+            });
+        }
+
         document.getElementById('loadTemplateBtn').addEventListener('click', () => {
             this.loadTemplate();
         });
@@ -165,6 +172,109 @@ class JsonBuilder {
         document.getElementById('previewComponentBtn').addEventListener('click', () => {
             this.previewCurrentComponent();
         });
+    }
+
+    getSharePointFolderUrl() {
+        const key = 'psychjson_sharepoint_folder_url_v1';
+        const last = (localStorage.getItem(key) || '').toString();
+
+        const raw = prompt(
+            'Enter SharePoint folder URL (will open in a new tab):\n\nExample: https://yourtenant.sharepoint.com/sites/YourSite/Shared%20Documents/YourFolder',
+            last
+        );
+        if (raw === null) return null;
+
+        const url = String(raw || '').trim();
+        if (!url) return null;
+        if (!/^https?:\/\//i.test(url)) {
+            this.showValidationResult('error', 'SharePoint URL must start with http:// or https://');
+            return null;
+        }
+
+        // Defensive: reject non-network schemes.
+        if (/^(javascript:|data:|file:)/i.test(url)) {
+            this.showValidationResult('error', 'Invalid URL scheme.');
+            return null;
+        }
+
+        localStorage.setItem(key, url);
+        return url;
+    }
+
+    getExportFilename(config) {
+        // Ask for a 7-char alphanumeric code and use it in the filename.
+        const last = (localStorage.getItem('psychjson_last_export_code') || '').toString();
+        const rawCode = prompt('Enter export code (7 alphanumeric characters):', last);
+        if (rawCode === null) return null;
+
+        const code = (rawCode || '').toString().trim();
+        const ok = /^[A-Za-z0-9]{7}$/.test(code);
+        if (!ok) {
+            this.showValidationResult('error', 'Invalid export code. Please use exactly 7 letters/numbers (A-Z, a-z, 0-9).');
+            return null;
+        }
+        localStorage.setItem('psychjson_last_export_code', code);
+
+        const taskType = (config.task_type || document.getElementById('taskType')?.value || 'task').toString().trim().toLowerCase();
+        const prefix = `${code}-${taskType}-`;
+
+        // Browser sandbox cannot inspect your Downloads directory.
+        // We approximate "-01, -02, ..." by tracking export history in localStorage.
+        const historyKey = 'psychjson_export_history_v1';
+        let history = [];
+        try {
+            history = JSON.parse(localStorage.getItem(historyKey) || '[]');
+            if (!Array.isArray(history)) history = [];
+        } catch {
+            history = [];
+        }
+
+        const parseSuffix = (name) => {
+            if (typeof name !== 'string') return null;
+            if (!name.startsWith(prefix) || !name.endsWith('.json')) return null;
+            const mid = name.slice(prefix.length, -'.json'.length);
+            const n = Number.parseInt(mid, 10);
+            return Number.isFinite(n) ? n : null;
+        };
+
+        const used = history.map(parseSuffix).filter(n => Number.isFinite(n));
+        const nextNum = (used.length ? Math.max(...used) : 0) + 1;
+        const suffix = String(nextNum).padStart(2, '0');
+        const filename = `${code}-${taskType}-${suffix}.json`;
+
+        history.push(filename);
+        if (history.length > 200) history = history.slice(history.length - 200);
+        localStorage.setItem(historyKey, JSON.stringify(history));
+
+        return { filename, code, taskType };
+    }
+
+    downloadJsonToFile(jsonText, filename) {
+        const blob = new Blob([jsonText], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        URL.revokeObjectURL(url);
+    }
+
+    /**
+     * Save JSON file locally
+     */
+    saveJSON() {
+        const config = this.generateJSON();
+        const json = JSON.stringify(config, null, 2);
+
+        const naming = this.getExportFilename(config);
+        if (!naming) return;
+
+        this.downloadJsonToFile(json, naming.filename);
+        this.showValidationResult('success', `JSON saved locally: ${naming.filename}`);
     }
 
     /**
@@ -2854,19 +2964,24 @@ class JsonBuilder {
     exportJSON() {
         const config = this.generateJSON();
         const json = JSON.stringify(config, null, 2);
-        
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `experiment_config_${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        
-        URL.revokeObjectURL(url);
-        this.showValidationResult('success', 'JSON configuration exported successfully!');
+
+        const naming = this.getExportFilename(config);
+        if (!naming) return;
+
+        // Export flow: save locally first (so you can upload/drag-drop), then open SharePoint.
+        this.downloadJsonToFile(json, naming.filename);
+
+        const sharepointUrl = this.getSharePointFolderUrl();
+        if (sharepointUrl) {
+            try {
+                window.open(sharepointUrl, '_blank', 'noopener');
+            } catch {
+                // ignore
+            }
+            this.showValidationResult('success', `Saved ${naming.filename}. SharePoint folder opened in a new tab.`);
+        } else {
+            this.showValidationResult('success', `Saved ${naming.filename}. (SharePoint URL not set.)`);
+        }
     }
 
     /**
