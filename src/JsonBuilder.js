@@ -2961,15 +2961,62 @@ class JsonBuilder {
     /**
      * Export JSON file
      */
-    exportJSON() {
+    async exportJSON() {
         const config = this.generateJSON();
         const json = JSON.stringify(config, null, 2);
 
         const naming = this.getExportFilename(config);
         if (!naming) return;
 
-        // Export flow: save locally first (so you can upload/drag-drop), then open SharePoint.
-        this.downloadJsonToFile(json, naming.filename);
+        // Preferred flow: upload directly via Microsoft Graph (requires Entra ID app registration)
+        const graphClient = window.GraphSharePointClient;
+        if (graphClient?.uploadJsonToOneDriveFolder) {
+            try {
+                const runtime = graphClient.getRuntimeConfig?.() || {};
+                if (!runtime.clientId) {
+                    const shouldConfigure = confirm(
+                        'Graph export is not configured yet (missing clientId).\n\nConfigure now?'
+                    );
+                    if (shouldConfigure) {
+                        const updated = await graphClient.promptAndPersistSettings();
+                        if (!updated?.clientId) {
+                            this.showValidationResult('warning', 'Graph export not configured; falling back to local download.');
+                            return this.exportJSONLegacy({ json, filename: naming.filename });
+                        }
+                    } else {
+                        return this.exportJSONLegacy({ json, filename: naming.filename });
+                    }
+                }
+
+                const driveItem = await graphClient.uploadJsonToOneDriveFolder({
+                    jsonText: json,
+                    filename: naming.filename
+                });
+
+                const webUrl = driveItem?.webUrl;
+                if (webUrl) {
+                    try {
+                        window.open(webUrl, '_blank', 'noopener');
+                    } catch {
+                        // ignore
+                    }
+                }
+
+                this.showValidationResult('success', `Uploaded ${naming.filename} to SharePoint via Microsoft Graph.`);
+                return;
+            } catch (error) {
+                console.error('Graph export failed:', error);
+                this.showValidationResult('warning', `Graph export failed; falling back to local download. (${error?.message || 'Unknown error'})`);
+                return this.exportJSONLegacy({ json, filename: naming.filename });
+            }
+        }
+
+        // Fallback: local download + open SharePoint folder URL.
+        return this.exportJSONLegacy({ json, filename: naming.filename });
+    }
+
+    exportJSONLegacy({ json, filename }) {
+        this.downloadJsonToFile(json, filename);
 
         const sharepointUrl = this.getSharePointFolderUrl();
         if (sharepointUrl) {
@@ -2978,9 +3025,9 @@ class JsonBuilder {
             } catch {
                 // ignore
             }
-            this.showValidationResult('success', `Saved ${naming.filename}. SharePoint folder opened in a new tab.`);
+            this.showValidationResult('success', `Saved ${filename}. SharePoint folder opened in a new tab.`);
         } else {
-            this.showValidationResult('success', `Saved ${naming.filename}. (SharePoint URL not set.)`);
+            this.showValidationResult('success', `Saved ${filename}. (SharePoint URL not set.)`);
         }
     }
 

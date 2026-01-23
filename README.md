@@ -9,6 +9,54 @@ This app is plain HTML/CSS/JS loaded via classic `<script>` tags (globals; no `i
 - Use VS Code Live Server on [index.html](index.html)
 - If you hit caching issues, bump the `?v=...` cache-buster querystring on local `<script>` tags in [index.html](index.html)
 
+## Export to SharePoint via Microsoft Graph
+
+The **Export to SharePoint** button can upload the generated JSON directly into your OneDrive for Business / SharePoint “My Site” folder using Microsoft Graph.
+
+Important constraints:
+
+- This is a static browser app (no backend), so it uses **delegated auth** (you sign in) via **MSAL**.
+- Do **not** add a client secret.
+- This requires running via `http(s)` (e.g. Live Server). MSAL does not work on `file://`.
+
+### 1) Create an Entra ID (Azure AD) App Registration
+
+In Entra admin center → App registrations:
+
+- Create a new app registration.
+- Platform: **Single-page application (SPA)**
+- Add Redirect URI(s) matching where you run the builder, e.g.:
+  - `http://127.0.0.1:5500/index.html`
+  - `http://localhost:5500/index.html`
+
+### 2) Add Microsoft Graph API permissions (Delegated)
+
+At minimum (for uploading into your own OneDrive for Business):
+
+- `User.Read`
+- `Files.ReadWrite`
+
+If you later target a Team site / shared document library, you may need broader scopes like `Sites.ReadWrite.All`.
+
+### 3) Configure the builder
+
+Edit [src/graphConfig.js](src/graphConfig.js):
+
+- Set `clientId` to your App Registration’s **Application (client) ID**.
+- Optionally set `tenantId` to your tenant GUID.
+- Confirm `defaultUploadFolderPath` matches your folder (relative to drive root).
+
+For the folder you provided, the default is:
+
+- `Documents/Research/Projects _ Open/DP26_internal_external_attention/CRDM`
+
+### 4) Use it
+
+- Run the app in Live Server.
+- Click **Export to SharePoint**.
+- The first time, a sign-in popup appears.
+- On success, the uploaded file opens in a new tab.
+
 ## What the builder outputs
 
 The JSON produced by the builder is intentionally lightweight and matches what [src/JsonBuilder.js](src/JsonBuilder.js) generates.
