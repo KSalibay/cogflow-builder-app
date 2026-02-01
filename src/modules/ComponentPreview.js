@@ -92,6 +92,8 @@ class ComponentPreview {
             this.showInstructionsPreview(stimulusText, componentData);
         } else if (componentType === 'flanker-trial') {
             this.showFlankerPreview(componentData);
+        } else if (componentType === 'gabor-trial') {
+            this.showGaborPreview(componentData);
         } else if (componentType === 'sart-trial') {
             this.showSartPreview(componentData);
         } else if (componentType === 'survey-response') {
@@ -315,6 +317,262 @@ class ComponentPreview {
         modal.show();
     }
 
+    showGaborPreview(componentData) {
+        const previewModal = this.getPreviewModal();
+        if (!previewModal) return;
+        const { modal } = previewModal;
+
+        const escape = (s) => {
+            return (s ?? '')
+                .toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        };
+
+        const targetLocation = (componentData?.target_location ?? 'left').toString();
+        const targetTilt = Number(componentData?.target_tilt_deg ?? 45);
+        const distractorOrientation = Number(componentData?.distractor_orientation_deg ?? 0);
+        const spatialCue = (componentData?.spatial_cue ?? 'none').toString();
+        const leftValue = (componentData?.left_value ?? 'neutral').toString();
+        const rightValue = (componentData?.right_value ?? 'neutral').toString();
+
+        const responseTask = (componentData?.response_task ?? 'discriminate_tilt').toString();
+        const leftKey = (componentData?.left_key ?? 'f').toString();
+        const rightKey = (componentData?.right_key ?? 'j').toString();
+        const yesKey = (componentData?.yes_key ?? 'f').toString();
+        const noKey = (componentData?.no_key ?? 'j').toString();
+
+        // Prefer per-component preview colors; fall back to current defaults panel if present.
+        const panelHigh = document.getElementById('gaborHighValueColor')?.value;
+        const panelLow = document.getElementById('gaborLowValueColor')?.value;
+        const highColor = (componentData?.high_value_color ?? panelHigh ?? '#00aa00').toString();
+        const lowColor = (componentData?.low_value_color ?? panelLow ?? '#0066ff').toString();
+        const neutralColor = '#666666';
+
+        const frameColorForValue = (v) => {
+            if (v === 'high') return highColor;
+            if (v === 'low') return lowColor;
+            return neutralColor;
+        };
+
+        const leftAngle = (targetLocation === 'left') ? targetTilt : distractorOrientation;
+        const rightAngle = (targetLocation === 'right') ? targetTilt : distractorOrientation;
+
+        const noteText = (componentData?._previewContextNote ?? '').toString();
+        const hasBlockSource = !!componentData?._blockPreviewSource;
+
+        const modalBody = document.querySelector('#componentPreviewModal .modal-body');
+        if (modalBody) {
+            modalBody.innerHTML = `
+                <div class="p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h5 class="mb-1">Gabor Preview</h5>
+                            <div class="small text-muted">Canvas renderer (actual Gabor gratings)</div>
+                            ${noteText ? `<div class="small text-muted">${escape(noteText)}</div>` : ''}
+                        </div>
+                        <div class="text-end small text-muted">
+                            <div><strong>Target:</strong> ${escape(targetLocation)}</div>
+                            <div><strong>Spatial cue:</strong> ${escape(spatialCue)}</div>
+                            <div><strong>Response:</strong> ${escape(responseTask)}</div>
+                        </div>
+                    </div>
+
+                    <div class="border rounded mt-3 p-2" style="background:#0f0f0f;">
+                        <canvas id="gaborPreviewCanvas" width="720" height="320" style="width:100%; height:auto; display:block;"></canvas>
+                        <div class="mt-2 small text-muted d-flex justify-content-between">
+                            <div><strong>Left value:</strong> ${escape(leftValue)}</div>
+                            <div><strong>Right value:</strong> ${escape(rightValue)}</div>
+                        </div>
+                    </div>
+
+                    <div class="mt-3 small text-muted">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                ${responseTask === 'detect_target'
+                                    ? `Yes/No: <strong>${escape(yesKey)}</strong>/<strong>${escape(noKey)}</strong>`
+                                    : `Left/Right: <strong>${escape(leftKey)}</strong>/<strong>${escape(rightKey)}</strong>`}
+                                ${componentData?.detection_response_task_enabled ? '<br><span class="badge bg-warning text-dark">DRT enabled</span>' : ''}
+                            </div>
+                            ${hasBlockSource ? `<button type="button" class="btn btn-sm btn-outline-secondary" id="gaborResampleBtn"><i class="fas fa-dice"></i> Resample</button>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Render actual Gabor patches
+            const canvas = modalBody.querySelector('#gaborPreviewCanvas');
+            if (canvas) {
+                this.renderGaborTrialToCanvas(canvas, {
+                    spatialCue,
+                    leftFrameColor: frameColorForValue(leftValue),
+                    rightFrameColor: frameColorForValue(rightValue),
+                    leftAngle,
+                    rightAngle
+                });
+            }
+
+            if (hasBlockSource) {
+                const btn = modalBody.querySelector('#gaborResampleBtn');
+                if (btn) {
+                    btn.onclick = () => {
+                        const sampled = this.sampleComponentFromBlock(componentData._blockPreviewSource);
+                        const baseType = componentData._blockPreviewSource.block_component_type || componentData._blockPreviewSource.component_type || 'gabor-trial';
+                        const length = componentData._blockPreviewSource.block_length ?? componentData._blockPreviewSource.length ?? 0;
+                        const sampling = componentData._blockPreviewSource.sampling_mode || 'per-trial';
+                        sampled._previewContextNote = `Block sample → ${baseType} (length ${length}, ${sampling})`;
+                        sampled._blockPreviewSource = componentData._blockPreviewSource;
+                        this.showGaborPreview(sampled);
+                    };
+                }
+            }
+        }
+
+        modal.show();
+    }
+
+    renderGaborTrialToCanvas(canvas, { spatialCue, leftFrameColor, rightFrameColor, leftAngle, rightAngle }) {
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const w = canvas.width;
+        const h = canvas.height;
+
+        // Background
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = '#0b0b0b';
+        ctx.fillRect(0, 0, w, h);
+
+        // Layout
+        const pad = 24;
+        const patchSize = Math.min(200, Math.floor((w - pad * 2) / 3));
+        const frameSize = patchSize + 44;
+        const cy = Math.floor(h * 0.60);
+        const leftCx = Math.floor(w * 0.32);
+        const rightCx = Math.floor(w * 0.68);
+
+        // Cue
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.font = '36px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const cueText = (spatialCue === 'left') ? '←' : (spatialCue === 'right') ? '→' : (spatialCue === 'both') ? '↔' : '';
+        if (cueText) {
+            ctx.fillText(cueText, Math.floor(w / 2), Math.floor(h * 0.18));
+        } else {
+            ctx.fillStyle = 'rgba(255,255,255,0.35)';
+            ctx.font = '14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
+            ctx.fillText('(no spatial cue)', Math.floor(w / 2), Math.floor(h * 0.18));
+        }
+
+        // Frames
+        this.drawRoundedRectStroke(ctx, leftCx - frameSize / 2, cy - frameSize / 2, frameSize, frameSize, 16, leftFrameColor, 6);
+        this.drawRoundedRectStroke(ctx, rightCx - frameSize / 2, cy - frameSize / 2, frameSize, frameSize, 16, rightFrameColor, 6);
+
+        // Gabor patches
+        this.drawGaborPatch(ctx, leftCx, cy, patchSize, leftAngle);
+        this.drawGaborPatch(ctx, rightCx, cy, patchSize, rightAngle);
+
+        // Fixation
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+        ctx.lineWidth = 2;
+        const fx = Math.floor(w / 2);
+        const fy = cy;
+        ctx.beginPath();
+        ctx.moveTo(fx - 10, fy);
+        ctx.lineTo(fx + 10, fy);
+        ctx.moveTo(fx, fy - 10);
+        ctx.lineTo(fx, fy + 10);
+        ctx.stroke();
+    }
+
+    drawRoundedRectStroke(ctx, x, y, width, height, radius, strokeStyle, lineWidth) {
+        const r = Math.max(0, Math.min(radius, Math.min(width, height) / 2));
+        ctx.save();
+        ctx.strokeStyle = strokeStyle;
+        ctx.lineWidth = lineWidth;
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + width - r, y);
+        ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+        ctx.lineTo(x + width, y + height - r);
+        ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+        ctx.lineTo(x + r, y + height);
+        ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    drawGaborPatch(ctx, centerX, centerY, sizePx, orientationDeg) {
+        const w = Math.max(8, Math.floor(sizePx));
+        const h = w;
+        const r = Math.floor(w / 2);
+        const theta = (Number.isFinite(orientationDeg) ? orientationDeg : 0) * Math.PI / 180;
+
+        // Frequency: cycles per pixel (tuned for preview visibility)
+        const freq = 0.06;
+        const sigma = w / 6;
+        const contrast = 0.95;
+        const phase = 0;
+
+        const img = ctx.createImageData(w, h);
+        const data = img.data;
+
+        const cosT = Math.cos(theta);
+        const sinT = Math.sin(theta);
+        const twoSigma2 = 2 * sigma * sigma;
+
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const dx = x - r;
+                const dy = y - r;
+                const rr = dx * dx + dy * dy;
+                const idx = (y * w + x) * 4;
+
+                // Circular aperture with alpha outside
+                if (rr > r * r) {
+                    data[idx + 0] = 0;
+                    data[idx + 1] = 0;
+                    data[idx + 2] = 0;
+                    data[idx + 3] = 0;
+                    continue;
+                }
+
+                // Rotate coordinates
+                const xRot = dx * cosT + dy * sinT;
+
+                const envelope = Math.exp(-(rr) / twoSigma2);
+                const grating = Math.cos(2 * Math.PI * freq * xRot + phase);
+                const val = 127.5 + 127.5 * contrast * envelope * grating;
+                const v = Math.max(0, Math.min(255, Math.round(val)));
+
+                data[idx + 0] = v;
+                data[idx + 1] = v;
+                data[idx + 2] = v;
+                data[idx + 3] = 255;
+            }
+        }
+
+        // NOTE: putImageData ignores the current transform matrix, so we must
+        // provide absolute coordinates.
+        ctx.putImageData(img, Math.round(centerX - r), Math.round(centerY - r));
+
+        // Soft outline
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, r - 1, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+    }
+
     showSurveyPreview(componentData) {
         const previewModal = this.getPreviewModal();
         if (!previewModal) return;
@@ -458,6 +716,11 @@ class ComponentPreview {
 
         if (baseType === 'sart-trial') {
             this.showSartPreview(sampled);
+            return;
+        }
+
+        if (baseType === 'gabor-trial') {
+            this.showGaborPreview(sampled);
             return;
         }
 
@@ -677,6 +940,37 @@ class ComponentPreview {
 
             const iti = randInt(blockData.sart_iti_min, blockData.sart_iti_max);
             if (iti !== null) sampled.iti_ms = iti;
+        } else if (componentType === 'gabor-trial') {
+            const locs = parseStringList(blockData.gabor_target_location_options);
+            sampled.target_location = pickFromList(locs, 'left');
+
+            const tilts = parseNumberList(blockData.gabor_target_tilt_options, { min: -90, max: 90 });
+            sampled.target_tilt_deg = pickFromList(tilts, 45);
+
+            const dis = parseNumberList(blockData.gabor_distractor_orientation_options, { min: 0, max: 179 });
+            sampled.distractor_orientation_deg = pickFromList(dis, 0);
+
+            const cues = parseStringList(blockData.gabor_spatial_cue_options);
+            sampled.spatial_cue = pickFromList(cues, 'none');
+
+            const lv = parseStringList(blockData.gabor_left_value_options);
+            sampled.left_value = pickFromList(lv, 'neutral');
+
+            const rv = parseStringList(blockData.gabor_right_value_options);
+            sampled.right_value = pickFromList(rv, 'neutral');
+
+            const responseTask = (blockData.gabor_response_task || '').toString().trim();
+            sampled.response_task = responseTask || 'discriminate_tilt';
+
+            sampled.left_key = (blockData.gabor_left_key || 'f').toString();
+            sampled.right_key = (blockData.gabor_right_key || 'j').toString();
+            sampled.yes_key = (blockData.gabor_yes_key || 'f').toString();
+            sampled.no_key = (blockData.gabor_no_key || 'j').toString();
+
+            const stimMs = randInt(blockData.gabor_stimulus_duration_min, blockData.gabor_stimulus_duration_max);
+            if (stimMs !== null) sampled.stimulus_duration_ms = stimMs;
+            const maskMs = randInt(blockData.gabor_mask_duration_min, blockData.gabor_mask_duration_max);
+            if (maskMs !== null) sampled.mask_duration_ms = maskMs;
         }
 
         return sampled;

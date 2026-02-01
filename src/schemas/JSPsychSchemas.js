@@ -177,6 +177,88 @@ class JSPsychSchemas {
                 }
             },
 
+            'gabor-trial': {
+                name: 'gabor-trial',
+                description: 'Gabor patch trial/frame (stimulus + scoring implemented by interpreter)',
+                parameters: {
+                    response_task: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'discriminate_tilt',
+                        options: ['detect_target', 'discriminate_tilt'],
+                        description: 'Whether participant detects the target (yes/no) or discriminates its tilt (left/right)'
+                    },
+                    left_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'f',
+                        description: 'Left response key (for discriminate_tilt)'
+                    },
+                    right_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'j',
+                        description: 'Right response key (for discriminate_tilt)'
+                    },
+                    yes_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'f',
+                        description: 'Yes key (for detect_target)'
+                    },
+                    no_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'j',
+                        description: 'No key (for detect_target)'
+                    },
+                    target_location: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'left',
+                        options: ['left', 'right'],
+                        description: 'Which location contains the target'
+                    },
+                    target_tilt_deg: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 45,
+                        description: 'Target orientation tilt (degrees)'
+                    },
+                    distractor_orientation_deg: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0,
+                        description: 'Distractor orientation (degrees)'
+                    },
+                    spatial_cue: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'none',
+                        options: ['none', 'left', 'right', 'both'],
+                        description: 'Spatial cue direction'
+                    },
+                    left_value: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'neutral',
+                        options: ['neutral', 'high', 'low'],
+                        description: 'Value cue for left location (frame color mapping via gabor_settings)'
+                    },
+                    right_value: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'neutral',
+                        options: ['neutral', 'high', 'low'],
+                        description: 'Value cue for right location (frame color mapping via gabor_settings)'
+                    },
+                    stimulus_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 67,
+                        description: 'Stimulus display duration (ms)'
+                    },
+                    mask_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 67,
+                        description: 'Mask duration after stimulus (ms)'
+                    },
+                    detection_response_task_enabled: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        description: 'Enable/disable Detection Response Task (DRT) overlay for this component (handled by interpreter)'
+                    }
+                }
+            },
+
             'block': {
                 name: 'block',
                 description: 'Generate many trials from parameter windows/ranges (compact representation for large experiments)',
@@ -189,7 +271,7 @@ class JSPsychSchemas {
                     block_component_type: {
                         type: this.parameterTypes.SELECT,
                         default: 'rdm-trial',
-                        options: ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups', 'flanker-trial', 'sart-trial'],
+                        options: ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups', 'flanker-trial', 'sart-trial', 'gabor-trial'],
                         required: true,
                         description: 'What component type this block generates'
                     },
@@ -615,6 +697,99 @@ class JSPsychSchemas {
                         default: 800,
                         blockTarget: 'sart-trial',
                         description: 'SART: ITI max (ms)'
+                    },
+
+                    // Gabor block windows/values
+                    gabor_response_task: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'discriminate_tilt',
+                        options: ['detect_target', 'discriminate_tilt'],
+                        blockTarget: 'gabor-trial',
+                        description: 'Gabor: response task mode for generated trials'
+                    },
+                    gabor_left_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'f',
+                        blockTarget: 'gabor-trial',
+                        description: 'Gabor: left key (discriminate_tilt)'
+                    },
+                    gabor_right_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'j',
+                        blockTarget: 'gabor-trial',
+                        description: 'Gabor: right key (discriminate_tilt)'
+                    },
+                    gabor_yes_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'f',
+                        blockTarget: 'gabor-trial',
+                        description: 'Gabor: yes key (detect_target)'
+                    },
+                    gabor_no_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'j',
+                        blockTarget: 'gabor-trial',
+                        description: 'Gabor: no key (detect_target)'
+                    },
+                    gabor_target_location_options: {
+                        type: this.parameterTypes.STRING,
+                        default: 'left,right',
+                        blockTarget: 'gabor-trial',
+                        description: 'Gabor: comma-separated target locations to sample from'
+                    },
+                    gabor_target_tilt_options: {
+                        type: this.parameterTypes.STRING,
+                        default: '-45,45',
+                        blockTarget: 'gabor-trial',
+                        description: 'Gabor: comma-separated target tilts (deg; -90 to 90) to sample from'
+                    },
+                    gabor_distractor_orientation_options: {
+                        type: this.parameterTypes.STRING,
+                        default: '0,90',
+                        blockTarget: 'gabor-trial',
+                        description: 'Gabor: comma-separated distractor orientations (deg; 0-179) to sample from'
+                    },
+                    gabor_spatial_cue_options: {
+                        type: this.parameterTypes.STRING,
+                        default: 'none,left,right,both',
+                        blockTarget: 'gabor-trial',
+                        description: 'Gabor: comma-separated spatial cue options to sample from'
+                    },
+                    gabor_left_value_options: {
+                        type: this.parameterTypes.STRING,
+                        default: 'neutral,high,low',
+                        blockTarget: 'gabor-trial',
+                        description: 'Gabor: comma-separated left value cue options to sample from'
+                    },
+                    gabor_right_value_options: {
+                        type: this.parameterTypes.STRING,
+                        default: 'neutral,high,low',
+                        blockTarget: 'gabor-trial',
+                        description: 'Gabor: comma-separated right value cue options to sample from'
+                    },
+                    gabor_stimulus_duration_min: {
+                        type: this.parameterTypes.INT,
+                        default: 67,
+                        blockTarget: 'gabor-trial',
+                        description: 'Gabor: stimulus duration min (ms)'
+                    },
+                    gabor_stimulus_duration_max: {
+                        type: this.parameterTypes.INT,
+                        default: 67,
+                        blockTarget: 'gabor-trial',
+                        description: 'Gabor: stimulus duration max (ms)'
+                    },
+                    gabor_mask_duration_min: {
+                        type: this.parameterTypes.INT,
+                        default: 67,
+                        blockTarget: 'gabor-trial',
+                        description: 'Gabor: mask duration min (ms)'
+                    },
+                    gabor_mask_duration_max: {
+                        type: this.parameterTypes.INT,
+                        default: 67,
+                        blockTarget: 'gabor-trial',
+                        description: 'Gabor: mask duration max (ms)'
                     },
                     group_1_coherence_min: {
                         type: this.parameterTypes.FLOAT,

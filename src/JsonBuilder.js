@@ -66,6 +66,38 @@ class JsonBuilder {
         }
     }
 
+    applyGaborResponseTaskVisibility() {
+        const mode = document.getElementById('gaborResponseTask')?.value || 'discriminate_tilt';
+        const directionGroup = document.getElementById('gaborDirectionKeysGroup');
+        const detectionGroup = document.getElementById('gaborDetectionKeysGroup');
+
+        if (directionGroup) {
+            directionGroup.style.display = (mode === 'discriminate_tilt') ? '' : 'none';
+        }
+        if (detectionGroup) {
+            detectionGroup.style.display = (mode === 'detect_target') ? '' : 'none';
+        }
+    }
+
+    bindGaborSettingsUI() {
+        const responseTaskEl = document.getElementById('gaborResponseTask');
+        if (!responseTaskEl) return;
+
+        // Prevent stacking listeners across re-renders.
+        if (responseTaskEl.dataset.bound === '1') {
+            this.applyGaborResponseTaskVisibility();
+            return;
+        }
+
+        responseTaskEl.dataset.bound = '1';
+        responseTaskEl.addEventListener('change', () => {
+            this.applyGaborResponseTaskVisibility();
+            this.updateJSON();
+        });
+
+        this.applyGaborResponseTaskVisibility();
+    }
+
     /**
      * Initialize the application
      */
@@ -321,7 +353,7 @@ class JsonBuilder {
     }
 
     maybeInsertStarterTimeline(taskType) {
-        if (taskType !== 'flanker' && taskType !== 'sart') return;
+        if (taskType !== 'flanker' && taskType !== 'sart' && taskType !== 'gabor') return;
 
         const timelineContainer = document.getElementById('timelineComponents');
         if (!timelineContainer) return;
@@ -331,7 +363,11 @@ class JsonBuilder {
 
         const defs = this.getComponentDefinitions();
         const instructionsDef = defs.find(d => d.id === 'instructions');
-        const trialId = taskType === 'flanker' ? 'flanker-trial' : 'sart-trial';
+        const trialId = taskType === 'flanker'
+            ? 'flanker-trial'
+            : (taskType === 'sart')
+                ? 'sart-trial'
+                : 'gabor-trial';
         const trialDef = defs.find(d => d.id === trialId);
 
         if (instructionsDef) this.addComponentToTimeline(instructionsDef);
@@ -419,6 +455,15 @@ class JsonBuilder {
             if (type === 'block') {
                 const innerType = componentData?.block_component_type;
                 return innerType === 'sart-trial';
+            }
+            return false;
+        }
+
+        if (taskType === 'gabor') {
+            if (type === 'gabor-trial') return true;
+            if (type === 'block') {
+                const innerType = componentData?.block_component_type;
+                return innerType === 'gabor-trial';
             }
             return false;
         }
@@ -616,6 +661,101 @@ class JsonBuilder {
                     <label class="parameter-label">ITI (ms):</label>
                     <input type="number" class="form-control parameter-input" id="sartItiMs" value="0" min="0" max="10000">
                     <div class="parameter-help">Default inter-trial interval</div>
+                </div>
+            </div>
+            `
+            : (taskType === 'gabor')
+            ? `
+            <div class="parameter-group" id="gaborExperimentParameters">
+                <div class="group-title d-flex justify-content-between align-items-center">
+                    <div>
+                        <span>Gabor Experiment Settings</span>
+                        <small class="text-muted d-block">Default values for Gabor components</small>
+                    </div>
+                    <button class="btn btn-sm btn-info" id="previewTaskDefaultsBtn" onclick="window.componentPreview?.showPreview(window.jsonBuilderInstance?.getCurrentGaborDefaults())">
+                        <i class="fas fa-eye"></i> Preview Defaults
+                    </button>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Response Task:</label>
+                    <select class="form-control parameter-input" id="gaborResponseTask">
+                        <option value="detect_target">Detect target (yes/no)</option>
+                        <option value="discriminate_tilt" selected>Discriminate target tilt (left/right)</option>
+                    </select>
+                    <div class="parameter-help">Interpreter decides scoring based on this mode</div>
+                </div>
+
+                <div id="gaborDirectionKeysGroup">
+                    <div class="parameter-row">
+                        <label class="parameter-label">Left Key:</label>
+                        <input type="text" class="form-control parameter-input" id="gaborLeftKey" value="f">
+                        <div class="parameter-help">Used for left-tilt responses (discriminate_tilt)</div>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Right Key:</label>
+                        <input type="text" class="form-control parameter-input" id="gaborRightKey" value="j">
+                        <div class="parameter-help">Used for right-tilt responses (discriminate_tilt)</div>
+                    </div>
+                </div>
+
+                <div id="gaborDetectionKeysGroup">
+                    <div class="parameter-row">
+                        <label class="parameter-label">Yes Key:</label>
+                        <input type="text" class="form-control parameter-input" id="gaborYesKey" value="f">
+                        <div class="parameter-help">Used for target-present responses (detect_target)</div>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">No Key:</label>
+                        <input type="text" class="form-control parameter-input" id="gaborNoKey" value="j">
+                        <div class="parameter-help">Used for target-absent responses (detect_target)</div>
+                    </div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">High Value Color:</label>
+                    <input type="color" class="form-control parameter-input" id="gaborHighValueColor" value="#00aa00">
+                    <div class="parameter-help">Example: green = high value</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Low Value Color:</label>
+                    <input type="color" class="form-control parameter-input" id="gaborLowValueColor" value="#0066ff">
+                    <div class="parameter-help">Example: blue = low value</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Spatial Cue Validity (0–1):</label>
+                    <input type="number" class="form-control parameter-input" id="gaborSpatialCueValidity" value="0.8" min="0" max="1" step="0.01">
+                    <div class="parameter-help">Directional arrow indicates this probability the target is at the cued location</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Fixation (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="gaborFixationMs" value="1000" min="0" max="20000">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Placeholders (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="gaborPlaceholdersMs" value="400" min="0" max="20000">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Cue (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="gaborCueMs" value="300" min="0" max="20000">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Cue→Target Delay Min (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="gaborCueDelayMinMs" value="100" min="0" max="20000">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Cue→Target Delay Max (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="gaborCueDelayMaxMs" value="200" min="0" max="20000">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Stimulus Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="gaborStimulusDurationMs" value="67" min="0" max="10000">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Mask Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="gaborMaskDurationMs" value="67" min="0" max="10000">
                 </div>
             </div>
             `
@@ -850,6 +990,9 @@ class JsonBuilder {
         if (feedbackTypeEl) {
             feedbackTypeEl.addEventListener('change', () => this.updateConditionalUI());
         }
+
+        // Task-specific conditional UI (Gabor response keys)
+        this.bindGaborSettingsUI();
         
         // Add specific listener for coherence slider
         const coherenceSlider = document.getElementById('motionCoherence');
@@ -986,6 +1129,98 @@ class JsonBuilder {
                     <label class="parameter-label">ITI (ms):</label>
                     <input type="number" class="form-control parameter-input" id="sartItiMs" value="0" min="0" max="10000">
                     <div class="parameter-help">Default inter-trial interval</div>
+                </div>
+            </div>
+            `
+            : (taskType === 'gabor')
+            ? `
+            <div class="parameter-group" id="gaborExperimentParameters">
+                <div class="group-title d-flex justify-content-between align-items-center">
+                    <div>
+                        <span>Gabor Experiment Settings</span>
+                        <small class="text-muted d-block">Default values for Gabor components</small>
+                    </div>
+                    <button class="btn btn-sm btn-info" id="previewTaskDefaultsBtn" onclick="window.componentPreview?.showPreview(window.jsonBuilderInstance?.getCurrentGaborDefaults())">
+                        <i class="fas fa-eye"></i> Preview Defaults
+                    </button>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Response Task:</label>
+                    <select class="form-control parameter-input" id="gaborResponseTask">
+                        <option value="detect_target">Detect target (yes/no)</option>
+                        <option value="discriminate_tilt" selected>Discriminate target tilt (left/right)</option>
+                    </select>
+                    <div class="parameter-help">Interpreter decides scoring based on this mode</div>
+                </div>
+
+                <div id="gaborDirectionKeysGroup">
+                    <div class="parameter-row">
+                        <label class="parameter-label">Left Key:</label>
+                        <input type="text" class="form-control parameter-input" id="gaborLeftKey" value="f">
+                        <div class="parameter-help">Used for left-tilt responses (discriminate_tilt)</div>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Right Key:</label>
+                        <input type="text" class="form-control parameter-input" id="gaborRightKey" value="j">
+                        <div class="parameter-help">Used for right-tilt responses (discriminate_tilt)</div>
+                    </div>
+                </div>
+
+                <div id="gaborDetectionKeysGroup">
+                    <div class="parameter-row">
+                        <label class="parameter-label">Yes Key:</label>
+                        <input type="text" class="form-control parameter-input" id="gaborYesKey" value="f">
+                        <div class="parameter-help">Used for target-present responses (detect_target)</div>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">No Key:</label>
+                        <input type="text" class="form-control parameter-input" id="gaborNoKey" value="j">
+                        <div class="parameter-help">Used for target-absent responses (detect_target)</div>
+                    </div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">High Value Color:</label>
+                    <input type="color" class="form-control parameter-input" id="gaborHighValueColor" value="#00aa00">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Low Value Color:</label>
+                    <input type="color" class="form-control parameter-input" id="gaborLowValueColor" value="#0066ff">
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Spatial Cue Validity (0–1):</label>
+                    <input type="number" class="form-control parameter-input" id="gaborSpatialCueValidity" value="0.8" min="0" max="1" step="0.01">
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Fixation (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="gaborFixationMs" value="1000" min="0" max="20000">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Placeholders (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="gaborPlaceholdersMs" value="400" min="0" max="20000">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Cue (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="gaborCueMs" value="300" min="0" max="20000">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Cue→Target Delay Min (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="gaborCueDelayMinMs" value="100" min="0" max="20000">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Cue→Target Delay Max (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="gaborCueDelayMaxMs" value="200" min="0" max="20000">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Stimulus Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="gaborStimulusDurationMs" value="67" min="0" max="10000">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Mask Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="gaborMaskDurationMs" value="67" min="0" max="10000">
                 </div>
             </div>
             `
@@ -1209,6 +1444,9 @@ class JsonBuilder {
         if (feedbackTypeEl) {
             feedbackTypeEl.addEventListener('change', () => this.updateConditionalUI());
         }
+
+        // Task-specific conditional UI (Gabor response keys)
+        this.bindGaborSettingsUI();
         
         // Add specific listener for coherence slider
         const coherenceSlider = document.getElementById('motionCoherence');
@@ -1248,7 +1486,9 @@ class JsonBuilder {
                 ? ['flanker-trial']
                 : (currentTaskType === 'sart')
                     ? ['sart-trial']
-                    : ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups'];
+                    : (currentTaskType === 'gabor')
+                        ? ['gabor-trial']
+                        : ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups'];
 
             const defaultType = baseOptions[0] || 'rdm-trial';
 
@@ -1293,7 +1533,27 @@ class JsonBuilder {
                 sart_iti_max: { type: 'number', default: 800, min: 0, max: 10000 }
             };
 
-            // RDM-only params remain in RDM mode; Flanker/SART blocks should not inherit the RDM UI surface.
+            const gaborOnlyParams = {
+                // Gabor task-wide settings (copyable to blocks so multiple blocks can co-exist)
+                gabor_response_task: { type: 'select', default: 'discriminate_tilt', options: ['detect_target', 'discriminate_tilt'] },
+                gabor_left_key: { type: 'string', default: 'f' },
+                gabor_right_key: { type: 'string', default: 'j' },
+                gabor_yes_key: { type: 'string', default: 'f' },
+                gabor_no_key: { type: 'string', default: 'j' },
+
+                gabor_target_location_options: { type: 'string', default: 'left,right' },
+                gabor_target_tilt_options: { type: 'string', default: '-45,45' },
+                gabor_distractor_orientation_options: { type: 'string', default: '0,90' },
+                gabor_spatial_cue_options: { type: 'string', default: 'none,left,right,both' },
+                gabor_left_value_options: { type: 'string', default: 'neutral,high,low' },
+                gabor_right_value_options: { type: 'string', default: 'neutral,high,low' },
+                gabor_stimulus_duration_min: { type: 'number', default: 67, min: 0, max: 10000 },
+                gabor_stimulus_duration_max: { type: 'number', default: 67, min: 0, max: 10000 },
+                gabor_mask_duration_min: { type: 'number', default: 67, min: 0, max: 10000 },
+                gabor_mask_duration_max: { type: 'number', default: 67, min: 0, max: 10000 }
+            };
+
+            // RDM-only params remain in RDM mode; other tasks should not inherit the RDM UI surface.
             const rdmOnlyParams = {
                 // Dot color (used for simple trial/practice/adaptive; dot-groups uses per-group colors)
                 dot_color: { type: 'COLOR', default: '#FFFFFF' },
@@ -1359,7 +1619,9 @@ class JsonBuilder {
                 ? flankerOnlyParams
                 : (currentTaskType === 'sart')
                     ? sartOnlyParams
-                    : rdmOnlyParams;
+                    : (currentTaskType === 'gabor')
+                        ? gaborOnlyParams
+                        : rdmOnlyParams;
 
             return {
                 id: 'block',
@@ -1430,8 +1692,8 @@ class JsonBuilder {
             }
         ];
 
-        // For Flanker and SART, show only task-appropriate components.
-        if (taskType === 'flanker' || taskType === 'sart') {
+        // For Flanker/SART/Gabor, show only task-appropriate components.
+        if (taskType === 'flanker' || taskType === 'sart' || taskType === 'gabor') {
             if (taskType === 'flanker') {
                 baseComponents.push({
                     id: 'flanker-trial',
@@ -1472,6 +1734,36 @@ class JsonBuilder {
                         mask_duration_ms: { type: 'number', default: 900, min: 0, max: 10000 },
                         trial_duration_ms: { type: 'number', default: 1150, min: 0, max: 30000 },
                         iti_ms: { type: 'number', default: 0, min: 0, max: 10000 }
+                    }
+                });
+            }
+
+            if (taskType === 'gabor') {
+                baseComponents.push({
+                    id: 'gabor-trial',
+                    name: `Gabor ${unitName}`,
+                    icon: 'fas fa-wave-square',
+                    description: 'Gabor patch trial/frame (interpreter implements stimulus + scoring)',
+                    category: 'task',
+                    parameters: {
+                        response_task: { type: 'select', default: 'discriminate_tilt', options: ['detect_target', 'discriminate_tilt'] },
+                        left_key: { type: 'string', default: 'f' },
+                        right_key: { type: 'string', default: 'j' },
+                        yes_key: { type: 'string', default: 'f' },
+                        no_key: { type: 'string', default: 'j' },
+
+                        target_location: { type: 'select', default: 'left', options: ['left', 'right'] },
+                        target_tilt_deg: { type: 'number', default: 45, min: -90, max: 90 },
+                        distractor_orientation_deg: { type: 'number', default: 0, min: 0, max: 179 },
+
+                        spatial_cue: { type: 'select', default: 'none', options: ['none', 'left', 'right', 'both'] },
+                        left_value: { type: 'select', default: 'neutral', options: ['neutral', 'high', 'low'] },
+                        right_value: { type: 'select', default: 'neutral', options: ['neutral', 'high', 'low'] },
+
+                        stimulus_duration_ms: { type: 'number', default: 67, min: 0, max: 10000 },
+                        mask_duration_ms: { type: 'number', default: 67, min: 0, max: 10000 },
+
+                        detection_response_task_enabled: { type: 'boolean', default: false }
                     }
                 });
             }
@@ -1847,6 +2139,17 @@ class JsonBuilder {
                 Object.assign(componentData, this.getFlankerDefaultsForNewComponent());
             }
 
+            if (componentDef.id === 'gabor-trial') {
+                Object.assign(componentData, this.getGaborDefaultsForNewComponent());
+            }
+
+            if (componentDef.id === 'block') {
+                const currentTaskType = document.getElementById('taskType')?.value || 'rdm';
+                if (currentTaskType === 'gabor') {
+                    Object.assign(componentData, this.getGaborDefaultsForNewBlock());
+                }
+            }
+
             // Ensure detection-response-task flag exists for traceability
             if (componentData.detection_response_task_enabled === undefined) {
                 componentData.detection_response_task_enabled = false;
@@ -2058,6 +2361,51 @@ class JsonBuilder {
             };
         }
 
+        if (taskType === 'gabor') {
+            const responseTask = document.getElementById('gaborResponseTask')?.value || 'discriminate_tilt';
+            const leftKey = document.getElementById('gaborLeftKey')?.value || 'f';
+            const rightKey = document.getElementById('gaborRightKey')?.value || 'j';
+            const yesKey = document.getElementById('gaborYesKey')?.value || 'f';
+            const noKey = document.getElementById('gaborNoKey')?.value || 'j';
+
+            const highValueColor = document.getElementById('gaborHighValueColor')?.value || '#00aa00';
+            const lowValueColor = document.getElementById('gaborLowValueColor')?.value || '#0066ff';
+
+            const spatialCueValidityRaw = document.getElementById('gaborSpatialCueValidity')?.value;
+            const spatialCueValidity = (spatialCueValidityRaw !== undefined && spatialCueValidityRaw !== null && `${spatialCueValidityRaw}` !== '')
+                ? parseFloat(spatialCueValidityRaw)
+                : 0.8;
+
+            const fixationMsRaw = document.getElementById('gaborFixationMs')?.value;
+            const placeholdersMsRaw = document.getElementById('gaborPlaceholdersMs')?.value;
+            const cueMsRaw = document.getElementById('gaborCueMs')?.value;
+            const cueDelayMinRaw = document.getElementById('gaborCueDelayMinMs')?.value;
+            const cueDelayMaxRaw = document.getElementById('gaborCueDelayMaxMs')?.value;
+            const stimMsRaw = document.getElementById('gaborStimulusDurationMs')?.value;
+            const maskMsRaw = document.getElementById('gaborMaskDurationMs')?.value;
+
+            config.gabor_settings = {
+                response_task: responseTask,
+                left_key: leftKey,
+                right_key: rightKey,
+                yes_key: yesKey,
+                no_key: noKey,
+
+                high_value_color: highValueColor,
+                low_value_color: lowValueColor,
+
+                spatial_cue_validity: Number.isFinite(spatialCueValidity) ? spatialCueValidity : 0.8,
+
+                fixation_ms: fixationMsRaw ? parseInt(fixationMsRaw) : 1000,
+                placeholders_ms: placeholdersMsRaw ? parseInt(placeholdersMsRaw) : 400,
+                cue_ms: cueMsRaw ? parseInt(cueMsRaw) : 300,
+                cue_delay_min_ms: cueDelayMinRaw ? parseInt(cueDelayMinRaw) : 100,
+                cue_delay_max_ms: cueDelayMaxRaw ? parseInt(cueDelayMaxRaw) : 200,
+                stimulus_duration_ms: stimMsRaw ? parseInt(stimMsRaw) : 67,
+                mask_duration_ms: maskMsRaw ? parseInt(maskMsRaw) : 67
+            };
+        }
+
         return config;
     }
 
@@ -2117,6 +2465,77 @@ class JsonBuilder {
             trial_duration_ms: 1150,
             iti_ms: parseInt(document.getElementById('sartItiMs')?.value || '0', 10),
             detection_response_task_enabled: false
+        };
+    }
+
+    /**
+     * Build a preview payload for the current Gabor defaults.
+     */
+    getCurrentGaborDefaults() {
+        const responseTask = document.getElementById('gaborResponseTask')?.value || 'discriminate_tilt';
+        const leftKey = document.getElementById('gaborLeftKey')?.value || 'f';
+        const rightKey = document.getElementById('gaborRightKey')?.value || 'j';
+        const yesKey = document.getElementById('gaborYesKey')?.value || 'f';
+        const noKey = document.getElementById('gaborNoKey')?.value || 'j';
+
+        return {
+            type: 'gabor-trial',
+            name: 'Gabor Defaults',
+
+            response_task: responseTask,
+            left_key: leftKey,
+            right_key: rightKey,
+            yes_key: yesKey,
+            no_key: noKey,
+
+            target_location: 'left',
+            target_tilt_deg: 45,
+            distractor_orientation_deg: 0,
+            spatial_cue: 'none',
+            left_value: 'neutral',
+            right_value: 'neutral',
+
+            // Use panel timings for the trial-level preview
+            stimulus_duration_ms: parseInt(document.getElementById('gaborStimulusDurationMs')?.value || '67', 10),
+            mask_duration_ms: parseInt(document.getElementById('gaborMaskDurationMs')?.value || '67', 10),
+
+            // Optional colors to render value cues in preview
+            high_value_color: document.getElementById('gaborHighValueColor')?.value || '#00aa00',
+            low_value_color: document.getElementById('gaborLowValueColor')?.value || '#0066ff',
+
+            detection_response_task_enabled: false
+        };
+    }
+
+    getGaborDefaultsForNewComponent() {
+        // Defaults panel values; used when adding new Gabor timeline items.
+        return {
+            response_task: document.getElementById('gaborResponseTask')?.value || 'discriminate_tilt',
+            left_key: document.getElementById('gaborLeftKey')?.value || 'f',
+            right_key: document.getElementById('gaborRightKey')?.value || 'j',
+            yes_key: document.getElementById('gaborYesKey')?.value || 'f',
+            no_key: document.getElementById('gaborNoKey')?.value || 'j',
+            stimulus_duration_ms: parseInt(document.getElementById('gaborStimulusDurationMs')?.value || '67', 10),
+            mask_duration_ms: parseInt(document.getElementById('gaborMaskDurationMs')?.value || '67', 10)
+        };
+    }
+
+    getGaborDefaultsForNewBlock() {
+        // Defaults panel values; used when adding new Block timeline items under the Gabor task.
+        // These are editor-only block params that become parameter_values/parameter_windows on export.
+        const stim = parseInt(document.getElementById('gaborStimulusDurationMs')?.value || '67', 10);
+        const mask = parseInt(document.getElementById('gaborMaskDurationMs')?.value || '67', 10);
+
+        return {
+            gabor_response_task: document.getElementById('gaborResponseTask')?.value || 'discriminate_tilt',
+            gabor_left_key: document.getElementById('gaborLeftKey')?.value || 'f',
+            gabor_right_key: document.getElementById('gaborRightKey')?.value || 'j',
+            gabor_yes_key: document.getElementById('gaborYesKey')?.value || 'f',
+            gabor_no_key: document.getElementById('gaborNoKey')?.value || 'j',
+            gabor_stimulus_duration_min: Number.isFinite(stim) ? stim : 67,
+            gabor_stimulus_duration_max: Number.isFinite(stim) ? stim : 67,
+            gabor_mask_duration_min: Number.isFinite(mask) ? mask : 67,
+            gabor_mask_duration_max: Number.isFinite(mask) ? mask : 67
         };
     }
 
@@ -2499,6 +2918,62 @@ class JsonBuilder {
             addWindow('mask_duration_ms', blockComponent.sart_mask_duration_min, blockComponent.sart_mask_duration_max);
             addWindow('trial_duration_ms', blockComponent.sart_trial_duration_min, blockComponent.sart_trial_duration_max);
             addWindow('iti_ms', blockComponent.sart_iti_min, blockComponent.sart_iti_max);
+        } else if (componentType === 'gabor-trial') {
+            const parseStringList = (raw) => {
+                if (raw === undefined || raw === null) return [];
+                return raw
+                    .toString()
+                    .split(',')
+                    .map(s => s.trim())
+                    .filter(Boolean);
+            };
+
+            const responseTask = (blockComponent.gabor_response_task ?? '').toString().trim();
+            if (responseTask) {
+                values.response_task = responseTask;
+            }
+
+            const lk = (blockComponent.gabor_left_key ?? '').toString().trim();
+            const rk = (blockComponent.gabor_right_key ?? '').toString().trim();
+            const yk = (blockComponent.gabor_yes_key ?? '').toString().trim();
+            const nk = (blockComponent.gabor_no_key ?? '').toString().trim();
+            if (lk) values.left_key = lk;
+            if (rk) values.right_key = rk;
+            if (yk) values.yes_key = yk;
+            if (nk) values.no_key = nk;
+
+            const locs = parseStringList(blockComponent.gabor_target_location_options);
+            if (locs.length > 0) {
+                values.target_location = Array.from(new Set(locs));
+            }
+
+            const tilts = parseNumberList(blockComponent.gabor_target_tilt_options, { min: -90, max: 90 });
+            if (tilts.length > 0) {
+                values.target_tilt_deg = Array.from(new Set(tilts));
+            }
+
+            const dis = parseNumberList(blockComponent.gabor_distractor_orientation_options, { min: 0, max: 179 });
+            if (dis.length > 0) {
+                values.distractor_orientation_deg = Array.from(new Set(dis));
+            }
+
+            const cues = parseStringList(blockComponent.gabor_spatial_cue_options);
+            if (cues.length > 0) {
+                values.spatial_cue = Array.from(new Set(cues));
+            }
+
+            const lv = parseStringList(blockComponent.gabor_left_value_options);
+            if (lv.length > 0) {
+                values.left_value = Array.from(new Set(lv));
+            }
+
+            const rv = parseStringList(blockComponent.gabor_right_value_options);
+            if (rv.length > 0) {
+                values.right_value = Array.from(new Set(rv));
+            }
+
+            addWindow('stimulus_duration_ms', blockComponent.gabor_stimulus_duration_min, blockComponent.gabor_stimulus_duration_max);
+            addWindow('mask_duration_ms', blockComponent.gabor_mask_duration_min, blockComponent.gabor_mask_duration_max);
         }
 
         const out = {

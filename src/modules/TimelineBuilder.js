@@ -891,6 +891,8 @@ class TimelineBuilder {
                 ? ['flanker-trial']
                 : (currentTaskType === 'sart')
                     ? ['sart-trial']
+                    : (currentTaskType === 'gabor')
+                        ? ['gabor-trial']
                     : ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups'];
 
             // Rebuild options if the schema contains extra entries.
@@ -905,6 +907,42 @@ class TimelineBuilder {
                 blockTypeEl.value = allowed[0] || currentValue;
             }
         }
+
+        const setParamVisible = (paramName, visible) => {
+            const row = formContainer.querySelector(`[data-param-name="${paramName}"]`);
+            if (!row) return;
+            row.style.display = visible ? '' : 'none';
+            row.querySelectorAll('input, select, textarea').forEach(i => {
+                i.disabled = !visible;
+            });
+        };
+
+        const updateGaborTrialKeyVisibility = () => {
+            if (!component || component.type !== 'gabor-trial') return;
+            const taskEl = formContainer.querySelector('#param_response_task');
+            const task = (taskEl ? taskEl.value : 'discriminate_tilt').toString();
+
+            const showYesNo = (task === 'detect_target');
+            setParamVisible('left_key', !showYesNo);
+            setParamVisible('right_key', !showYesNo);
+            setParamVisible('yes_key', showYesNo);
+            setParamVisible('no_key', showYesNo);
+        };
+
+        const updateGaborBlockKeyVisibility = () => {
+            if (!blockTypeEl) return;
+            const selected = blockTypeEl.value;
+            if (selected !== 'gabor-trial') return;
+
+            const taskEl = formContainer.querySelector('#param_gabor_response_task');
+            const task = (taskEl ? taskEl.value : 'discriminate_tilt').toString();
+
+            const showYesNo = (task === 'detect_target');
+            setParamVisible('gabor_left_key', !showYesNo);
+            setParamVisible('gabor_right_key', !showYesNo);
+            setParamVisible('gabor_yes_key', showYesNo);
+            setParamVisible('gabor_no_key', showYesNo);
+        };
 
         const updateBlockVisibility = () => {
             if (!blockTypeEl) return;
@@ -944,19 +982,15 @@ class TimelineBuilder {
                 const stimType = (stimTypeRaw ?? 'arrows').toString().trim().toLowerCase();
                 const isArrows = (stimType === '' || stimType === 'arrows');
 
-                const setParamVisible = (paramName, visible) => {
-                    const row = formContainer.querySelector(`[data-param-name="${paramName}"]`);
-                    if (!row) return;
-                    row.style.display = visible ? '' : 'none';
-                    row.querySelectorAll('input, select, textarea').forEach(i => {
-                        i.disabled = !visible;
-                    });
-                };
-
                 setParamVisible('flanker_target_direction_options', isArrows);
                 setParamVisible('flanker_target_stimulus_options', !isArrows);
                 setParamVisible('flanker_distractor_stimulus_options', !isArrows);
                 setParamVisible('flanker_neutral_stimulus_options', !isArrows);
+            }
+
+            // Gabor block: show the correct key fields based on response task.
+            if (selected === 'gabor-trial') {
+                updateGaborBlockKeyVisibility();
             }
         };
 
@@ -969,6 +1003,20 @@ class TimelineBuilder {
             if (stimTypeEl) {
                 stimTypeEl.addEventListener('change', updateBlockVisibility);
             }
+
+            // Gabor block: response task changes should re-evaluate key visibility.
+            const gaborTaskEl = formContainer.querySelector('#param_gabor_response_task');
+            if (gaborTaskEl) {
+                gaborTaskEl.addEventListener('change', updateGaborBlockKeyVisibility);
+                updateGaborBlockKeyVisibility();
+            }
+        }
+
+        // Gabor trial: response task changes should re-evaluate key visibility.
+        const gaborTrialTaskEl = formContainer.querySelector('#param_response_task');
+        if (component && component.type === 'gabor-trial' && gaborTrialTaskEl) {
+            gaborTrialTaskEl.addEventListener('change', updateGaborTrialKeyVisibility);
+            updateGaborTrialKeyVisibility();
         }
     }
 
