@@ -44,7 +44,14 @@ class JsonBuilder {
 
         const mouseSettings = document.getElementById('mouseResponseSettings');
         if (mouseSettings) {
-            mouseSettings.style.display = (defaultDevice === 'mouse') ? 'block' : 'none';
+            const showMouse = (defaultDevice === 'mouse');
+            mouseSettings.style.display = showMouse ? 'block' : 'none';
+
+            // Also disable hidden inputs so they don't clutter tab order
+            // and so the UI state is unambiguous.
+            mouseSettings.querySelectorAll('input, select, textarea').forEach((el) => {
+                el.disabled = !showMouse;
+            });
         }
 
         // Hide Response Keys unless the default response is keyboard
@@ -196,9 +203,13 @@ class JsonBuilder {
         });
 
         // Parameter modal
-        document.getElementById('saveParametersBtn').addEventListener('click', () => {
-            this.saveParameters();
-        });
+        const saveParametersBtn = document.getElementById('saveParametersBtn');
+        if (saveParametersBtn) {
+            // Use onclick so component-specific editors can override it cleanly.
+            saveParametersBtn.onclick = () => {
+                this.saveParameters();
+            };
+        }
         
         // Add event listener for preview button
         document.getElementById('previewComponentBtn').addEventListener('click', () => {
@@ -316,6 +327,12 @@ class JsonBuilder {
         const nextTaskType = event?.target?.value || 'rdm';
         const prevTaskType = this.currentTaskType || 'rdm';
 
+        if (!this.isTaskTypeAllowedForExperiment(nextTaskType, this.experimentType)) {
+            alert('SOC Dashboard is only available for Continuous experiments.');
+            if (event?.target) event.target.value = prevTaskType;
+            return;
+        }
+
         if (nextTaskType === prevTaskType) {
             this.updateJSON();
             return;
@@ -353,7 +370,8 @@ class JsonBuilder {
     }
 
     maybeInsertStarterTimeline(taskType) {
-        if (taskType !== 'flanker' && taskType !== 'sart' && taskType !== 'gabor') return;
+        if (taskType === 'soc-dashboard' && this.experimentType !== 'continuous') return;
+        if (taskType !== 'flanker' && taskType !== 'sart' && taskType !== 'gabor' && taskType !== 'soc-dashboard') return;
 
         const timelineContainer = document.getElementById('timelineComponents');
         if (!timelineContainer) return;
@@ -367,7 +385,9 @@ class JsonBuilder {
             ? 'flanker-trial'
             : (taskType === 'sart')
                 ? 'sart-trial'
-                : 'gabor-trial';
+                : (taskType === 'soc-dashboard')
+                    ? 'soc-dashboard'
+                    : 'gabor-trial';
         const trialDef = defs.find(d => d.id === trialId);
 
         if (instructionsDef) this.addComponentToTimeline(instructionsDef);
@@ -433,18 +453,32 @@ class JsonBuilder {
         ]);
         if (alwaysAllowed.has(type)) return true;
 
+        const getBlockInnerType = () => {
+            if (type !== 'block') return null;
+            const d = (componentData && typeof componentData === 'object') ? componentData : {};
+            // Block editors sometimes store values under `parameter_values`.
+            const pv = (d.parameter_values && typeof d.parameter_values === 'object') ? d.parameter_values : {};
+            const inner = d.block_component_type ?? d.component_type ?? pv.block_component_type ?? pv.component_type;
+            return (typeof inner === 'string' && inner.trim() !== '') ? inner.trim() : null;
+        };
+
         // Custom: do not restrict
         if (taskType === 'custom') return true;
 
         if (taskType === 'rdm') {
-            // RDM allows everything we define, including other tasks for experimentation.
-            return true;
+            // RDM task: keep timeline focused on RDM components.
+            if (typeof type === 'string' && type.startsWith('rdm-')) return true;
+            if (type === 'block') {
+                const innerType = getBlockInnerType();
+                return !!innerType && innerType.startsWith('rdm-');
+            }
+            return false;
         }
 
         if (taskType === 'flanker') {
             if (type === 'flanker-trial') return true;
             if (type === 'block') {
-                const innerType = componentData?.block_component_type;
+                const innerType = getBlockInnerType();
                 return innerType === 'flanker-trial';
             }
             return false;
@@ -453,7 +487,7 @@ class JsonBuilder {
         if (taskType === 'sart') {
             if (type === 'sart-trial') return true;
             if (type === 'block') {
-                const innerType = componentData?.block_component_type;
+                const innerType = getBlockInnerType();
                 return innerType === 'sart-trial';
             }
             return false;
@@ -462,9 +496,15 @@ class JsonBuilder {
         if (taskType === 'gabor') {
             if (type === 'gabor-trial') return true;
             if (type === 'block') {
-                const innerType = componentData?.block_component_type;
-                return innerType === 'gabor-trial';
+                const innerType = getBlockInnerType();
+                return innerType === 'gabor-trial' || innerType === 'gabor-quest';
             }
+            return false;
+        }
+
+        if (taskType === 'soc-dashboard') {
+            if (type === 'soc-dashboard') return true;
+            if (type === 'soc-dashboard-icon') return true;
             return false;
         }
 
@@ -488,10 +528,21 @@ class JsonBuilder {
     onExperimentTypeChange(event) {
         this.experimentType = event.target.value;
         console.log('Experiment type changed to:', this.experimentType);
+
+        // Keep task type options consistent with experiment type.
+        // (SOC Dashboard is continuous-only.)
+        const taskTypeChanged = this.enforceTaskTypeAvailability();
         
         // Update UI based on experiment type
         this.updateExperimentTypeUI();
         this.updateConditionalUI();
+
+        // If we auto-switched task types, keep the component library in sync.
+        if (taskTypeChanged) {
+            // Remove any now-incompatible timeline items (e.g., SOC sessions/icons).
+            this.removeIncompatibleTimelineComponents(this.currentTaskType);
+            this.loadComponentLibrary();
+        }
         this.updateJSON();
     }
 
@@ -515,6 +566,10 @@ class JsonBuilder {
 
         // Toggle conditional UI sections without re-rendering the whole panel
         this.updateConditionalUI();
+
+        // Data-collection modalities can add/remove components (e.g., eye tracking).
+        // Refresh the component library so the modal + sidebar stay in sync.
+        this.loadComponentLibrary();
         
         this.updateJSON();
     }
@@ -523,6 +578,9 @@ class JsonBuilder {
      * Update UI based on experiment type
      */
     updateExperimentTypeUI() {
+        // Enforce task-type availability whenever we rerender task-scoped panels.
+        this.enforceTaskTypeAvailability();
+
         const parameterForms = document.getElementById('parameterForms');
         parameterForms.innerHTML = '';
         
@@ -534,6 +592,38 @@ class JsonBuilder {
 
         // Ensure conditional sections match current state after re-render
         this.updateConditionalUI();
+    }
+
+    isTaskTypeAllowedForExperiment(taskType, experimentType) {
+        const t = (taskType ?? '').toString();
+        const e = (experimentType ?? '').toString();
+        if (t === 'soc-dashboard') return e === 'continuous';
+        return true;
+    }
+
+    enforceTaskTypeAvailability() {
+        const taskTypeEl = document.getElementById('taskType');
+        if (!taskTypeEl) return false;
+
+        let changed = false;
+
+        // SOC Dashboard: continuous-only
+        const socOpt = Array.from(taskTypeEl.options || []).find(o => o.value === 'soc-dashboard');
+        if (socOpt) {
+            const allowed = this.isTaskTypeAllowedForExperiment('soc-dashboard', this.experimentType);
+            socOpt.disabled = !allowed;
+
+            if (!allowed && taskTypeEl.value === 'soc-dashboard') {
+                taskTypeEl.value = 'rdm';
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            this.currentTaskType = taskTypeEl.value || 'rdm';
+        }
+
+        return changed;
     }
 
     /**
@@ -724,6 +814,21 @@ class JsonBuilder {
                 </div>
 
                 <div class="parameter-row">
+                    <label class="parameter-label">Spatial Frequency (cyc/px):</label>
+                    <input type="number" class="form-control parameter-input" id="gaborSpatialFrequency" value="0.06" min="0.001" max="0.5" step="0.001">
+                    <div class="parameter-help">Spatial frequency of the grating carrier (Gaussian envelope)</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Grating Waveform:</label>
+                    <select class="form-control parameter-input" id="gaborGratingWaveform">
+                        <option value="sinusoidal" selected>Sinusoidal</option>
+                        <option value="square">Square</option>
+                        <option value="triangle">Triangle</option>
+                    </select>
+                    <div class="parameter-help">Carrier waveform; envelope remains Gaussian</div>
+                </div>
+
+                <div class="parameter-row">
                     <label class="parameter-label">Spatial Cue Validity (0–1):</label>
                     <input type="number" class="form-control parameter-input" id="gaborSpatialCueValidity" value="0.8" min="0" max="1" step="0.01">
                     <div class="parameter-help">Directional arrow indicates this probability the target is at the cued location</div>
@@ -756,6 +861,99 @@ class JsonBuilder {
                 <div class="parameter-row">
                     <label class="parameter-label">Mask Duration (ms):</label>
                     <input type="number" class="form-control parameter-input" id="gaborMaskDurationMs" value="67" min="0" max="10000">
+                </div>
+            </div>
+            `
+            : (taskType === 'soc-dashboard')
+            ? `
+            <div class="parameter-group" id="socDashboardExperimentParameters">
+                <div class="group-title d-flex justify-content-between align-items-center">
+                    <div>
+                        <span>SOC Dashboard Settings</span>
+                        <small class="text-muted d-block">Experiment-wide defaults (applies to newly-added SOC session components). Add subtasks via the Component Library.</small>
+                    </div>
+                    <button class="btn btn-sm btn-info" id="previewTaskDefaultsBtn" onclick="window.componentPreview?.showPreview(window.jsonBuilderInstance?.getCurrentSocDashboardDefaults())">
+                        <i class="fas fa-eye"></i> Preview Defaults
+                    </button>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Session Title:</label>
+                    <input type="text" class="form-control parameter-input" id="socTitle" value="SOC Dashboard">
+                    <div class="parameter-help">Shown in the subtask window titlebars</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Wallpaper URL:</label>
+                    <input type="text" class="form-control parameter-input" id="socWallpaperUrl" value="" placeholder="https://...">
+                    <div class="parameter-help">Optional background image URL (leave blank for default gradient)</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Background Color:</label>
+                    <input type="color" class="form-control parameter-input" id="socBackgroundColor" value="#0b1220">
+                    <div class="parameter-help">Used when no wallpaper URL is provided</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Desktop Icons Clickable:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="socIconsClickable" checked>
+                            <label class="form-check-label" for="socIconsClickable">Show icons as clickable</label>
+                        </div>
+                    </div>
+                    <div class="parameter-help">If disabled, icon clicks can still be logged (visual affordance only)</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Log Icon Clicks:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="socLogIconClicks" checked>
+                            <label class="form-check-label" for="socLogIconClicks">Record icon clicks in the trial events log</label>
+                        </div>
+                    </div>
+                    <div class="parameter-help">Useful for multitasking/distractor analysis</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Tag Icon Clicks as Distractors:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="socIconClicksAreDistractors" checked>
+                            <label class="form-check-label" for="socIconClicksAreDistractors">Add a distractor flag to icon-click events</label>
+                        </div>
+                    </div>
+                    <div class="parameter-help">When enabled, icon-click events include <code>distractor: true</code></div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Default App:</label>
+                    <select class="form-control parameter-input" id="socDefaultApp">
+                        <option value="soc" selected>SOC</option>
+                        <option value="email">Email</option>
+                        <option value="terminal">Terminal</option>
+                    </select>
+                    <div class="parameter-help">Initial active app when the session starts</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Number of Tasks:</label>
+                    <input type="number" class="form-control parameter-input" id="socNumTasks" value="1" min="1" max="4">
+                    <div class="parameter-help">Fallback window count used when no subtasks are configured (1–4)</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Session Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="socSessionDurationMs" value="60000" min="0" max="3600000">
+                    <div class="parameter-help">0 = no auto-end (participant ends with end key)</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">End Key:</label>
+                    <input type="text" class="form-control parameter-input" id="socEndKey" value="escape">
+                    <div class="parameter-help">Key that ends the session (e.g., escape)</div>
                 </div>
             </div>
             `
@@ -819,6 +1017,27 @@ class JsonBuilder {
                     <label class="parameter-label">Aperture Diameter (px):</label>
                     <input type="number" class="form-control parameter-input" id="apertureDiameter" value="350" min="50" max="800">
                     <div class="parameter-help">Diameter (circle) or width (rectangle) of aperture</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Aperture Outline:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input parameter-input" type="checkbox" id="apertureOutlineEnabled">
+                            <label class="form-check-label" for="apertureOutlineEnabled">Show outline</label>
+                        </div>
+                    </div>
+                    <div class="parameter-help">Experiment default: draw an outline around the aperture</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Outline Width (px):</label>
+                    <input type="number" class="form-control parameter-input" id="apertureOutlineWidth" value="2" min="0" max="50" step="0.5">
+                    <div class="parameter-help">Experiment default outline width (used when outline is enabled)</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Outline Color:</label>
+                    <input type="color" class="form-control parameter-input" id="apertureOutlineColor" value="#FFFFFF">
+                    <div class="parameter-help">Experiment default outline color (used when outline is enabled)</div>
                 </div>
                 <div class="parameter-row">
                     <label class="parameter-label">Background Color:</label>
@@ -1190,6 +1409,19 @@ class JsonBuilder {
                 </div>
 
                 <div class="parameter-row">
+                    <label class="parameter-label">Spatial Frequency (cyc/px):</label>
+                    <input type="number" class="form-control parameter-input" id="gaborSpatialFrequency" value="0.06" min="0.001" max="0.5" step="0.001">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Grating Waveform:</label>
+                    <select class="form-control parameter-input" id="gaborGratingWaveform">
+                        <option value="sinusoidal" selected>Sinusoidal</option>
+                        <option value="square">Square</option>
+                        <option value="triangle">Triangle</option>
+                    </select>
+                </div>
+
+                <div class="parameter-row">
                     <label class="parameter-label">Spatial Cue Validity (0–1):</label>
                     <input type="number" class="form-control parameter-input" id="gaborSpatialCueValidity" value="0.8" min="0" max="1" step="0.01">
                 </div>
@@ -1221,6 +1453,99 @@ class JsonBuilder {
                 <div class="parameter-row">
                     <label class="parameter-label">Mask Duration (ms):</label>
                     <input type="number" class="form-control parameter-input" id="gaborMaskDurationMs" value="67" min="0" max="10000">
+                </div>
+            </div>
+            `
+            : (taskType === 'soc-dashboard')
+            ? `
+            <div class="parameter-group" id="socDashboardExperimentParameters">
+                <div class="group-title d-flex justify-content-between align-items-center">
+                    <div>
+                        <span>SOC Dashboard Settings</span>
+                        <small class="text-muted d-block">Experiment-wide defaults (applies to newly-added SOC session components). Add subtasks via the Component Library.</small>
+                    </div>
+                    <button class="btn btn-sm btn-info" id="previewTaskDefaultsBtn" onclick="window.componentPreview?.showPreview(window.jsonBuilderInstance?.getCurrentSocDashboardDefaults())">
+                        <i class="fas fa-eye"></i> Preview Defaults
+                    </button>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Session Title:</label>
+                    <input type="text" class="form-control parameter-input" id="socTitle" value="SOC Dashboard">
+                    <div class="parameter-help">Shown in the subtask window titlebars</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Wallpaper URL:</label>
+                    <input type="text" class="form-control parameter-input" id="socWallpaperUrl" value="" placeholder="https://...">
+                    <div class="parameter-help">Optional background image URL (leave blank for default gradient)</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Background Color:</label>
+                    <input type="color" class="form-control parameter-input" id="socBackgroundColor" value="#0b1220">
+                    <div class="parameter-help">Used when no wallpaper URL is provided</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Desktop Icons Clickable:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="socIconsClickable" checked>
+                            <label class="form-check-label" for="socIconsClickable">Show icons as clickable</label>
+                        </div>
+                    </div>
+                    <div class="parameter-help">If disabled, icon clicks can still be logged (visual affordance only)</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Log Icon Clicks:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="socLogIconClicks" checked>
+                            <label class="form-check-label" for="socLogIconClicks">Record icon clicks in the trial events log</label>
+                        </div>
+                    </div>
+                    <div class="parameter-help">Useful for multitasking/distractor analysis</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Tag Icon Clicks as Distractors:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="socIconClicksAreDistractors" checked>
+                            <label class="form-check-label" for="socIconClicksAreDistractors">Add a distractor flag to icon-click events</label>
+                        </div>
+                    </div>
+                    <div class="parameter-help">When enabled, icon-click events include <code>distractor: true</code></div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Default App:</label>
+                    <select class="form-control parameter-input" id="socDefaultApp">
+                        <option value="soc" selected>SOC</option>
+                        <option value="email">Email</option>
+                        <option value="terminal">Terminal</option>
+                    </select>
+                    <div class="parameter-help">Initial active app when the session starts</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Number of Tasks:</label>
+                    <input type="number" class="form-control parameter-input" id="socNumTasks" value="1" min="1" max="4">
+                    <div class="parameter-help">Fallback window count used when no subtasks are configured (1–4)</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Session Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="socSessionDurationMs" value="60000" min="0" max="3600000">
+                    <div class="parameter-help">0 = no auto-end (participant ends with end key)</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">End Key:</label>
+                    <input type="text" class="form-control parameter-input" id="socEndKey" value="escape">
+                    <div class="parameter-help">Key that ends the session (e.g., escape)</div>
                 </div>
             </div>
             `
@@ -1280,6 +1605,27 @@ class JsonBuilder {
                     <label class="parameter-label">Aperture Diameter (px):</label>
                     <input type="number" class="form-control parameter-input" id="apertureDiameter" value="350" min="50" max="800">
                     <div class="parameter-help">Diameter (circle) or width (rectangle) of aperture</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Aperture Outline:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input parameter-input" type="checkbox" id="apertureOutlineEnabled">
+                            <label class="form-check-label" for="apertureOutlineEnabled">Show outline</label>
+                        </div>
+                    </div>
+                    <div class="parameter-help">Experiment default: draw an outline around the aperture</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Outline Width (px):</label>
+                    <input type="number" class="form-control parameter-input" id="apertureOutlineWidth" value="2" min="0" max="50" step="0.5">
+                    <div class="parameter-help">Experiment default outline width (used when outline is enabled)</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Outline Color:</label>
+                    <input type="color" class="form-control parameter-input" id="apertureOutlineColor" value="#FFFFFF">
+                    <div class="parameter-help">Experiment default outline color (used when outline is enabled)</div>
                 </div>
                 <div class="parameter-row">
                     <label class="parameter-label">Background Color:</label>
@@ -1487,7 +1833,7 @@ class JsonBuilder {
                 : (currentTaskType === 'sart')
                     ? ['sart-trial']
                     : (currentTaskType === 'gabor')
-                        ? ['gabor-trial']
+                        ? ['gabor-trial', 'gabor-quest']
                         : ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups'];
 
             const defaultType = baseOptions[0] || 'rdm-trial';
@@ -1547,6 +1893,22 @@ class JsonBuilder {
                 gabor_spatial_cue_options: { type: 'string', default: 'none,left,right,both' },
                 gabor_left_value_options: { type: 'string', default: 'neutral,high,low' },
                 gabor_right_value_options: { type: 'string', default: 'neutral,high,low' },
+
+                gabor_spatial_frequency_min: { type: 'number', default: 0.06, min: 0.001, max: 0.5, step: 0.001 },
+                gabor_spatial_frequency_max: { type: 'number', default: 0.06, min: 0.001, max: 0.5, step: 0.001 },
+                gabor_grating_waveform_options: { type: 'string', default: 'sinusoidal' },
+
+                // Optional adaptive staircase per-block (stored in exported block.parameter_values.adaptive)
+                gabor_adaptive_mode: { type: 'select', default: 'none', options: ['none', 'quest'] },
+                gabor_quest_parameter: { type: 'select', default: 'target_tilt_deg', options: ['target_tilt_deg', 'spatial_frequency_cyc_per_px'] },
+                gabor_quest_target_performance: { type: 'number', default: 0.82, min: 0.5, max: 0.99, step: 0.01 },
+                gabor_quest_start_value: { type: 'number', default: 45, step: 0.1 },
+                gabor_quest_start_sd: { type: 'number', default: 20, min: 0.001, step: 0.1 },
+                gabor_quest_beta: { type: 'number', default: 3.5, min: 0.001, step: 0.1 },
+                gabor_quest_delta: { type: 'number', default: 0.01, min: 0, step: 0.001 },
+                gabor_quest_gamma: { type: 'number', default: 0.5, min: 0, max: 1, step: 0.01 },
+                gabor_quest_min_value: { type: 'number', default: -90, step: 0.1 },
+                gabor_quest_max_value: { type: 'number', default: 90, step: 0.1 },
                 gabor_stimulus_duration_min: { type: 'number', default: 67, min: 0, max: 10000 },
                 gabor_stimulus_duration_max: { type: 'number', default: 67, min: 0, max: 10000 },
                 gabor_mask_duration_min: { type: 'number', default: 67, min: 0, max: 10000 },
@@ -1756,6 +2118,9 @@ class JsonBuilder {
                         target_tilt_deg: { type: 'number', default: 45, min: -90, max: 90 },
                         distractor_orientation_deg: { type: 'number', default: 0, min: 0, max: 179 },
 
+                        spatial_frequency_cyc_per_px: { type: 'number', default: 0.06, min: 0.001, max: 0.5, step: 0.001 },
+                        grating_waveform: { type: 'select', default: 'sinusoidal', options: ['sinusoidal', 'square', 'triangle'] },
+
                         spatial_cue: { type: 'select', default: 'none', options: ['none', 'left', 'right', 'both'] },
                         left_value: { type: 'select', default: 'neutral', options: ['neutral', 'high', 'low'] },
                         right_value: { type: 'select', default: 'neutral', options: ['neutral', 'high', 'low'] },
@@ -1802,6 +2167,250 @@ class JsonBuilder {
 
             // Block (task-scoped)
             baseComponents.push(createBlockComponentDef(taskType));
+
+            // Add specialized components based on data collection settings
+            // (these are task-agnostic and should be available for all tasks).
+            if (this.dataCollection['mouse-tracking']) {
+                baseComponents.push({
+                    id: 'mouse-tracking',
+                    name: 'Mouse Tracking',
+                    icon: 'fas fa-mouse',
+                    description: 'Track mouse movement and clicks',
+                    category: 'tracking',
+                    parameters: {
+                        track_movement: { type: 'boolean', default: true },
+                        track_clicks: { type: 'boolean', default: true },
+                        sampling_rate: { type: 'number', default: 50 }
+                    }
+                });
+            }
+
+            if (this.dataCollection['eye-tracking']) {
+                baseComponents.push({
+                    id: 'eye-tracking',
+                    name: 'Eye Tracking',
+                    icon: 'fas fa-eye',
+                    description: 'WebGazer-based eye tracking',
+                    category: 'tracking',
+                    parameters: {
+                        calibration_points: { type: 'number', default: 9 },
+                        prediction_points: { type: 'number', default: 50 },
+                        sample_rate: { type: 'number', default: 30 }
+                    }
+                });
+
+                // Optional preface instructions researchers can place *before* calibration.
+                baseComponents.push({
+                    id: 'eye-tracking-calibration-instructions',
+                    name: 'Calibration Instructions',
+                    icon: 'fas fa-eye',
+                    description: 'Preface screen shown before the eye-tracking calibration dots',
+                    category: 'tracking',
+                    type: 'html-keyboard-response',
+                    parameters: {
+                        stimulus: {
+                            type: 'string',
+                            default: 'Eye tracking calibration\n\nWe will briefly calibrate the camera-based eye tracking.\n\nPlease sit comfortably, keep your head still, and look at each dot as it appears.\nPress SPACE while looking at each dot.\n\nPress any key to begin.'
+                        },
+                        choices: { type: 'select', default: 'ALL_KEYS', options: ['ALL_KEYS', 'space', 'enter', 'escape'] },
+                        prompt: { type: 'string', default: '' },
+                        stimulus_duration: { type: 'number', default: null, min: 0, max: 30000 },
+                        trial_duration: { type: 'number', default: null, min: 0, max: 60000 },
+                        response_ends_trial: { type: 'boolean', default: true }
+                    },
+                    data: {
+                        type: 'html-keyboard-response',
+                        stimulus: 'Eye tracking calibration\n\nWe will briefly calibrate the camera-based eye tracking.\n\nPlease sit comfortably, keep your head still, and look at each dot as it appears.\nPress SPACE while looking at each dot.\n\nPress any key to begin.',
+                        choices: 'ALL_KEYS',
+                        prompt: '',
+                        stimulus_duration: null,
+                        trial_duration: null,
+                        response_ends_trial: true,
+                        data: { plugin_type: 'eye-tracking-calibration-instructions' }
+                    }
+                });
+            }
+
+            return baseComponents;
+        }
+
+        // SOC Dashboard (continuous-only)
+        if (taskType === 'soc-dashboard') {
+            baseComponents.push({
+                id: 'soc-dashboard',
+                name: 'SOC Dashboard Session',
+                icon: 'fas fa-desktop',
+                description: 'SOC Dashboard shell session (subtasks render as tiled windows; interpreter implements UI)',
+                category: 'task',
+                parameters: {
+                    title: { type: 'string', default: 'SOC Dashboard' },
+                    trial_duration_ms: { type: 'number', default: 60000, min: 0, max: 3600000 },
+                    end_key: { type: 'string', default: 'escape' },
+                    wallpaper_url: { type: 'string', default: '' },
+                    background_color: { type: 'string', default: '#0b1220' },
+                    start_menu_enabled: { type: 'boolean', default: true },
+                    default_app: { type: 'select', default: 'soc', options: ['soc', 'email', 'terminal'] },
+                    num_tasks: { type: 'number', default: 1, min: 1, max: 4 },
+                    icons_clickable: { type: 'boolean', default: true },
+                    log_icon_clicks: { type: 'boolean', default: true },
+                    icon_clicks_are_distractors: { type: 'boolean', default: true },
+                    detection_response_task_enabled: { type: 'boolean', default: false }
+                }
+            });
+
+            // SOC subtasks (builder-only): composed into the nearest SOC Dashboard Session on export.
+            baseComponents.push(
+                {
+                    id: 'soc-subtask-sart-like',
+                    name: 'SART-like subtask',
+                    icon: 'fas fa-bullseye',
+                    description: 'SOC subtask window (composed into nearest SOC Dashboard Session on export)',
+                    category: 'task',
+                    parameters: {
+                        title: { type: 'string', default: 'Login monitor' }
+                    }
+                },
+                {
+                    id: 'soc-subtask-flanker-like',
+                    name: 'Flanker-like subtask',
+                    icon: 'fas fa-random',
+                    description: 'SOC subtask window (composed into nearest SOC Dashboard Session on export)',
+                    category: 'task',
+                    parameters: {
+                        title: { type: 'string', default: 'Flanker-like' }
+                    }
+                },
+                {
+                    id: 'soc-subtask-nback-like',
+                    name: 'N-back-like subtask',
+                    icon: 'fas fa-th',
+                    description: 'SOC subtask window (composed into nearest SOC Dashboard Session on export)',
+                    category: 'task',
+                    parameters: {
+                        title: { type: 'string', default: 'Repeat-offender monitor' }
+                    }
+                },
+                {
+                    id: 'soc-subtask-wcst-like',
+                    name: 'WCST-like subtask',
+                    icon: 'fas fa-shapes',
+                    description: 'SOC subtask window (composed into nearest SOC Dashboard Session on export)',
+                    category: 'task',
+                    parameters: {
+                        title: { type: 'string', default: 'WCST-like' }
+                    }
+                }
+            );
+
+            baseComponents.push({
+                id: 'soc-dashboard-icon',
+                name: 'Desktop Icon',
+                icon: 'fas fa-icons',
+                description: 'Defines a desktop icon (composed into the nearest SOC Dashboard Session on export)',
+                category: 'task',
+                parameters: {
+                    label: { type: 'string', default: 'Email' },
+                    app: { type: 'select', default: 'email', options: ['soc', 'email', 'terminal'] },
+                    icon_text: { type: 'string', default: '✉' },
+                    row: { type: 'number', default: 0, min: 0, max: 20 },
+                    col: { type: 'number', default: 0, min: 0, max: 20 },
+                    distractor: { type: 'boolean', default: true },
+                    detection_response_task_enabled: { type: 'boolean', default: false }
+                }
+            });
+
+            // Optional generic HTML/image components
+            baseComponents.push(
+                {
+                    id: 'html-keyboard-response',
+                    name: 'HTML + Keyboard',
+                    icon: 'fas fa-keyboard',
+                    description: 'Show HTML content and collect keyboard response',
+                    category: 'basic',
+                    parameters: {
+                        stimulus: { type: 'string', default: '<p>Press a key to continue.</p>' },
+                        choices: { type: 'select', default: 'ALL_KEYS', options: ['ALL_KEYS', 'space', 'enter', 'escape'] },
+                        prompt: { type: 'string', default: '' },
+                        stimulus_duration: { type: 'number', default: null, min: 0, max: 30000 },
+                        trial_duration: { type: 'number', default: null, min: 0, max: 60000 },
+                        response_ends_trial: { type: 'boolean', default: true }
+                    }
+                },
+                {
+                    id: 'image-keyboard-response',
+                    name: 'Image + Keyboard',
+                    icon: 'fas fa-image',
+                    description: 'Show image and collect keyboard response',
+                    category: 'stimulus',
+                    parameters: {
+                        stimulus: { type: 'string', default: 'img/sample.jpg' },
+                        choices: { type: 'array', default: ['f', 'j'] },
+                        stimulus_duration: { type: 'number', default: null },
+                        trial_duration: { type: 'number', default: null }
+                    }
+                }
+            );
+
+            // Task-agnostic tracking components
+            if (this.dataCollection['mouse-tracking']) {
+                baseComponents.push({
+                    id: 'mouse-tracking',
+                    name: 'Mouse Tracking',
+                    icon: 'fas fa-mouse',
+                    description: 'Track mouse movement and clicks',
+                    category: 'tracking',
+                    parameters: {
+                        track_movement: { type: 'boolean', default: true },
+                        track_clicks: { type: 'boolean', default: true },
+                        sampling_rate: { type: 'number', default: 50 }
+                    }
+                });
+            }
+
+            if (this.dataCollection['eye-tracking']) {
+                baseComponents.push({
+                    id: 'eye-tracking',
+                    name: 'Eye Tracking',
+                    icon: 'fas fa-eye',
+                    description: 'WebGazer-based eye tracking',
+                    category: 'tracking',
+                    parameters: {
+                        calibration_points: { type: 'number', default: 9 },
+                        prediction_points: { type: 'number', default: 50 },
+                        sample_rate: { type: 'number', default: 30 }
+                    }
+                });
+
+                baseComponents.push({
+                    id: 'eye-tracking-calibration-instructions',
+                    name: 'Calibration Instructions',
+                    icon: 'fas fa-eye',
+                    description: 'Preface screen shown before the eye-tracking calibration dots',
+                    category: 'tracking',
+                    type: 'html-keyboard-response',
+                    parameters: {
+                        stimulus: {
+                            type: 'string',
+                            default: 'Eye tracking calibration\n\nWe will briefly calibrate the camera-based eye tracking.\n\nPlease sit comfortably, keep your head still, and look at each dot as it appears.\nPress SPACE while looking at each dot.\n\nPress any key to begin.'
+                        },
+                        choices: { type: 'select', default: 'ALL_KEYS', options: ['ALL_KEYS', 'space', 'enter', 'escape'] },
+                        prompt: { type: 'string', default: '' },
+                        stimulus_duration: { type: 'number', default: null, min: 0, max: 30000 },
+                        trial_duration: { type: 'number', default: null, min: 0, max: 60000 },
+                        response_ends_trial: { type: 'boolean', default: true }
+                    },
+                    data: {
+                        type: 'html-keyboard-response',
+                        stimulus: 'Eye tracking calibration\n\nWe will briefly calibrate the camera-based eye tracking.\n\nPlease sit comfortably, keep your head still, and look at each dot as it appears.\nPress SPACE while looking at each dot.\n\nPress any key to begin.',
+                        choices: 'ALL_KEYS',
+                        prompt: '',
+                        stimulus_duration: null,
+                        trial_duration: null,
+                        response_ends_trial: true,
+                        data: { plugin_type: 'eye-tracking-calibration-instructions' }
+                    }
+                });
+            }
 
             return baseComponents;
         }
@@ -2014,6 +2623,37 @@ class JsonBuilder {
                     sample_rate: { type: 'number', default: 30 }
                 }
             });
+
+            // Optional preface instructions researchers can place *before* calibration.
+            baseComponents.push({
+                id: 'eye-tracking-calibration-instructions',
+                name: 'Calibration Instructions',
+                icon: 'fas fa-eye',
+                description: 'Preface screen shown before the eye-tracking calibration dots',
+                category: 'tracking',
+                type: 'html-keyboard-response',
+                parameters: {
+                    stimulus: {
+                        type: 'string',
+                        default: 'Eye tracking calibration\n\nWe will briefly calibrate the camera-based eye tracking.\n\nPlease sit comfortably, keep your head still, and look at each dot as it appears.\nPress SPACE while looking at each dot.\n\nPress any key to begin.'
+                    },
+                    choices: { type: 'select', default: 'ALL_KEYS', options: ['ALL_KEYS', 'space', 'enter', 'escape'] },
+                    prompt: { type: 'string', default: '' },
+                    stimulus_duration: { type: 'number', default: null, min: 0, max: 30000 },
+                    trial_duration: { type: 'number', default: null, min: 0, max: 60000 },
+                    response_ends_trial: { type: 'boolean', default: true }
+                },
+                data: {
+                    type: 'html-keyboard-response',
+                    stimulus: 'Eye tracking calibration\n\nWe will briefly calibrate the camera-based eye tracking.\n\nPlease sit comfortably, keep your head still, and look at each dot as it appears.\nPress SPACE while looking at each dot.\n\nPress any key to begin.',
+                    choices: 'ALL_KEYS',
+                    prompt: '',
+                    stimulus_duration: null,
+                    trial_duration: null,
+                    response_ends_trial: true,
+                    data: { plugin_type: 'eye-tracking-calibration-instructions' }
+                }
+            });
         }
 
         // Add RDM task-specific components if RDM is selected
@@ -2070,8 +2710,8 @@ class JsonBuilder {
             return;
         }
         
-        // For instructions components, use simple data format like Figma prototype
-        if (componentDef.id === 'instructions') {
+        // For html-keyboard-response instructions-like components, use simple data format like the Figma prototype.
+        if (componentDef.id === 'instructions' || componentDef.id === 'eye-tracking-calibration-instructions') {
             // Hide empty state if visible
             const emptyState = timelineContainer.querySelector('.empty-timeline');
             if (emptyState) {
@@ -2081,12 +2721,25 @@ class JsonBuilder {
             const instructionsComponent = document.createElement('div');
             instructionsComponent.className = 'timeline-component card mb-2';
             instructionsComponent.dataset.componentType = 'html-keyboard-response';
+            // Preserve the builder-specific identity even though the exported jsPsych type is html-keyboard-response.
+            // This lets the UI distinguish calibration preface vs generic instructions reliably.
+            instructionsComponent.dataset.builderComponentId = componentDef.id;
             // Ensure detection-response-task flag exists for traceability
             const instructionsData = {
                 ...(componentDef.data || {}),
                 detection_response_task_enabled: !!(componentDef.data?.detection_response_task_enabled ?? false)
             };
             instructionsComponent.dataset.componentData = JSON.stringify(instructionsData);
+
+            const title = (componentDef.id === 'eye-tracking-calibration-instructions')
+                ? 'Calibration Instructions'
+                : 'Instructions';
+            const subtitle = (componentDef.id === 'eye-tracking-calibration-instructions')
+                ? 'Preface shown before eye-tracking calibration'
+                : 'Welcome screen with task instructions';
+            const iconHtml = (componentDef.id === 'eye-tracking-calibration-instructions')
+                ? '<i class="fas fa-eye text-info"></i>'
+                : '<i class="fas fa-info-circle text-info"></i>';
             
             instructionsComponent.innerHTML = `
                 <div class="card-body">
@@ -2097,9 +2750,9 @@ class JsonBuilder {
                             </div>
                             <div>
                                 <h6 class="card-title mb-1">
-                                    <i class="fas fa-info-circle text-info"></i> Instructions
+                                    ${iconHtml} ${title}
                                 </h6>
-                                <small class="text-muted">Welcome screen with task instructions</small>
+                                <small class="text-muted">${subtitle}</small>
                             </div>
                         </div>
                         <div class="btn-group" role="group">
@@ -2141,6 +2794,10 @@ class JsonBuilder {
 
             if (componentDef.id === 'gabor-trial') {
                 Object.assign(componentData, this.getGaborDefaultsForNewComponent());
+            }
+
+            if (componentDef.id === 'soc-dashboard') {
+                Object.assign(componentData, this.getSocDashboardDefaultsForNewComponent());
             }
 
             if (componentDef.id === 'block') {
@@ -2384,6 +3041,12 @@ class JsonBuilder {
             const stimMsRaw = document.getElementById('gaborStimulusDurationMs')?.value;
             const maskMsRaw = document.getElementById('gaborMaskDurationMs')?.value;
 
+            const spatialFreqRaw = document.getElementById('gaborSpatialFrequency')?.value;
+            const spatialFreq = (spatialFreqRaw !== undefined && spatialFreqRaw !== null && `${spatialFreqRaw}` !== '')
+                ? parseFloat(spatialFreqRaw)
+                : 0.06;
+            const waveform = (document.getElementById('gaborGratingWaveform')?.value || 'sinusoidal').toString();
+
             config.gabor_settings = {
                 response_task: responseTask,
                 left_key: leftKey,
@@ -2394,6 +3057,9 @@ class JsonBuilder {
                 high_value_color: highValueColor,
                 low_value_color: lowValueColor,
 
+                spatial_frequency_cyc_per_px: Number.isFinite(spatialFreq) ? spatialFreq : 0.06,
+                grating_waveform: waveform,
+
                 spatial_cue_validity: Number.isFinite(spatialCueValidity) ? spatialCueValidity : 0.8,
 
                 fixation_ms: fixationMsRaw ? parseInt(fixationMsRaw) : 1000,
@@ -2403,6 +3069,39 @@ class JsonBuilder {
                 cue_delay_max_ms: cueDelayMaxRaw ? parseInt(cueDelayMaxRaw) : 200,
                 stimulus_duration_ms: stimMsRaw ? parseInt(stimMsRaw) : 67,
                 mask_duration_ms: maskMsRaw ? parseInt(maskMsRaw) : 67
+            };
+        }
+
+        if (taskType === 'soc-dashboard') {
+            const title = (document.getElementById('socTitle')?.value || 'SOC Dashboard').toString();
+            const wallpaperUrl = (document.getElementById('socWallpaperUrl')?.value || '').toString().trim();
+            const defaultApp = (document.getElementById('socDefaultApp')?.value || 'soc').toString();
+
+            const durationRaw = document.getElementById('socSessionDurationMs')?.value;
+            const durationMs = (durationRaw !== undefined && durationRaw !== null && `${durationRaw}` !== '')
+                ? parseInt(durationRaw)
+                : 60000;
+
+            const numTasksRaw = document.getElementById('socNumTasks')?.value;
+            const numTasks = (numTasksRaw !== undefined && numTasksRaw !== null && `${numTasksRaw}` !== '')
+                ? parseInt(numTasksRaw)
+                : 1;
+
+            const safeNumTasks = Number.isFinite(numTasks)
+                ? Math.max(1, Math.min(4, Math.floor(numTasks)))
+                : 1;
+
+            config.soc_dashboard_settings = {
+                title,
+                wallpaper_url: wallpaperUrl,
+                background_color: (document.getElementById('socBackgroundColor')?.value || '#0b1220').toString(),
+                default_app: defaultApp,
+                num_tasks: safeNumTasks,
+                trial_duration_ms: Number.isFinite(durationMs) ? durationMs : 60000,
+                end_key: (document.getElementById('socEndKey')?.value || 'escape').toString(),
+                icons_clickable: !!document.getElementById('socIconsClickable')?.checked,
+                log_icon_clicks: !!document.getElementById('socLogIconClicks')?.checked,
+                icon_clicks_are_distractors: !!document.getElementById('socIconClicksAreDistractors')?.checked
             };
         }
 
@@ -2499,6 +3198,9 @@ class JsonBuilder {
             stimulus_duration_ms: parseInt(document.getElementById('gaborStimulusDurationMs')?.value || '67', 10),
             mask_duration_ms: parseInt(document.getElementById('gaborMaskDurationMs')?.value || '67', 10),
 
+            spatial_frequency_cyc_per_px: Number.parseFloat(document.getElementById('gaborSpatialFrequency')?.value || '0.06'),
+            grating_waveform: (document.getElementById('gaborGratingWaveform')?.value || 'sinusoidal').toString(),
+
             // Optional colors to render value cues in preview
             high_value_color: document.getElementById('gaborHighValueColor')?.value || '#00aa00',
             low_value_color: document.getElementById('gaborLowValueColor')?.value || '#0066ff',
@@ -2516,8 +3218,37 @@ class JsonBuilder {
             yes_key: document.getElementById('gaborYesKey')?.value || 'f',
             no_key: document.getElementById('gaborNoKey')?.value || 'j',
             stimulus_duration_ms: parseInt(document.getElementById('gaborStimulusDurationMs')?.value || '67', 10),
-            mask_duration_ms: parseInt(document.getElementById('gaborMaskDurationMs')?.value || '67', 10)
+            mask_duration_ms: parseInt(document.getElementById('gaborMaskDurationMs')?.value || '67', 10),
+            spatial_frequency_cyc_per_px: Number.parseFloat(document.getElementById('gaborSpatialFrequency')?.value || '0.06'),
+            grating_waveform: (document.getElementById('gaborGratingWaveform')?.value || 'sinusoidal').toString()
         };
+    }
+
+    getCurrentSocDashboardDefaults() {
+        const durationMs = parseInt(document.getElementById('socSessionDurationMs')?.value || '60000', 10);
+        const numTasks = parseInt(document.getElementById('socNumTasks')?.value || '1', 10);
+        const safeNumTasks = Number.isFinite(numTasks) ? Math.max(1, Math.min(4, Math.floor(numTasks))) : 1;
+
+        return {
+            type: 'soc-dashboard',
+            name: 'SOC Dashboard defaults',
+            title: (document.getElementById('socTitle')?.value || 'SOC Dashboard').toString(),
+            wallpaper_url: (document.getElementById('socWallpaperUrl')?.value || '').toString().trim(),
+            background_color: (document.getElementById('socBackgroundColor')?.value || '#0b1220').toString(),
+            default_app: (document.getElementById('socDefaultApp')?.value || 'soc').toString(),
+            num_tasks: safeNumTasks,
+            trial_duration_ms: Number.isFinite(durationMs) ? durationMs : 60000,
+            end_key: (document.getElementById('socEndKey')?.value || 'escape').toString(),
+            icons_clickable: !!document.getElementById('socIconsClickable')?.checked,
+            log_icon_clicks: !!document.getElementById('socLogIconClicks')?.checked,
+            icon_clicks_are_distractors: !!document.getElementById('socIconClicksAreDistractors')?.checked
+        };
+    }
+
+    getSocDashboardDefaultsForNewComponent() {
+        const defaults = this.getCurrentSocDashboardDefaults();
+        const { name, ...componentDefaults } = defaults;
+        return componentDefaults;
     }
 
     getGaborDefaultsForNewBlock() {
@@ -2526,12 +3257,30 @@ class JsonBuilder {
         const stim = parseInt(document.getElementById('gaborStimulusDurationMs')?.value || '67', 10);
         const mask = parseInt(document.getElementById('gaborMaskDurationMs')?.value || '67', 10);
 
+        const freq = Number.parseFloat(document.getElementById('gaborSpatialFrequency')?.value || '0.06');
+        const safeFreq = Number.isFinite(freq) ? freq : 0.06;
+
         return {
             gabor_response_task: document.getElementById('gaborResponseTask')?.value || 'discriminate_tilt',
             gabor_left_key: document.getElementById('gaborLeftKey')?.value || 'f',
             gabor_right_key: document.getElementById('gaborRightKey')?.value || 'j',
             gabor_yes_key: document.getElementById('gaborYesKey')?.value || 'f',
             gabor_no_key: document.getElementById('gaborNoKey')?.value || 'j',
+
+            gabor_spatial_frequency_min: safeFreq,
+            gabor_spatial_frequency_max: safeFreq,
+            gabor_grating_waveform_options: (document.getElementById('gaborGratingWaveform')?.value || 'sinusoidal').toString(),
+
+            gabor_adaptive_mode: 'none',
+            gabor_quest_parameter: 'target_tilt_deg',
+            gabor_quest_target_performance: 0.82,
+            gabor_quest_start_value: 45,
+            gabor_quest_start_sd: 20,
+            gabor_quest_beta: 3.5,
+            gabor_quest_delta: 0.01,
+            gabor_quest_gamma: 0.5,
+            gabor_quest_min_value: -90,
+            gabor_quest_max_value: 90,
             gabor_stimulus_duration_min: Number.isFinite(stim) ? stim : 67,
             gabor_stimulus_duration_max: Number.isFinite(stim) ? stim : 67,
             gabor_mask_duration_min: Number.isFinite(mask) ? mask : 67,
@@ -2593,7 +3342,104 @@ class JsonBuilder {
             }
         });
 
+        const taskType = document.getElementById('taskType')?.value || 'rdm';
+        if (taskType === 'soc-dashboard') {
+            return this.composeSocDashboardTimeline(components);
+        }
+
         return components;
+    }
+
+    composeSocDashboardTimeline(components) {
+        const output = [];
+        let currentSession = null;
+
+        function extractSubtaskParams(component) {
+            const raw = (component && typeof component === 'object') ? component : {};
+            const fromNested = (raw.parameters && typeof raw.parameters === 'object') ? raw.parameters : null;
+            const bag = fromNested || raw;
+
+            const params = {};
+            for (const [k, v] of Object.entries(bag)) {
+                if (k === 'type' || k === 'name' || k === 'title' || k === 'parameters') continue;
+                params[k] = v;
+            }
+            return params;
+        }
+
+        function isSocSubtaskType(t) {
+            return t === 'soc-subtask-sart-like'
+                || t === 'soc-subtask-flanker-like'
+                || t === 'soc-subtask-nback-like'
+                || t === 'soc-subtask-wcst-like';
+        }
+
+        function mapSocSubtaskKind(t) {
+            switch (t) {
+                case 'soc-subtask-sart-like': return 'sart-like';
+                case 'soc-subtask-flanker-like': return 'flanker-like';
+                case 'soc-subtask-nback-like': return 'nback-like';
+                case 'soc-subtask-wcst-like': return 'wcst-like';
+                default: return 'unknown';
+            }
+        }
+
+        for (const component of components) {
+            if (!component || typeof component !== 'object') continue;
+
+            if (component.type === 'soc-dashboard') {
+                currentSession = component;
+                if (!Array.isArray(currentSession.desktop_icons)) {
+                    currentSession.desktop_icons = [];
+                }
+                if (!Array.isArray(currentSession.subtasks)) {
+                    currentSession.subtasks = [];
+                }
+                output.push(currentSession);
+                continue;
+            }
+
+            if (isSocSubtaskType(component.type)) {
+                const subtask = {
+                    type: mapSocSubtaskKind(component.type),
+                    title: (component.title || component.name || 'Subtask').toString(),
+                    ...extractSubtaskParams(component)
+                };
+
+                if (currentSession) {
+                    currentSession.subtasks.push(subtask);
+                } else {
+                    // If there is no session yet, keep the component as-is so the
+                    // user can spot the ordering problem.
+                    output.push(component);
+                }
+                continue;
+            }
+
+            if (component.type === 'soc-dashboard-icon') {
+                const icon = {
+                    label: (component.label || component.name || 'Icon').toString(),
+                    app: (component.app || 'soc').toString(),
+                    icon_text: (component.icon_text || '').toString(),
+                    row: Number.isFinite(Number(component.row)) ? parseInt(component.row, 10) : 0,
+                    col: Number.isFinite(Number(component.col)) ? parseInt(component.col, 10) : 0,
+                    distractor: !!component.distractor
+                };
+
+                if (currentSession) {
+                    currentSession.desktop_icons.push(icon);
+                } else {
+                    // If there is no session yet, keep the component as-is so the
+                    // user can spot the ordering problem.
+                    output.push(component);
+                }
+                continue;
+            }
+
+            output.push(component);
+        }
+
+        return output;
     }
 
     /**
@@ -2614,7 +3460,8 @@ class JsonBuilder {
                 prompt: component.prompt,
                 stimulus_duration: component.stimulus_duration,
                 trial_duration: component.trial_duration,
-                response_ends_trial: component.response_ends_trial
+                response_ends_trial: component.response_ends_trial,
+                data: component.data
             };
             
             // Remove undefined/null values to clean up the JSON
@@ -2709,6 +3556,50 @@ class JsonBuilder {
                         delete baseComponent[key];
                     }
                 });
+
+            // Keep aperture border (outline) params nested for clarity in hand-edited JSON.
+            // Remove any flat fields to avoid confusion.
+            const outline = {};
+
+            // New editor shape: mode + width/color (only treat as override when mode is explicit true/false)
+            if (baseComponent.show_aperture_outline_mode !== undefined) {
+                const mode = (baseComponent.show_aperture_outline_mode ?? 'inherit').toString().trim().toLowerCase();
+                delete baseComponent.show_aperture_outline_mode;
+
+                if (mode === 'true' || mode === 'false') {
+                    outline.show_aperture_outline = (mode === 'true');
+
+                    const widthRaw = Number(baseComponent.aperture_outline_width);
+                    if (Number.isFinite(widthRaw)) outline.aperture_outline_width = widthRaw;
+
+                    const colorRaw = (typeof baseComponent.aperture_outline_color === 'string') ? baseComponent.aperture_outline_color.trim() : '';
+                    if (colorRaw) outline.aperture_outline_color = colorRaw;
+                }
+
+                // These are editor-only fields; never export them flat.
+                if (baseComponent.aperture_outline_width !== undefined) delete baseComponent.aperture_outline_width;
+                if (baseComponent.aperture_outline_color !== undefined) delete baseComponent.aperture_outline_color;
+            }
+
+            // Legacy support: flat boolean + width/color
+            if (baseComponent.show_aperture_outline !== undefined) {
+                outline.show_aperture_outline = baseComponent.show_aperture_outline;
+                delete baseComponent.show_aperture_outline;
+            }
+            if (baseComponent.aperture_outline_width !== undefined) {
+                outline.aperture_outline_width = baseComponent.aperture_outline_width;
+                delete baseComponent.aperture_outline_width;
+            }
+            if (baseComponent.aperture_outline_color !== undefined) {
+                outline.aperture_outline_color = baseComponent.aperture_outline_color;
+                delete baseComponent.aperture_outline_color;
+            }
+            if (Object.keys(outline).length > 0) {
+                const ap = (baseComponent.aperture_parameters && typeof baseComponent.aperture_parameters === 'object')
+                    ? baseComponent.aperture_parameters
+                    : {};
+                baseComponent.aperture_parameters = { ...ap, ...outline };
+            }
         }
 
         // Special handling for RDM dot groups (after override generation)
@@ -2723,6 +3614,8 @@ class JsonBuilder {
 
     transformBlock(blockComponent) {
         const componentType = blockComponent.block_component_type || 'rdm-trial';
+        const isGaborQuestBlock = componentType === 'gabor-quest';
+        const exportComponentType = isGaborQuestBlock ? 'gabor-trial' : componentType;
         const lengthRaw = blockComponent.block_length;
         const length = Math.max(1, parseInt(lengthRaw ?? 1));
         const samplingMode = blockComponent.sampling_mode || 'per-trial';
@@ -2918,7 +3811,7 @@ class JsonBuilder {
             addWindow('mask_duration_ms', blockComponent.sart_mask_duration_min, blockComponent.sart_mask_duration_max);
             addWindow('trial_duration_ms', blockComponent.sart_trial_duration_min, blockComponent.sart_trial_duration_max);
             addWindow('iti_ms', blockComponent.sart_iti_min, blockComponent.sart_iti_max);
-        } else if (componentType === 'gabor-trial') {
+        } else if (componentType === 'gabor-trial' || componentType === 'gabor-quest') {
             const parseStringList = (raw) => {
                 if (raw === undefined || raw === null) return [];
                 return raw
@@ -2972,14 +3865,73 @@ class JsonBuilder {
                 values.right_value = Array.from(new Set(rv));
             }
 
+            addWindow('spatial_frequency_cyc_per_px', blockComponent.gabor_spatial_frequency_min, blockComponent.gabor_spatial_frequency_max);
+
+            const waveforms = parseStringList(blockComponent.gabor_grating_waveform_options);
+            if (waveforms.length > 0) {
+                values.grating_waveform = Array.from(new Set(waveforms));
+            }
+
+            const adaptiveMode = isGaborQuestBlock
+                ? 'quest'
+                : (blockComponent.gabor_adaptive_mode ?? 'none').toString().trim();
+            if (adaptiveMode === 'quest') {
+                values.adaptive = {
+                    mode: 'quest',
+                    parameter: (blockComponent.gabor_quest_parameter ?? 'target_tilt_deg').toString(),
+                    target_performance: Number(blockComponent.gabor_quest_target_performance),
+                    start_value: Number(blockComponent.gabor_quest_start_value),
+                    start_sd: Number(blockComponent.gabor_quest_start_sd),
+                    beta: Number(blockComponent.gabor_quest_beta),
+                    delta: Number(blockComponent.gabor_quest_delta),
+                    gamma: Number(blockComponent.gabor_quest_gamma),
+                    min_value: Number(blockComponent.gabor_quest_min_value),
+                    max_value: Number(blockComponent.gabor_quest_max_value)
+                };
+
+                // Clean up NaNs if the user left fields empty
+                Object.keys(values.adaptive).forEach(k => {
+                    const v = values.adaptive[k];
+                    if (typeof v === 'number' && !Number.isFinite(v)) {
+                        delete values.adaptive[k];
+                    }
+                });
+            }
+
             addWindow('stimulus_duration_ms', blockComponent.gabor_stimulus_duration_min, blockComponent.gabor_stimulus_duration_max);
             addWindow('mask_duration_ms', blockComponent.gabor_mask_duration_min, blockComponent.gabor_mask_duration_max);
+        }
+
+        // Aperture border (outline) settings apply to all RDM-derived block component types.
+        if (componentType && componentType.startsWith('rdm-')) {
+            const modeRaw = (blockComponent.show_aperture_outline_mode ?? 'inherit').toString().trim();
+            const widthRaw = Number(blockComponent.aperture_outline_width);
+            const colorRaw = (typeof blockComponent.aperture_outline_color === 'string') ? blockComponent.aperture_outline_color.trim() : '';
+
+            const hasWidth = Number.isFinite(widthRaw);
+            const hasColor = colorRaw !== '';
+
+            const ap = {};
+            // Only emit a per-block override when the user explicitly chooses true/false.
+            // (Width/color have defaults in the UI, so treating their presence as intent causes accidental overrides.)
+            if (modeRaw === 'true' || modeRaw === 'false') {
+                ap.show_aperture_outline = (modeRaw === 'true');
+                if (hasWidth) ap.aperture_outline_width = widthRaw;
+                if (hasColor) ap.aperture_outline_color = colorRaw;
+            }
+
+            if (Object.keys(ap).length > 0) {
+                const existing = (values.aperture_parameters && typeof values.aperture_parameters === 'object')
+                    ? values.aperture_parameters
+                    : {};
+                values.aperture_parameters = { ...existing, ...ap };
+            }
         }
 
         const out = {
             type: 'block',
             detection_response_task_enabled: !!(blockComponent.detection_response_task_enabled ?? false),
-            component_type: componentType,
+            component_type: exportComponentType,
             length: length,
             sampling_mode: samplingMode,
             parameter_windows: windows
@@ -3102,8 +4054,10 @@ class JsonBuilder {
             }
         }
 
-        // Apply key overrides (keyboard)
-        if (hasKeysOverride) {
+        const effectiveDevice = merged.response_device || 'keyboard';
+
+        // Apply key overrides (keyboard only)
+        if (effectiveDevice === 'keyboard' && hasKeysOverride) {
             const choices = responseKeys.split(',').map(k => k.trim()).filter(Boolean);
             merged.choices = choices;
             merged.key_mapping = {
@@ -3112,8 +4066,13 @@ class JsonBuilder {
             };
         }
 
+        // If not keyboard, remove keyboard-only fields inherited from defaults.
+        if (effectiveDevice !== 'keyboard') {
+            if (merged.choices) delete merged.choices;
+            if (merged.key_mapping) delete merged.key_mapping;
+        }
+
         // Apply mouse overrides
-        const effectiveDevice = merged.response_device || 'keyboard';
         if (effectiveDevice === 'mouse') {
             merged.mouse_response = {
                 enabled: true,
@@ -3192,6 +4151,11 @@ class JsonBuilder {
             transformed.response_parameters_override = component.response_parameters_override;
         }
 
+        // Preserve nested aperture parameters if present (e.g., aperture outline fields)
+        if (component.aperture_parameters && typeof component.aperture_parameters === 'object') {
+            transformed.aperture_parameters = { ...component.aperture_parameters };
+        }
+
         // Group configuration
         transformed.group_1_percentage = (component.group_1_percentage ?? 50);
         transformed.group_1_color = component.group_1_color ?? '#FF0066';
@@ -3236,12 +4200,42 @@ class JsonBuilder {
      * Get RDM aperture parameters from UI
      */
     getRDMApertureParameters() {
-        return {
+        const expAperture = (this.currentExperiment && typeof this.currentExperiment === 'object' && this.currentExperiment.aperture_parameters && typeof this.currentExperiment.aperture_parameters === 'object')
+            ? this.currentExperiment.aperture_parameters
+            : {};
+
+        const out = {
             shape: document.getElementById('apertureShape')?.value || 'circle',
             diameter: parseInt(document.getElementById('apertureDiameter')?.value || 350),
             center_x: parseInt(document.getElementById('canvasWidth')?.value || 600) / 2,
             center_y: parseInt(document.getElementById('canvasHeight')?.value || 600) / 2
         };
+
+        // Experiment-wide aperture outline controls
+        const enabledEl = document.getElementById('apertureOutlineEnabled');
+        if (enabledEl) {
+            out.show_aperture_outline = !!enabledEl.checked;
+        } else if (expAperture.show_aperture_outline !== undefined) {
+            // Back-compat when loading older templates or if UI isn't present
+            out.show_aperture_outline = expAperture.show_aperture_outline;
+        }
+
+        const widthEl = document.getElementById('apertureOutlineWidth');
+        if (widthEl && widthEl.value !== '' && widthEl.value !== null && widthEl.value !== undefined) {
+            const w = Number(widthEl.value);
+            if (Number.isFinite(w)) out.aperture_outline_width = w;
+        } else if (expAperture.aperture_outline_width !== undefined) {
+            out.aperture_outline_width = expAperture.aperture_outline_width;
+        }
+
+        const colorEl = document.getElementById('apertureOutlineColor');
+        if (colorEl && typeof colorEl.value === 'string' && colorEl.value.trim() !== '') {
+            out.aperture_outline_color = colorEl.value.trim();
+        } else if (expAperture.aperture_outline_color !== undefined) {
+            out.aperture_outline_color = expAperture.aperture_outline_color;
+        }
+
+        return out;
     }
 
     /**
@@ -3596,7 +4590,10 @@ class JsonBuilder {
                 shape: "circle",
                 diameter: 350,
                 center_x: 400,
-                center_y: 300
+                center_y: 300,
+                show_aperture_outline: false,
+                aperture_outline_width: 2,
+                aperture_outline_color: "#FFFFFF"
             },
             dot_parameters: {
                 total_dots: 150,
@@ -3648,6 +4645,9 @@ class JsonBuilder {
         // Aperture parameters
         this.setElementValue('apertureShape', exp.aperture_parameters?.shape);
         this.setElementValue('apertureDiameter', exp.aperture_parameters?.diameter);
+        this.setElementChecked('apertureOutlineEnabled', exp.aperture_parameters?.show_aperture_outline);
+        this.setElementValue('apertureOutlineWidth', exp.aperture_parameters?.aperture_outline_width);
+        this.setElementValue('apertureOutlineColor', exp.aperture_parameters?.aperture_outline_color);
         
         // Dot parameters
         this.setElementValue('totalDots', exp.dot_parameters?.total_dots);
@@ -3668,6 +4668,18 @@ class JsonBuilder {
         this.setElementValue('fixationDuration', exp.timing_parameters?.fixation_duration);
         
         // Response parameters
+        // Default response device (drives modality-specific UI)
+        {
+            const rp = exp.response_parameters || {};
+            const inferred = (typeof rp.response_device === 'string' && rp.response_device.trim() !== '')
+                ? rp.response_device.trim()
+                : (rp.mouse_response ? 'mouse'
+                    : (rp.touch_response ? 'touch'
+                        : (rp.voice_response ? 'voice' : 'keyboard')));
+
+            this.setElementValue('defaultResponseDevice', inferred);
+        }
+
         if (exp.response_parameters?.choices) {
             this.setElementValue('responseKeys', exp.response_parameters.choices.join(','));
         }
@@ -3844,7 +4856,7 @@ class JsonBuilder {
             canvas_width: getValue('canvasWidth', 600, 'int'),
             canvas_height: getValue('canvasHeight', 600, 'int'),
             aperture_shape: getValue('apertureShape', 'circle'),
-            aperture_size: getValue('apertureSize', 300, 'int'),
+            aperture_diameter: getValue('apertureDiameter', 350, 'int'),
             background_color: getValue('backgroundColor', '#404040'),
             dot_size: getValue('dotSize', 4, 'int'),
             dot_color: getValue('dotColor', '#ffffff'),
@@ -3853,7 +4865,15 @@ class JsonBuilder {
             coherent_direction: getValue('motionDirection', 0, 'int'),
             speed: getValue('motionSpeed', 5, 'int'),
             lifetime_frames: getValue('dotLifetime', 60, 'int'),
-            noise_type: 'random_direction'
+            noise_type: 'random_direction',
+
+            // Aperture outline defaults
+            show_aperture_outline: (() => {
+                const el = document.getElementById('apertureOutlineEnabled');
+                return el ? !!el.checked : false;
+            })(),
+            aperture_outline_width: getValue('apertureOutlineWidth', 2, 'number'),
+            aperture_outline_color: getValue('apertureOutlineColor', '#FFFFFF')
         };
     }
 

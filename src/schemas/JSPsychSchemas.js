@@ -60,6 +60,415 @@ class JSPsychSchemas {
      */
     initializePluginSchemas() {
         return {
+            'soc-dashboard': {
+                name: 'soc-dashboard',
+                description: 'SOC Dashboard session (Windows-like shell). Subtasks are added in the Builder and composed into this session on export.',
+                parameters: {
+                    title: {
+                        type: this.parameterTypes.STRING,
+                        default: 'SOC Dashboard',
+                        description: 'Session title (shown in subtask windows)'
+                    },
+                    trial_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 60000,
+                        description: 'Session duration in ms (0 = no auto-end)'
+                    },
+                    end_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'escape',
+                        description: 'Key that ends the session'
+                    },
+                    wallpaper_url: {
+                        type: this.parameterTypes.STRING,
+                        default: '',
+                        description: 'Optional wallpaper image URL'
+                    },
+                    background_color: {
+                        type: this.parameterTypes.STRING,
+                        default: '#0b1220',
+                        description: 'Background color used when no wallpaper URL is provided'
+                    },
+                    start_menu_enabled: {
+                        type: this.parameterTypes.BOOL,
+                        default: true,
+                        description: 'Enable Start button'
+                    },
+                    default_app: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'soc',
+                        options: ['soc', 'email', 'terminal'],
+                        description: 'Initial active app'
+                    },
+                    num_tasks: {
+                        type: this.parameterTypes.INT,
+                        default: 1,
+                        min: 1,
+                        max: 4,
+                        description: 'Fallback: number of placeholder windows shown when no subtasks are configured (1–4)'
+                    },
+                    icons_clickable: {
+                        type: this.parameterTypes.BOOL,
+                        default: true,
+                        description: 'Whether desktop icons appear clickable (interpreter logs clicks as distractors)'
+                    },
+                    log_icon_clicks: {
+                        type: this.parameterTypes.BOOL,
+                        default: true,
+                        description: 'Whether to log desktop icon clicks'
+                    },
+                    icon_clicks_are_distractors: {
+                        type: this.parameterTypes.BOOL,
+                        default: true,
+                        description: 'Tag icon-click events as distractors'
+                    },
+                    detection_response_task_enabled: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        description: 'Enable/disable DRT overlay for this component (handled by interpreter)'
+                    }
+                }
+            },
+
+            // Builder-only helper components: composed into soc-dashboard trials on export.
+            'soc-subtask-sart-like': {
+                name: 'soc-subtask-sart-like',
+                description: 'SOC subtask window (SART-like). Composed into the nearest SOC Dashboard session at export time.',
+                parameters: {
+                    title: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Login monitor',
+                        description: 'Subtask window title'
+                    },
+                    start_at_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        min: 0,
+                        max: 3600000,
+                        description: 'Scheduled start time (ms) from SOC session start. If used with duration_ms, the window appears/disappears automatically.'
+                    },
+                    duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        min: 0,
+                        max: 3600000,
+                        description: 'Scheduled duration (ms). If 0, scheduling is disabled unless end_at_ms is provided manually in JSON.'
+                    },
+                    instructions: {
+                        type: this.parameterTypes.HTML_STRING,
+                        default: '<p>Please press <b>{{GO_CONTROL}}</b> to filter through login attempts.</p>\n<p>Press <b>{{GO_CONTROL}}</b> to allow safe logins, and block harmful ones.</p>\n<p><b>Harmful (targets)</b>: {{TARGETS}}</p>\n<p><b>Benign (distractors)</b>: {{DISTRACTORS}}</p>\n<p><i>Click this popup to begin.</i></p>',
+                        description: 'Optional instructions shown in a popup before this subtask begins (closing the popup marks the subtask start time)'
+                    },
+                    instructions_title: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Filtering harmful logins',
+                        description: 'Popup title for the subtask instructions overlay'
+                    },
+                    show_markers: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        description: 'Show TARGET/DISTRACTOR markers inside the task UI (off by default)'
+                    },
+                    visible_entries: {
+                        type: this.parameterTypes.INT,
+                        default: 8,
+                        min: 3,
+                        max: 25,
+                        description: 'Number of log entries visible at once (older entries scroll out of view)'
+                    },
+                    scroll_interval_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 900,
+                        min: 100,
+                        max: 10000,
+                        description: 'Milliseconds between new log entries (auto-scroll rate)'
+                    },
+                    min_run_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 30000,
+                        min: 0,
+                        max: 3600000,
+                        description: 'Minimum subtask runtime in ms (0 = no minimum)'
+                    },
+                    max_run_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 60000,
+                        min: 0,
+                        max: 3600000,
+                        description: 'Maximum subtask runtime in ms (0 = no maximum). If max < min, values are swapped at runtime.'
+                    },
+                    response_device: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'keyboard',
+                        options: ['keyboard', 'mouse'],
+                        description: 'Primary response device for this subtask'
+                    },
+                    go_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'space',
+                        description: 'Keyboard go key (ignored if response_device = mouse)'
+                    },
+                    go_button: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'action',
+                        options: ['action', 'change'],
+                        description: 'Mouse-only: which button the participant clicks to respond (controls the in-window action UI)'
+                    },
+                    go_condition: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'target',
+                        options: ['target', 'distractor'],
+                        description: 'Which class requires a Go response'
+                    },
+                    highlight_subdomains: {
+                        type: this.parameterTypes.BOOL,
+                        default: true,
+                        description: 'Highlight target/distractor entries in the feed'
+                    },
+                    target_highlight_color: {
+                        type: this.parameterTypes.COLOR,
+                        default: '#ff4d4d',
+                        description: 'Target highlight color'
+                    },
+                    distractor_highlight_color: {
+                        type: this.parameterTypes.COLOR,
+                        default: '#3dd6ff',
+                        description: 'Distractor highlight color'
+                    },
+                    target_subdomains: {
+                        type: this.parameterTypes.HTML_STRING,
+                        default: 'login.bank.example\nvpn.bank.example\nadmin.bank.example',
+                        description: 'Target domain/subdomain list (comma- or newline-separated)'
+                    },
+                    distractor_subdomains: {
+                        type: this.parameterTypes.HTML_STRING,
+                        default: 'cdn.news.example\nstatic.video.example\napi.store.example',
+                        description: 'Distractor domain/subdomain list (comma- or newline-separated)'
+                    },
+                    neutral_subdomains: {
+                        type: this.parameterTypes.HTML_STRING,
+                        default: '',
+                        description: 'Optional neutral domain/subdomain list (comma- or newline-separated). If blank, neutrals are auto-generated.'
+                    },
+                    target_probability: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.15,
+                        min: 0,
+                        max: 1,
+                        description: 'Probability a new entry is a target (0–1)'
+                    },
+                    distractor_probability: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.35,
+                        min: 0,
+                        max: 1,
+                        description: 'Probability a new entry is a distractor (0–1). Remaining probability becomes neutral.'
+                    },
+                    detection_response_task_enabled: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        description: 'Enable/disable DRT overlay for this component (handled by interpreter)'
+                    }
+                }
+            },
+            'soc-subtask-flanker-like': {
+                name: 'soc-subtask-flanker-like',
+                description: 'SOC subtask window (Flanker-like). Composed into the nearest SOC Dashboard session at export time.',
+                parameters: {
+                    title: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Flanker-like',
+                        description: 'Subtask window title'
+                    },
+                    instructions: {
+                        type: this.parameterTypes.HTML_STRING,
+                        default: '',
+                        description: 'Optional instructions shown in a popup before this subtask begins (closing the popup marks the subtask start time)'
+                    },
+                    detection_response_task_enabled: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        description: 'Enable/disable DRT overlay for this component (handled by interpreter)'
+                    }
+                }
+            },
+            'soc-subtask-nback-like': {
+                name: 'soc-subtask-nback-like',
+                description: 'SOC subtask window (N-back-like). Composed into the nearest SOC Dashboard session at export time.',
+                parameters: {
+                    title: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Repeat-offender monitor',
+                        description: 'Subtask window title'
+                    },
+                    start_at_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        min: 0,
+                        max: 3600000,
+                        description: 'Scheduled start time (ms) from SOC session start. If used with duration_ms, the window appears/disappears automatically.'
+                    },
+                    duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        min: 0,
+                        max: 3600000,
+                        description: 'Scheduled duration (ms). If 0, scheduling is disabled unless end_at_ms is provided manually in JSON.'
+                    },
+                    instructions: {
+                        type: this.parameterTypes.HTML_STRING,
+                        default: '<p>You will see a stream of security alerts, one at a time.</p>\n<p>Press <b>{{GO_CONTROL}}</b> when the current alert matches the one from <b>{{N}}-back</b> on <b>{{MATCH_FIELD}}</b>.</p>\n<p>If it does not match, respond <b>{{NOGO_CONTROL}}</b> (or withhold if using Go/No-Go).</p>\n<p><i>Click this popup to begin.</i></p>',
+                        description: 'Optional instructions shown in a popup before this subtask begins (closing the popup marks the subtask start time)'
+                    },
+                    instructions_title: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Correlating repeat offenders',
+                        description: 'Popup title for the subtask instructions overlay'
+                    },
+
+                    n: {
+                        type: this.parameterTypes.INT,
+                        default: 2,
+                        min: 1,
+                        max: 3,
+                        description: 'N-back level (1–3)'
+                    },
+                    match_field: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'src_ip',
+                        options: ['src_ip', 'username'],
+                        description: 'Which field defines an N-back match'
+                    },
+
+                    response_paradigm: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'go_nogo',
+                        options: ['go_nogo', '2afc'],
+                        description: 'Response paradigm: Go/No-Go (single key) or 2AFC (match vs no-match keys)'
+                    },
+                    go_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'space',
+                        description: 'Go key for Go/No-Go (and also accepted as the Match key if response_paradigm=2afc and match_key is blank)'
+                    },
+                    match_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'j',
+                        description: '2AFC: key for MATCH (yes)'
+                    },
+                    nonmatch_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'f',
+                        description: '2AFC: key for NO MATCH (no)'
+                    },
+
+                    stimulus_interval_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 1200,
+                        min: 200,
+                        max: 10000,
+                        description: 'Milliseconds between alert cards (stimulus cadence)'
+                    },
+                    target_probability: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.25,
+                        min: 0,
+                        max: 1,
+                        description: 'Probability the current alert matches the alert from N-back (0–1). Only applies after the buffer has at least N items.'
+                    },
+                    min_run_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 30000,
+                        min: 0,
+                        max: 3600000,
+                        description: 'Minimum subtask runtime in ms (0 = no minimum)'
+                    },
+                    max_run_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 60000,
+                        min: 0,
+                        max: 3600000,
+                        description: 'Maximum subtask runtime in ms (0 = no maximum). If max < min, values are swapped at runtime.'
+                    },
+                    show_feedback: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        description: 'Show brief on-screen feedback after responses (off by default)'
+                    },
+
+                    detection_response_task_enabled: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        description: 'Enable/disable DRT overlay for this component (handled by interpreter)'
+                    }
+                }
+            },
+            'soc-subtask-wcst-like': {
+                name: 'soc-subtask-wcst-like',
+                description: 'SOC subtask window (WCST-like). Composed into the nearest SOC Dashboard session at export time.',
+                parameters: {
+                    title: {
+                        type: this.parameterTypes.STRING,
+                        default: 'WCST-like',
+                        description: 'Subtask window title'
+                    },
+                    instructions: {
+                        type: this.parameterTypes.HTML_STRING,
+                        default: '',
+                        description: 'Optional instructions shown in a popup before this subtask begins (closing the popup marks the subtask start time)'
+                    },
+                    detection_response_task_enabled: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        description: 'Enable/disable DRT overlay for this component (handled by interpreter)'
+                    }
+                }
+            },
+
+            // Builder-only helper component: composed into soc-dashboard trials on export.
+            'soc-dashboard-icon': {
+                name: 'soc-dashboard-icon',
+                description: 'Desktop icon definition (composed into the nearest SOC session at export time)',
+                parameters: {
+                    label: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Email',
+                        description: 'Icon label'
+                    },
+                    app: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'email',
+                        options: ['soc', 'email', 'terminal'],
+                        description: 'App to activate when clicked'
+                    },
+                    icon_text: {
+                        type: this.parameterTypes.STRING,
+                        default: '✉',
+                        description: 'Simple text glyph used as icon'
+                    },
+                    row: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        description: 'Grid row'
+                    },
+                    col: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        description: 'Grid column'
+                    },
+                    distractor: {
+                        type: this.parameterTypes.BOOL,
+                        default: true,
+                        description: 'Whether clicking this icon should be treated as a distractor'
+                    },
+                    detection_response_task_enabled: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        description: 'Enable/disable DRT overlay for this component (handled by interpreter)'
+                    }
+                }
+            },
+
             'flanker-trial': {
                 name: 'flanker-trial',
                 description: 'Flanker trial/frame (stimulus + scoring implemented by interpreter)',
@@ -223,6 +632,17 @@ class JSPsychSchemas {
                         default: 0,
                         description: 'Distractor orientation (degrees)'
                     },
+                    spatial_frequency_cyc_per_px: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.06,
+                        description: 'Spatial frequency (cycles per pixel) of the grating carrier'
+                    },
+                    grating_waveform: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'sinusoidal',
+                        options: ['sinusoidal', 'square', 'triangle'],
+                        description: 'Waveform of the grating carrier'
+                    },
                     spatial_cue: {
                         type: this.parameterTypes.SELECT,
                         default: 'none',
@@ -271,7 +691,7 @@ class JSPsychSchemas {
                     block_component_type: {
                         type: this.parameterTypes.SELECT,
                         default: 'rdm-trial',
-                        options: ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups', 'flanker-trial', 'sart-trial', 'gabor-trial'],
+                        options: ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups', 'flanker-trial', 'sart-trial', 'gabor-trial', 'gabor-quest'],
                         required: true,
                         description: 'What component type this block generates'
                     },
@@ -313,6 +733,27 @@ class JSPsychSchemas {
                         options: ['both', 'color', 'speed'],
                         blockTarget: 'rdm-*',
                         description: 'Continuous mode only: transition type (color = gradient, speed = slow/fast, both = combine)'
+                    },
+
+                    // Aperture outline overrides (per-block)
+                    show_aperture_outline_mode: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'inherit',
+                        options: ['inherit', 'true', 'false'],
+                        blockTarget: 'rdm-*',
+                        description: 'Aperture outline override for generated RDM trials (inherit uses experiment-wide aperture_parameters)'
+                    },
+                    aperture_outline_width: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 2,
+                        blockTarget: 'rdm-*',
+                        description: 'Outline width (px) when overriding outline visibility'
+                    },
+                    aperture_outline_color: {
+                        type: this.parameterTypes.COLOR,
+                        default: '#FFFFFF',
+                        blockTarget: 'rdm-*',
+                        description: 'Outline color when overriding outline visibility'
                     },
 
                     // Response override (per-block)
@@ -367,7 +808,7 @@ class JSPsychSchemas {
                         type: this.parameterTypes.FLOAT,
                         default: 0,
                         blockTarget: 'rdm-*',
-                        description: 'Mouse response: segment start angle offset in degrees (0 = right)'
+                        description: 'Mouse response: segment start angle offset in degrees (0=right; 90=down; 180=left; 270=up). Angles increase clockwise (screen/canvas coordinates).'
                     },
                     mouse_selection_mode: {
                         type: this.parameterTypes.SELECT,
@@ -394,7 +835,7 @@ class JSPsychSchemas {
                         type: this.parameterTypes.STRING,
                         default: '0,180',
                         blockTarget: 'rdm-trial',
-                        description: 'RDM Trial: comma-separated directions to sample from (degrees; 0=right, 90=down, 180=left, 270=up)'
+                        description: 'RDM Trial: comma-separated directions (degrees; 0=right, 90=down, 180=left, 270=up) to sample from. Allowed range: 0 to 359.'
                     },
                     speed_min: {
                         type: this.parameterTypes.FLOAT,
@@ -426,7 +867,7 @@ class JSPsychSchemas {
                         type: this.parameterTypes.STRING,
                         default: '0,180',
                         blockTarget: 'rdm-practice',
-                        description: 'RDM Practice: comma-separated directions to sample from (degrees; 0=right, 90=down, 180=left, 270=up)'
+                        description: 'RDM Practice: comma-separated directions (degrees; 0=right, 90=down, 180=left, 270=up) to sample from. Allowed range: 0 to 359.'
                     },
                     practice_feedback_duration_min: {
                         type: this.parameterTypes.INT,
@@ -537,13 +978,13 @@ class JSPsychSchemas {
                         type: this.parameterTypes.STRING,
                         default: 'congruent,incongruent',
                         blockTarget: 'flanker-trial',
-                        description: 'Flanker: comma-separated congruency options to sample from'
+                        description: 'Flanker: comma-separated congruency values to sample from. Allowed: congruent, incongruent, neutral.'
                     },
                     flanker_target_direction_options: {
                         type: this.parameterTypes.STRING,
                         default: 'left,right',
                         blockTarget: 'flanker-trial',
-                        description: 'Flanker: comma-separated target directions to sample from'
+                        description: 'Flanker: comma-separated target directions to sample from (used for arrows). Allowed: left, right.'
                     },
                     flanker_stimulus_type: {
                         type: this.parameterTypes.SELECT,
@@ -556,19 +997,19 @@ class JSPsychSchemas {
                         type: this.parameterTypes.STRING,
                         default: 'H',
                         blockTarget: 'flanker-trial',
-                        description: 'Flanker: comma-separated possible center stimuli (letters/symbols/custom)'
+                        description: 'Flanker: comma-separated possible center stimuli (used when stimulus_type is letters/symbols/custom). Example: H,S,@.'
                     },
                     flanker_distractor_stimulus_options: {
                         type: this.parameterTypes.STRING,
                         default: 'S',
                         blockTarget: 'flanker-trial',
-                        description: 'Flanker: comma-separated possible distractor stimuli (letters/symbols/custom)'
+                        description: 'Flanker: comma-separated possible distractor stimuli (used when stimulus_type is letters/symbols/custom).'
                     },
                     flanker_neutral_stimulus_options: {
                         type: this.parameterTypes.STRING,
                         default: '–',
                         blockTarget: 'flanker-trial',
-                        description: 'Flanker: comma-separated neutral flanker stimuli'
+                        description: 'Flanker: comma-separated neutral flanker stimuli (used when stimulus_type is letters/symbols/custom and congruency = neutral).'
                     },
                     flanker_left_key: {
                         type: this.parameterTypes.STRING,
@@ -636,7 +1077,7 @@ class JSPsychSchemas {
                         type: this.parameterTypes.STRING,
                         default: '1,2,3,4,5,6,7,8,9',
                         blockTarget: 'sart-trial',
-                        description: 'SART: comma-separated digits to sample from'
+                        description: 'SART: comma-separated digits to sample from. Allowed range: 0 to 9.'
                     },
                     sart_nogo_digit: {
                         type: this.parameterTypes.INT,
@@ -704,91 +1145,171 @@ class JSPsychSchemas {
                         type: this.parameterTypes.SELECT,
                         default: 'discriminate_tilt',
                         options: ['detect_target', 'discriminate_tilt'],
-                        blockTarget: 'gabor-trial',
+                        blockTarget: 'gabor-trial,gabor-quest',
                         description: 'Gabor: response task mode for generated trials'
                     },
                     gabor_left_key: {
                         type: this.parameterTypes.STRING,
                         default: 'f',
-                        blockTarget: 'gabor-trial',
+                        blockTarget: 'gabor-trial,gabor-quest',
                         description: 'Gabor: left key (discriminate_tilt)'
                     },
                     gabor_right_key: {
                         type: this.parameterTypes.STRING,
                         default: 'j',
-                        blockTarget: 'gabor-trial',
+                        blockTarget: 'gabor-trial,gabor-quest',
                         description: 'Gabor: right key (discriminate_tilt)'
                     },
                     gabor_yes_key: {
                         type: this.parameterTypes.STRING,
                         default: 'f',
-                        blockTarget: 'gabor-trial',
+                        blockTarget: 'gabor-trial,gabor-quest',
                         description: 'Gabor: yes key (detect_target)'
                     },
                     gabor_no_key: {
                         type: this.parameterTypes.STRING,
                         default: 'j',
-                        blockTarget: 'gabor-trial',
+                        blockTarget: 'gabor-trial,gabor-quest',
                         description: 'Gabor: no key (detect_target)'
                     },
                     gabor_target_location_options: {
                         type: this.parameterTypes.STRING,
                         default: 'left,right',
-                        blockTarget: 'gabor-trial',
-                        description: 'Gabor: comma-separated target locations to sample from'
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor: comma-separated target locations to sample from. Allowed: left, right.'
                     },
                     gabor_target_tilt_options: {
                         type: this.parameterTypes.STRING,
                         default: '-45,45',
-                        blockTarget: 'gabor-trial',
-                        description: 'Gabor: comma-separated target tilts (deg; -90 to 90) to sample from'
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor: comma-separated target tilts (degrees) to sample from. Allowed range: -90 to 90.'
                     },
                     gabor_distractor_orientation_options: {
                         type: this.parameterTypes.STRING,
                         default: '0,90',
-                        blockTarget: 'gabor-trial',
-                        description: 'Gabor: comma-separated distractor orientations (deg; 0-179) to sample from'
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor: comma-separated distractor orientations (degrees) to sample from. Allowed range: 0 to 179.'
                     },
                     gabor_spatial_cue_options: {
                         type: this.parameterTypes.STRING,
                         default: 'none,left,right,both',
-                        blockTarget: 'gabor-trial',
-                        description: 'Gabor: comma-separated spatial cue options to sample from'
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor: comma-separated spatial cue options to sample from. Allowed: none, left, right, both.'
                     },
                     gabor_left_value_options: {
                         type: this.parameterTypes.STRING,
                         default: 'neutral,high,low',
-                        blockTarget: 'gabor-trial',
-                        description: 'Gabor: comma-separated left value cue options to sample from'
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor: comma-separated left value cue options to sample from. Allowed: neutral, high, low.'
                     },
                     gabor_right_value_options: {
                         type: this.parameterTypes.STRING,
                         default: 'neutral,high,low',
-                        blockTarget: 'gabor-trial',
-                        description: 'Gabor: comma-separated right value cue options to sample from'
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor: comma-separated right value cue options to sample from. Allowed: neutral, high, low.'
+                    },
+                    gabor_spatial_frequency_min: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.06,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor: spatial frequency min (cycles per pixel)'
+                    },
+                    gabor_spatial_frequency_max: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.06,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor: spatial frequency max (cycles per pixel)'
+                    },
+                    gabor_grating_waveform_options: {
+                        type: this.parameterTypes.STRING,
+                        default: 'sinusoidal',
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor: comma-separated grating waveforms to sample from. Allowed: sinusoidal, square, triangle.'
+                    },
+                    gabor_adaptive_mode: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'none',
+                        options: ['none', 'quest'],
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor: optional adaptive staircase mode for this block'
+                    },
+                    gabor_quest_parameter: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'target_tilt_deg',
+                        options: ['target_tilt_deg', 'spatial_frequency_cyc_per_px'],
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor QUEST: which parameter to adapt'
+                    },
+                    gabor_quest_target_performance: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.82,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor QUEST: target performance level (e.g., 0.82)'
+                    },
+                    gabor_quest_start_value: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 45,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor QUEST: initial value'
+                    },
+                    gabor_quest_start_sd: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 20,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor QUEST: initial SD'
+                    },
+                    gabor_quest_beta: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 3.5,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor QUEST: beta (slope)'
+                    },
+                    gabor_quest_delta: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.01,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor QUEST: lapse rate (delta)'
+                    },
+                    gabor_quest_gamma: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.5,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor QUEST: guess rate (gamma)'
+                    },
+                    gabor_quest_min_value: {
+                        type: this.parameterTypes.FLOAT,
+                        default: -90,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor QUEST: minimum allowed value'
+                    },
+                    gabor_quest_max_value: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 90,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor QUEST: maximum allowed value'
                     },
                     gabor_stimulus_duration_min: {
                         type: this.parameterTypes.INT,
                         default: 67,
-                        blockTarget: 'gabor-trial',
+                        blockTarget: 'gabor-trial,gabor-quest',
                         description: 'Gabor: stimulus duration min (ms)'
                     },
                     gabor_stimulus_duration_max: {
                         type: this.parameterTypes.INT,
                         default: 67,
-                        blockTarget: 'gabor-trial',
+                        blockTarget: 'gabor-trial,gabor-quest',
                         description: 'Gabor: stimulus duration max (ms)'
                     },
                     gabor_mask_duration_min: {
                         type: this.parameterTypes.INT,
                         default: 67,
-                        blockTarget: 'gabor-trial',
+                        blockTarget: 'gabor-trial,gabor-quest',
                         description: 'Gabor: mask duration min (ms)'
                     },
                     gabor_mask_duration_max: {
                         type: this.parameterTypes.INT,
                         default: 67,
-                        blockTarget: 'gabor-trial',
+                        blockTarget: 'gabor-trial,gabor-quest',
                         description: 'Gabor: mask duration max (ms)'
                     },
                     group_1_coherence_min: {
@@ -807,7 +1328,7 @@ class JSPsychSchemas {
                         type: this.parameterTypes.STRING,
                         default: '0,180',
                         blockTarget: 'rdm-dot-groups',
-                        description: 'RDM Groups: group 1 direction options (degrees; 0=right, 90=down, 180=left, 270=up)'
+                        description: 'RDM Groups: group 1 comma-separated direction options (degrees; 0=right, 90=down, 180=left, 270=up). Allowed range: 0 to 359.'
                     },
                     group_1_speed_min: {
                         type: this.parameterTypes.FLOAT,
@@ -837,7 +1358,7 @@ class JSPsychSchemas {
                         type: this.parameterTypes.STRING,
                         default: '0,180',
                         blockTarget: 'rdm-dot-groups',
-                        description: 'RDM Groups: group 2 direction options (degrees; 0=right, 90=down, 180=left, 270=up)'
+                        description: 'RDM Groups: group 2 comma-separated direction options (degrees; 0=right, 90=down, 180=left, 270=up). Allowed range: 0 to 359.'
                     },
                     group_2_speed_min: {
                         type: this.parameterTypes.FLOAT,
@@ -1310,7 +1831,7 @@ class JSPsychSchemas {
             }
 
             // Validate task type (experiment-wide)
-            const knownTaskTypes = ['rdm', 'sart', 'flanker', 'stroop', 'nback', 'simon', 'custom'];
+            const knownTaskTypes = ['rdm', 'sart', 'flanker', 'gabor', 'soc-dashboard', 'stroop', 'nback', 'simon', 'custom'];
             if (config.task_type === undefined || config.task_type === null || config.task_type === '') {
                 warnings.push('Missing recommended field: task_type');
             } else if (typeof config.task_type !== 'string') {
@@ -1816,7 +2337,7 @@ class JSPsychSchemas {
             mouse_start_angle_deg: {
                 type: this.parameterTypes.FLOAT,
                 default: 0,
-                description: 'Mouse response: segment start angle offset in degrees (0 = right)'
+                description: 'Mouse response: segment start angle offset in degrees (0=right; 90=down; 180=left; 270=up). Angles increase clockwise (screen/canvas coordinates).'
             },
             mouse_selection_mode: {
                 type: this.parameterTypes.SELECT,
@@ -1888,6 +2409,24 @@ class JSPsychSchemas {
                 type: this.parameterTypes.FLOAT, 
                 default: 350,
                 description: 'Aperture diameter in pixels'
+            },
+
+            // Aperture outline overrides (per-component)
+            show_aperture_outline_mode: {
+                type: this.parameterTypes.SELECT,
+                default: 'inherit',
+                options: ['inherit', 'true', 'false'],
+                description: 'Aperture outline override (inherit uses experiment-wide aperture_parameters)'
+            },
+            aperture_outline_width: {
+                type: this.parameterTypes.FLOAT,
+                default: 2,
+                description: 'Outline width (px) when overriding outline visibility'
+            },
+            aperture_outline_color: {
+                type: this.parameterTypes.COLOR,
+                default: '#FFFFFF',
+                description: 'Outline color when overriding outline visibility'
             },
             ...responseOverrideParameters
         };
@@ -2038,6 +2577,24 @@ class JSPsychSchemas {
                             type: this.parameterTypes.FLOAT, 
                             default: 350,
                             description: 'Aperture diameter in pixels'
+                        },
+
+                        // Aperture outline overrides (per-component)
+                        show_aperture_outline_mode: {
+                            type: this.parameterTypes.SELECT,
+                            default: 'inherit',
+                            options: ['inherit', 'true', 'false'],
+                            description: 'Aperture outline override (inherit uses experiment-wide aperture_parameters)'
+                        },
+                        aperture_outline_width: {
+                            type: this.parameterTypes.FLOAT,
+                            default: 2,
+                            description: 'Outline width (px) when overriding outline visibility'
+                        },
+                        aperture_outline_color: {
+                            type: this.parameterTypes.COLOR,
+                            default: '#FFFFFF',
+                            description: 'Outline color when overriding outline visibility'
                         },
                         ...responseOverrideParameters
                     }

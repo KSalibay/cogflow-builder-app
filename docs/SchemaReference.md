@@ -26,6 +26,11 @@ Note: some older sections in this file may reference legacy/aspirational schema 
 
 Note: the builder output shape in [../src/JsonBuilder.js](../src/JsonBuilder.js) is the authoritative reference for what is exported today.
 
+Additional note: aperture outline (border) fields are exported under `aperture_parameters`:
+- `show_aperture_outline`
+- `aperture_outline_width`
+- `aperture_outline_color`
+
 ---
 
 ## Component mapping (high level)

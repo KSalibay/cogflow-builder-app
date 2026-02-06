@@ -89,18 +89,141 @@ Notes:
 - **Data collection** currently includes `reaction-time`, `accuracy`, `correctness` (online correctness computation toggle), and `eye-tracking`.
 - **Response modalities** (keyboard/mouse/touch/voice) are configured via the Default Response UI and exported under `response_parameters`.
 
+### Supported tasks (5)
+
+The Builder currently supports five task types via the **Task Type** dropdown:
+
+- `task_type: "rdm"` — Random Dot Motion (RDM)
+- `task_type: "gabor"` — Gabor Patch task
+- `task_type: "flanker"` — Flanker task
+- `task_type: "sart"` — Sustained Attention to Response Task (SART)
+- `task_type: "soc-dashboard"` — multi-window SOC desktop session (continuous-mode only)
+
+There is also a `task_type: "custom"` option intended for advanced/manual use (no task-specific components; generic components + tracking only).
+
+### Session updates (Feb 2026)
+
+- Eye-tracking support in the Builder now includes a dedicated **Calibration Instructions** component (shown only when the Eye Tracking modality is enabled).
+  - This exports as a normal `html-keyboard-response` trial, but is tagged with `data.plugin_type = "eye-tracking-calibration-instructions"` so the interpreter can reposition it to the correct place (between the camera-permission screen and calibration dots).
+  - Timeline card title/icon also stays in sync so calibration prefaces remain visually distinct from generic Instructions.
+- Response-modality parameters are now conditionally shown/disabled in the UI.
+  - Disabled fields are not saved/exported (prevents exporting irrelevant voice/mouse/touch settings when not in use).
+- Continuous-mode defaults were expanded to include aperture outline controls so continuous exports match the interpreter’s rendering expectations.
+
+### SOC Dashboard release (Feb 2026)
+
+The Builder includes a **SOC Dashboard** task type for “multi-tasking” paradigms presented inside a single, realistic SOC desktop.
+
+- Constraint: `task_type: "soc-dashboard"` is only enabled when `experiment_type` is `continuous`.
+- Authoring model: one `soc-dashboard` component acts as a session container; “subtasks” are authored as separate helper cards and are composed into the nearest SOC Dashboard at export time.
+
+Implemented SOC subtasks:
+
+- `soc-subtask-sart-like` (exports as `type: "sart-like"` inside `subtasks[]`)
+  - Deterministic GO mapping for realism (single action outcome per run):
+    - `go_condition: "target"` → GO yields `ALLOW`
+    - `go_condition: "distractor"` → GO yields `BLOCK`
+  - `show_markers` (default false) toggles target/distractor tags.
+  - `instructions` supports placeholders like `{{GO_CONTROL}}`, `{{TARGETS}}`, `{{DISTRACTORS}}`.
+
+- `soc-subtask-nback-like` (exports as `type: "nback-like"` inside `subtasks[]`)
+  - `match_field: "src_ip" | "username"`
+  - `response_paradigm: "go_nogo" | "2afc"` (modal shows only the relevant key fields)
+  - `instructions` supports placeholders like `{{GO_CONTROL}}`, `{{NOGO_CONTROL}}`, `{{N}}`, `{{MATCH_FIELD}}`.
+
+Scheduling (for overlaps / multitasking):
+
+- Each subtask supports `start_at_ms` / `start_delay_ms` and `duration_ms` / `end_at_ms` so windows can appear/disappear on a fixed schedule.
+- Subtasks also include a clickable instruction popup at runtime; dismissing it anchors the “true start” timing (the interpreter logs `t_subtask_ms` from that point).
+
+Planned / placeholders (next session):
+
+- `soc-subtask-flanker-like` (TBD)
+- `soc-subtask-wcst-like` (TBD)
+
 See [docs/inputs_outputs.md](docs/inputs_outputs.md) for a more detailed (but still current) reference.
 
 ## Timeline components
 
 The timeline is authored in the UI and serialized from DOM `dataset.componentData`. Supported component types include:
 
-- `html-keyboard-response` (used for Instructions)
+### Common components (all tasks)
+
+- Instructions:
+  - `instructions` (renders/export as `html-keyboard-response`)
+- Generic stimulus/survey:
+  - `html-keyboard-response` (generic)
+  - `image-keyboard-response`
+  - `survey-response`
+- Tracking (only shown when enabled under **Data Collection**):
+  - `eye-tracking` (settings stub)
+  - `eye-tracking-calibration-instructions` (preface screen; exported as `html-keyboard-response` tagged with `data.plugin_type = "eye-tracking-calibration-instructions"`)
+  - `mouse-tracking`
+
+### RDM components (`task_type: "rdm"`)
+
 - `rdm-trial`
 - `rdm-practice`
 - `rdm-adaptive`
 - `rdm-dot-groups`
-- `block` (compact representation for large numbers of trials)
+- `block` (component_type can be `rdm-trial`, `rdm-practice`, `rdm-adaptive`, `rdm-dot-groups`)
+- `html-button-response` (generic button-response screen; available in RDM mode)
+
+### Gabor components (`task_type: "gabor"`)
+
+- `gabor-trial`
+- `block` (component_type can be `gabor-trial` or `gabor-quest`)
+
+### Flanker components (`task_type: "flanker"`)
+
+- `flanker-trial`
+- `block` (component_type can be `flanker-trial`)
+
+### SART components (`task_type: "sart"`)
+
+- `sart-trial`
+- `block` (component_type can be `sart-trial`)
+
+### SOC Dashboard components (`task_type: "soc-dashboard"`)
+
+- `soc-dashboard` (SOC desktop “session container”)
+- `soc-dashboard-icon` (desktop icon; distractor clicks)
+- Subtasks (composed into `soc-dashboard.subtasks[]` on export):
+  - `soc-subtask-sart-like` (log triage Go/No-Go)
+  - `soc-subtask-nback-like` (alert correlation)
+  - `soc-subtask-flanker-like` (placeholder; next session)
+  - `soc-subtask-wcst-like` (placeholder; next session)
+
+### Eye tracking
+
+The Builder’s **Eye Tracking** data-collection checkbox controls whether the study should collect eye tracking.
+
+- Minimal form (what the Builder exports today):
+
+```json
+{
+  "data_collection": {
+    "eye-tracking": true
+  }
+}
+```
+
+- Detailed form (optional; supported by the interpreter):
+
+```json
+{
+  "data_collection": {
+    "eye_tracking": {
+      "enabled": true,
+      "sample_rate": 30,
+      "calibration_points": 9,
+      "show_video": false
+    }
+  }
+}
+```
+
+When eye tracking is enabled, the component library includes **Calibration Instructions** so researchers can insert a participant-friendly preface screen before calibration.
 
 ### Blocks (compact representation)
 

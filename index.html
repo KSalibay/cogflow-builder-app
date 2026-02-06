@@ -70,6 +70,7 @@
                                 <option value="gabor">Gabor Patch Task</option>
                                 <option value="flanker">Flanker Task</option>
                                 <option value="sart">SART</option>
+                                <option value="soc-dashboard" disabled>SOC Dashboard (Continuous only)</option>
                                 <option value="custom">Custom Task</option>
                             </select>
                             <small class="text-muted">This determines available components in the library</small>
@@ -291,13 +292,14 @@
     <script src="src/GraphSharePointClient.js?v=20260123-1"></script>
 
     <!-- Cache-bust local scripts -->
-    <script src="src/JsonBuilder.js?v=20260123-1"></script>
+    <script src="src/JsonBuilder.js?v=20260207-2"></script>
     <script src="src/modules/DataCollectionModules.js?v=20260114-1"></script>
     <script src="src/modules/TrialManager.js?v=20260113-10"></script>
     <script src="src/modules/TimelineBuilder.js?v=20260122-5"></script>
+    <script src="src/modules/SocDashboardPreview.js?v=20260207-1"></script>
     <script src="src/modules/ComponentPreview.js?v=20260122-7"></script>
     <script src="src/schemas/RDMTaskSchema.js?v=20260113-10"></script>
-    <script src="src/schemas/JSPsychSchemas.js?v=20260122-5"></script>
+    <script src="src/schemas/JSPsychSchemas.js?v=20260207-1"></script>
     <script src="src/schemas/UnifiedSchema.js?v=20260113-10"></script>
 
     <script>
@@ -392,6 +394,7 @@
             // Store component data
             const componentData = {
                 type: 'html-keyboard-response',
+                auto_generated: true,
                 stimulus: generateInstructionsText(),
                 choices: 'ALL_KEYS'
             };
@@ -436,8 +439,11 @@
         }
         
         function updateInstructionsComponents() {
-            // Find all instructions components and update their text
-            const instructionsComponents = document.querySelectorAll('.timeline-component[data-component-type="html-keyboard-response"]');
+            // Keep instructions-like timeline cards in sync.
+            // 1) Auto-update stimulus text for auto-generated Instructions cards.
+            // 2) Keep card title/subtitle/icon accurate for Instructions vs Calibration Instructions.
+            //    (Avoid touching generic HTML+Keyboard components, which also use html-keyboard-response.)
+            const htmlKeyboardComponents = document.querySelectorAll('.timeline-component[data-component-type="html-keyboard-response"]');
             
             function generateInstructionsText() {
                 const taskName = document.getElementById('taskName')?.value || 'Random Dot Motion task';
@@ -460,11 +466,47 @@
             
             const newInstructionsText = generateInstructionsText();
             
-            instructionsComponents.forEach(component => {
+            htmlKeyboardComponents.forEach(component => {
                 try {
                     const data = JSON.parse(component.dataset.componentData || '{}');
-                    if (data.type === 'html-keyboard-response' && data.stimulus.includes('This is an experiment')) {
-                        // This appears to be our auto-generated instructions, update it
+                    if (data.type !== 'html-keyboard-response') return;
+
+                    const pluginType = data?.data?.plugin_type;
+                    const builderId = component?.dataset?.builderComponentId;
+                    const isCalibrationPreface = (pluginType === 'eye-tracking-calibration-instructions') || (builderId === 'eye-tracking-calibration-instructions');
+
+                    // Determine whether this is an "instructions-like" card that should have the
+                    // special title/subtitle. We use explicit builder ids when present, then
+                    // fall back to the legacy instructions card shape (no name field).
+                    const hasExplicitInstructionsId = (builderId === 'instructions' || builderId === 'eye-tracking-calibration-instructions');
+                    const looksLikeLegacyInstructions = (!data.name && (data.auto_generated === true || typeof data.stimulus === 'string'));
+                    const shouldTreatAsInstructionsLike = hasExplicitInstructionsId || isCalibrationPreface || looksLikeLegacyInstructions;
+
+                    if (shouldTreatAsInstructionsLike) {
+                        // Persist a stable identity on the DOM element.
+                        if (isCalibrationPreface) {
+                            component.dataset.builderComponentId = 'eye-tracking-calibration-instructions';
+                        } else if (!component.dataset.builderComponentId) {
+                            component.dataset.builderComponentId = 'instructions';
+                        }
+
+                        const titleEl = component.querySelector('.card-title');
+                        const subtitleEl = component.querySelector('small.text-muted');
+                        if (titleEl) {
+                            titleEl.innerHTML = isCalibrationPreface
+                                ? '<i class="fas fa-eye text-info"></i> Calibration Instructions'
+                                : '<i class="fas fa-info-circle text-info"></i> Instructions';
+                        }
+                        if (subtitleEl) {
+                            subtitleEl.textContent = isCalibrationPreface
+                                ? 'Preface shown before eye-tracking calibration'
+                                : 'Welcome screen with task instructions';
+                        }
+                    }
+
+                    // Only auto-update components that explicitly opt in.
+                    // This prevents overwriting user-authored instruction text.
+                    if (data.auto_generated === true && typeof data.stimulus === 'string') {
                         data.stimulus = newInstructionsText;
                         component.dataset.componentData = JSON.stringify(data);
                     }
@@ -494,6 +536,21 @@
             } catch (e) {
                 console.warn('Could not parse component data for preview:', e);
                 componentData = {};
+            }
+
+            // For RDM-derived components, merge experiment-wide defaults so timeline previews
+            // reflect the defaults panel unless the component explicitly overrides.
+            // (This includes aperture outline defaults.)
+            try {
+                const t = (componentData?.type || '').toString();
+                const isRdm = t.includes('rdm') || t === 'psychophysics-rdm' || t === 'rdk';
+                const isRdmBlock = (t === 'block') && ((componentData?.block_component_type || componentData?.component_type || '').toString().startsWith('rdm-'));
+                if (isRdm || isRdmBlock) {
+                    const defaults = window.jsonBuilderInstance?.getCurrentRDMParameters?.() || {};
+                    componentData = { ...defaults, ...componentData };
+                }
+            } catch (e) {
+                console.warn('Could not apply experiment defaults to preview:', e);
             }
             
             // Show preview using the ComponentPreview system
@@ -601,7 +658,11 @@
             // Store reference for saving
             window.editingInstructionsComponent = component;
             
-            modalTitle.innerHTML = '<i class="fas fa-info-circle"></i> Edit Instructions';
+            const pluginType = componentData?.data?.plugin_type;
+            const isCalibrationPreface = pluginType === 'eye-tracking-calibration-instructions' || component?.dataset?.builderComponentId === 'eye-tracking-calibration-instructions';
+            modalTitle.innerHTML = isCalibrationPreface
+                ? '<i class="fas fa-eye"></i> Edit Calibration Instructions'
+                : '<i class="fas fa-info-circle"></i> Edit Instructions';
             
             // Get current values from component data
             const currentStimulus = componentData.stimulus || '';
@@ -695,9 +756,19 @@
             const trialDuration = document.getElementById('trialDuration').value;
             const responseEnds = document.getElementById('responseEnds').checked;
             
-            // Update component data
+            // Update component data (preserve any additional fields)
+            let existing = {};
+            try {
+                existing = JSON.parse(window.editingInstructionsComponent.dataset.componentData || '{}') || {};
+            } catch (e) {
+                existing = {};
+            }
+
             const updatedData = {
+                ...existing,
                 type: 'html-keyboard-response',
+                // Once edited by a human, stop auto-updating it.
+                auto_generated: false,
                 stimulus: instructionsText,
                 choices: responseKeys,
                 prompt: promptText,
