@@ -92,7 +92,7 @@ class ComponentPreview {
             this.showInstructionsPreview(stimulusText, componentData);
         } else if (componentType === 'flanker-trial') {
             this.showFlankerPreview(componentData);
-        } else if (componentType === 'gabor-trial') {
+        } else if (componentType === 'gabor-trial' || componentType === 'gabor-quest') {
             this.showGaborPreview(componentData);
         } else if (componentType === 'sart-trial') {
             this.showSartPreview(componentData);
@@ -352,6 +352,13 @@ class ComponentPreview {
         const lowColor = (componentData?.low_value_color ?? panelLow ?? '#0066ff').toString();
         const neutralColor = '#666666';
 
+        const panelFreqRaw = document.getElementById('gaborSpatialFrequency')?.value;
+        const panelFreq = (panelFreqRaw !== undefined && panelFreqRaw !== null && `${panelFreqRaw}` !== '')
+            ? Number.parseFloat(panelFreqRaw)
+            : null;
+        const spatialFrequency = Number(componentData?.spatial_frequency_cyc_per_px ?? panelFreq ?? 0.06);
+        const gratingWaveform = (componentData?.grating_waveform ?? document.getElementById('gaborGratingWaveform')?.value ?? 'sinusoidal').toString();
+
         const frameColorForValue = (v) => {
             if (v === 'high') return highColor;
             if (v === 'low') return lowColor;
@@ -411,7 +418,9 @@ class ComponentPreview {
                     leftFrameColor: frameColorForValue(leftValue),
                     rightFrameColor: frameColorForValue(rightValue),
                     leftAngle,
-                    rightAngle
+                    rightAngle,
+                    spatialFrequency,
+                    gratingWaveform
                 });
             }
 
@@ -434,7 +443,7 @@ class ComponentPreview {
         modal.show();
     }
 
-    renderGaborTrialToCanvas(canvas, { spatialCue, leftFrameColor, rightFrameColor, leftAngle, rightAngle }) {
+    renderGaborTrialToCanvas(canvas, { spatialCue, leftFrameColor, rightFrameColor, leftAngle, rightAngle, spatialFrequency, gratingWaveform }) {
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
@@ -473,8 +482,8 @@ class ComponentPreview {
         this.drawRoundedRectStroke(ctx, rightCx - frameSize / 2, cy - frameSize / 2, frameSize, frameSize, 16, rightFrameColor, 6);
 
         // Gabor patches
-        this.drawGaborPatch(ctx, leftCx, cy, patchSize, leftAngle);
-        this.drawGaborPatch(ctx, rightCx, cy, patchSize, rightAngle);
+        this.drawGaborPatch(ctx, leftCx, cy, patchSize, leftAngle, { spatialFrequency, gratingWaveform });
+        this.drawGaborPatch(ctx, rightCx, cy, patchSize, rightAngle, { spatialFrequency, gratingWaveform });
 
         // Fixation
         ctx.strokeStyle = 'rgba(255,255,255,0.7)';
@@ -509,14 +518,17 @@ class ComponentPreview {
         ctx.restore();
     }
 
-    drawGaborPatch(ctx, centerX, centerY, sizePx, orientationDeg) {
+    drawGaborPatch(ctx, centerX, centerY, sizePx, orientationDeg, { spatialFrequency, gratingWaveform } = {}) {
         const w = Math.max(8, Math.floor(sizePx));
         const h = w;
         const r = Math.floor(w / 2);
         const theta = (Number.isFinite(orientationDeg) ? orientationDeg : 0) * Math.PI / 180;
 
         // Frequency: cycles per pixel (tuned for preview visibility)
-        const freq = 0.06;
+        const freq = (Number.isFinite(Number(spatialFrequency)) && Number(spatialFrequency) > 0)
+            ? Number(spatialFrequency)
+            : 0.06;
+        const waveform = (gratingWaveform || 'sinusoidal').toString();
         const sigma = w / 6;
         const contrast = 0.95;
         const phase = 0;
@@ -548,8 +560,16 @@ class ComponentPreview {
                 const xRot = dx * cosT + dy * sinT;
 
                 const envelope = Math.exp(-(rr) / twoSigma2);
-                const grating = Math.cos(2 * Math.PI * freq * xRot + phase);
-                const val = 127.5 + 127.5 * contrast * envelope * grating;
+                const angle = 2 * Math.PI * freq * xRot + phase;
+                let carrier = Math.cos(angle);
+                if (waveform === 'square') {
+                    carrier = (carrier >= 0) ? 1 : -1;
+                } else if (waveform === 'triangle') {
+                    // Triangle in [-1,1]
+                    carrier = (2 / Math.PI) * Math.asin(Math.sin(angle));
+                }
+
+                const val = 127.5 + 127.5 * contrast * envelope * carrier;
                 const v = Math.max(0, Math.min(255, Math.round(val)));
 
                 data[idx + 0] = v;
@@ -700,7 +720,6 @@ class ComponentPreview {
         // Render a randomly sampled parameter set from the block window so users can
         // quickly sanity-check the block configuration.
         const sampled = this.sampleComponentFromBlock(componentData);
-
         const rawBaseType = componentData.block_component_type || componentData.component_type;
         const baseType = (typeof rawBaseType === 'string' && rawBaseType.trim() !== '') ? rawBaseType : 'rdm-trial';
         const length = componentData.block_length ?? componentData.length ?? 0;
@@ -719,7 +738,7 @@ class ComponentPreview {
             return;
         }
 
-        if (baseType === 'gabor-trial') {
+        if (baseType === 'gabor-trial' || baseType === 'gabor-quest') {
             this.showGaborPreview(sampled);
             return;
         }
@@ -753,8 +772,14 @@ class ComponentPreview {
     }
 
     sampleComponentFromBlock(blockData) {
-        const rng = this.getBlockRng(blockData);
-        const rawType = blockData?.block_component_type || blockData?.component_type;
+        // Some builder flows store block parameter fields under `parameter_values`.
+        // Normalize into a single flat object so previews work from either shape.
+            const src = (blockData && typeof blockData === 'object' && blockData.parameter_values && typeof blockData.parameter_values === 'object')
+            ? { ...blockData, ...blockData.parameter_values }
+            : blockData;
+
+        const rng = this.getBlockRng(src);
+        const rawType = src?.block_component_type || src?.component_type;
         const componentType = (typeof rawType === 'string' && rawType.trim() !== '') ? rawType : 'rdm-trial';
 
         const randFloat = (min, max) => {
@@ -811,93 +836,103 @@ class ComponentPreview {
         const sampled = { type: componentType };
 
         // Pass through per-block response cue settings (dot-groups)
-        if (blockData?.response_target_group !== undefined) sampled.response_target_group = blockData.response_target_group;
-        if (blockData?.cue_border_mode !== undefined) sampled.cue_border_mode = blockData.cue_border_mode;
-        if (blockData?.cue_border_color !== undefined) sampled.cue_border_color = blockData.cue_border_color;
-        if (blockData?.cue_border_width !== undefined) sampled.cue_border_width = blockData.cue_border_width;
+        if (src?.response_target_group !== undefined) sampled.response_target_group = src.response_target_group;
+        if (src?.cue_border_mode !== undefined) sampled.cue_border_mode = src.cue_border_mode;
+        if (src?.cue_border_color !== undefined) sampled.cue_border_color = src.cue_border_color;
+        if (src?.cue_border_width !== undefined) sampled.cue_border_width = src.cue_border_width;
+
+        // Pass through per-block aperture outline settings (all RDM types)
+        // New export nests these under `aperture_parameters`, but keep flat-field support for older configs.
+        if (src?.aperture_parameters && typeof src.aperture_parameters === 'object') {
+            sampled.aperture_parameters = { ...src.aperture_parameters };
+        }
+        if (src?.show_aperture_outline_mode !== undefined) sampled.show_aperture_outline_mode = src.show_aperture_outline_mode;
+        if (src?.show_aperture_outline !== undefined) sampled.show_aperture_outline = src.show_aperture_outline;
+        if (src?.aperture_outline_width !== undefined) sampled.aperture_outline_width = src.aperture_outline_width;
+        if (src?.aperture_outline_color !== undefined) sampled.aperture_outline_color = src.aperture_outline_color;
 
         if (componentType === 'rdm-trial') {
-            const coherence = randFloat(blockData.coherence_min, blockData.coherence_max);
+            const coherence = randFloat(src.coherence_min, src.coherence_max);
             if (coherence !== null) sampled.coherence = Math.max(0, Math.min(1, coherence));
 
-            const speed = randFloat(blockData.speed_min, blockData.speed_max);
+            const speed = randFloat(src.speed_min, src.speed_max);
             if (speed !== null) sampled.speed = speed;
 
-            const dirs = parseNumberList(blockData.direction_options);
+            const dirs = parseNumberList(src.direction_options);
             sampled.direction = pickFromList(dirs, 0);
 
-            if (typeof blockData.dot_color === 'string' && blockData.dot_color.trim() !== '') {
-                sampled.dot_color = blockData.dot_color;
+            if (typeof src.dot_color === 'string' && src.dot_color.trim() !== '') {
+                sampled.dot_color = src.dot_color;
             }
         } else if (componentType === 'rdm-practice') {
-            const coherence = randFloat(blockData.practice_coherence_min, blockData.practice_coherence_max);
+            const coherence = randFloat(src.practice_coherence_min, src.practice_coherence_max);
             if (coherence !== null) sampled.coherence = Math.max(0, Math.min(1, coherence));
 
-            const dirs = parseNumberList(blockData.practice_direction_options);
+            const dirs = parseNumberList(src.practice_direction_options);
             sampled.direction = pickFromList(dirs, 0);
 
             // Feedback window isn't directly visualized, but keep it on the payload for completeness.
-            const feedback = randInt(blockData.practice_feedback_duration_min, blockData.practice_feedback_duration_max);
+            const feedback = randInt(src.practice_feedback_duration_min, src.practice_feedback_duration_max);
             if (feedback !== null) sampled.feedback_duration = feedback;
 
-            if (typeof blockData.dot_color === 'string' && blockData.dot_color.trim() !== '') {
-                sampled.dot_color = blockData.dot_color;
+            if (typeof src.dot_color === 'string' && src.dot_color.trim() !== '') {
+                sampled.dot_color = src.dot_color;
             }
         } else if (componentType === 'rdm-adaptive') {
             // Preview a single plausible stimulus instance by sampling initial_coherence → coherence.
-            const coherence = randFloat(blockData.adaptive_initial_coherence_min, blockData.adaptive_initial_coherence_max);
+            const coherence = randFloat(src.adaptive_initial_coherence_min, src.adaptive_initial_coherence_max);
             if (coherence !== null) sampled.coherence = Math.max(0, Math.min(1, coherence));
 
-            if (typeof blockData.dot_color === 'string' && blockData.dot_color.trim() !== '') {
-                sampled.dot_color = blockData.dot_color;
+            if (typeof src.dot_color === 'string' && src.dot_color.trim() !== '') {
+                sampled.dot_color = src.dot_color;
             }
         } else if (componentType === 'rdm-dot-groups') {
             // Percentages: sample group_1 and set group_2 = 100 - group_1
-            const g1Pct = randInt(blockData.group_1_percentage_min, blockData.group_1_percentage_max);
+            const g1Pct = randInt(src.group_1_percentage_min, src.group_1_percentage_max);
             const safeG1Pct = (g1Pct === null) ? 50 : Math.max(0, Math.min(100, g1Pct));
             sampled.group_1_percentage = safeG1Pct;
             sampled.group_2_percentage = 100 - safeG1Pct;
 
-            const g1C = randFloat(blockData.group_1_coherence_min, blockData.group_1_coherence_max);
+            const g1C = randFloat(src.group_1_coherence_min, src.group_1_coherence_max);
             if (g1C !== null) sampled.group_1_coherence = Math.max(0, Math.min(1, g1C));
-            const g2C = randFloat(blockData.group_2_coherence_min, blockData.group_2_coherence_max);
+            const g2C = randFloat(src.group_2_coherence_min, src.group_2_coherence_max);
             if (g2C !== null) sampled.group_2_coherence = Math.max(0, Math.min(1, g2C));
 
-            const g1S = randFloat(blockData.group_1_speed_min, blockData.group_1_speed_max);
+            const g1S = randFloat(src.group_1_speed_min, src.group_1_speed_max);
             if (g1S !== null) sampled.group_1_speed = g1S;
-            const g2S = randFloat(blockData.group_2_speed_min, blockData.group_2_speed_max);
+            const g2S = randFloat(src.group_2_speed_min, src.group_2_speed_max);
             if (g2S !== null) sampled.group_2_speed = g2S;
 
-            const g1Dirs = parseNumberList(blockData.group_1_direction_options);
+            const g1Dirs = parseNumberList(src.group_1_direction_options);
             sampled.group_1_direction = pickFromList(g1Dirs, 0);
-            const g2Dirs = parseNumberList(blockData.group_2_direction_options);
+            const g2Dirs = parseNumberList(src.group_2_direction_options);
             sampled.group_2_direction = pickFromList(g2Dirs, 180);
 
-            const fallback = (typeof blockData.dot_color === 'string' && blockData.dot_color.trim() !== '') ? blockData.dot_color : null;
-            sampled.group_1_color = (typeof blockData.group_1_color === 'string' && blockData.group_1_color.trim() !== '') ? blockData.group_1_color : (fallback || '#FF0066');
-            sampled.group_2_color = (typeof blockData.group_2_color === 'string' && blockData.group_2_color.trim() !== '') ? blockData.group_2_color : (fallback || '#0066FF');
+            const fallback = (typeof src.dot_color === 'string' && src.dot_color.trim() !== '') ? src.dot_color : null;
+            sampled.group_1_color = (typeof src.group_1_color === 'string' && src.group_1_color.trim() !== '') ? src.group_1_color : (fallback || '#FF0066');
+            sampled.group_2_color = (typeof src.group_2_color === 'string' && src.group_2_color.trim() !== '') ? src.group_2_color : (fallback || '#0066FF');
         } else if (componentType === 'flanker-trial') {
-            const congruency = parseStringList(blockData.flanker_congruency_options);
+            const congruency = parseStringList(src.flanker_congruency_options);
             sampled.congruency = pickFromList(congruency, 'congruent');
 
             // Optional stimulus type and symbol options
-            const stimType = (blockData.flanker_stimulus_type || 'arrows').toString();
+            const stimType = (src.flanker_stimulus_type || 'arrows').toString();
             sampled.stimulus_type = stimType;
             const isArrows = stimType.trim().toLowerCase() === 'arrows' || stimType.trim() === '';
 
             if (isArrows) {
-                const dirs = parseStringList(blockData.flanker_target_direction_options);
+                const dirs = parseStringList(src.flanker_target_direction_options);
                 sampled.target_direction = pickFromList(dirs, 'left');
             } else {
-                const tOpts = parseStringList(blockData.flanker_target_stimulus_options);
-                const dOpts = parseStringList(blockData.flanker_distractor_stimulus_options);
-                const nOpts = parseStringList(blockData.flanker_neutral_stimulus_options);
+                const tOpts = parseStringList(src.flanker_target_stimulus_options);
+                const dOpts = parseStringList(src.flanker_distractor_stimulus_options);
+                const nOpts = parseStringList(src.flanker_neutral_stimulus_options);
                 sampled.target_stimulus = pickFromList(tOpts, 'H');
                 sampled.distractor_stimulus = pickFromList(dOpts, 'S');
                 sampled.neutral_stimulus = pickFromList(nOpts, '–');
             }
 
-            sampled.left_key = (blockData.flanker_left_key || 'f').toString();
+            sampled.left_key = (src.flanker_left_key || 'f').toString();
             sampled.right_key = (blockData.flanker_right_key || 'j').toString();
             sampled.show_fixation_dot = !!(blockData.flanker_show_fixation_dot ?? false);
             sampled.show_fixation_cross_between_trials = !!(blockData.flanker_show_fixation_cross_between_trials ?? false);
@@ -940,7 +975,7 @@ class ComponentPreview {
 
             const iti = randInt(blockData.sart_iti_min, blockData.sart_iti_max);
             if (iti !== null) sampled.iti_ms = iti;
-        } else if (componentType === 'gabor-trial') {
+        } else if (componentType === 'gabor-trial' || componentType === 'gabor-quest') {
             const locs = parseStringList(blockData.gabor_target_location_options);
             sampled.target_location = pickFromList(locs, 'left');
 
@@ -958,6 +993,12 @@ class ComponentPreview {
 
             const rv = parseStringList(blockData.gabor_right_value_options);
             sampled.right_value = pickFromList(rv, 'neutral');
+
+            const freq = randFloat(blockData.gabor_spatial_frequency_min, blockData.gabor_spatial_frequency_max);
+            if (freq !== null) sampled.spatial_frequency_cyc_per_px = freq;
+
+            const waves = parseStringList(blockData.gabor_grating_waveform_options);
+            sampled.grating_waveform = pickFromList(waves, 'sinusoidal');
 
             const responseTask = (blockData.gabor_response_task || '').toString().trim();
             sampled.response_task = responseTask || 'discriminate_tilt';
@@ -1286,6 +1327,16 @@ class ComponentPreview {
 
         const mergedParams = { ...params, ...normalizedFromGroups };
 
+        // Support nested aperture parameters (new export structure).
+        // Flatten into mergedParams so the existing preview mapper continues to work.
+        if (mergedParams.aperture_parameters && typeof mergedParams.aperture_parameters === 'object') {
+            for (const [key, value] of Object.entries(mergedParams.aperture_parameters)) {
+                if (mergedParams[key] === undefined) {
+                    mergedParams[key] = value;
+                }
+            }
+        }
+
         // Legacy aliases for target group (older UI/modal names)
         if (!mergedParams.response_target_group) {
             const legacyTarget = mergedParams.custom_response || mergedParams.customResponse || mergedParams.modalCustomResponse || mergedParams.modal_custom_response;
@@ -1348,6 +1399,32 @@ class ComponentPreview {
 
         const cueEnabled = (cueMode && cueMode !== 'off' && targetGroup && targetGroup !== 'none' && !!cueColor);
 
+        // Aperture outline (non-cue) configuration
+        const outlineModeRaw = (mergedParams?.show_aperture_outline_mode ?? mergedParams?.aperture_outline_mode ?? 'inherit');
+        const outlineMode = String(outlineModeRaw).trim().toLowerCase();
+        const outlineWidthRaw = mergedParams?.aperture_outline_width;
+        const outlineColorRaw = mergedParams?.aperture_outline_color;
+
+        const outlineWidthNum = (outlineWidthRaw === '' || outlineWidthRaw === null || outlineWidthRaw === undefined)
+            ? null
+            : Number(outlineWidthRaw);
+        const hasOutlineWidth = (outlineWidthNum !== null && Number.isFinite(outlineWidthNum) && outlineWidthNum > 0);
+        const hasOutlineColor = (typeof outlineColorRaw === 'string' && outlineColorRaw.trim().length > 0);
+
+        let outlineEnabled;
+        if (typeof mergedParams?.show_aperture_outline === 'boolean') {
+            outlineEnabled = mergedParams.show_aperture_outline;
+        } else if (mergedParams?.show_aperture_outline === 'true' || mergedParams?.show_aperture_outline === 'false') {
+            outlineEnabled = (String(mergedParams.show_aperture_outline).toLowerCase() === 'true');
+        } else if (outlineMode === 'true' || outlineMode === 'on' || outlineMode === 'enabled') {
+            outlineEnabled = true;
+        } else if (outlineMode === 'false' || outlineMode === 'off' || outlineMode === 'disabled') {
+            outlineEnabled = false;
+        } else {
+            // inherit/unknown: if user set width/color, assume they intended it to be visible
+            outlineEnabled = (hasOutlineWidth || hasOutlineColor) ? true : false;
+        }
+
         // Map component parameters to preview parameters
         this.parameters = {
             component_type: componentType || this.parameters.component_type,
@@ -1384,7 +1461,12 @@ class ComponentPreview {
             // Cue border (aperture border as response cue)
             cue_border_enabled: cueEnabled,
             cue_border_color: cueColor || '#888888',
-            cue_border_width: parseInt(cueWidth)
+            cue_border_width: parseInt(cueWidth),
+
+            // Aperture outline (static)
+            show_aperture_outline: outlineEnabled,
+            aperture_outline_width: hasOutlineWidth ? outlineWidthNum : null,
+            aperture_outline_color: hasOutlineColor ? outlineColorRaw.trim() : null
         };
 
         // For dot-groups, compute an effective coherence for display purposes.
@@ -1591,14 +1673,24 @@ class ComponentPreview {
             this.ctx.restore();
             
             // Draw aperture boundary for visualization
-            if (this.parameters.cue_border_enabled) {
+            // Priority: response cue border > static outline > default dashed
+            const shouldDrawCue = !!this.parameters.cue_border_enabled;
+            const shouldDrawOutline = (!shouldDrawCue && !!this.parameters.show_aperture_outline);
+
+            if (shouldDrawCue) {
                 this.ctx.strokeStyle = this.parameters.cue_border_color;
-                this.ctx.lineWidth = this.parameters.cue_border_width;
+                this.ctx.lineWidth = Math.max(1, Number(this.parameters.cue_border_width) || 1);
                 this.ctx.setLineDash([]); // Solid for cue
+            } else if (shouldDrawOutline) {
+                const color = this.parameters.aperture_outline_color || '#888888';
+                const width = Math.max(1, Number(this.parameters.aperture_outline_width) || 2);
+                this.ctx.strokeStyle = color;
+                this.ctx.lineWidth = width;
+                this.ctx.setLineDash([]); // Solid for outline
             } else {
                 this.ctx.strokeStyle = '#888888';
                 this.ctx.lineWidth = 2;
-                this.ctx.setLineDash([5, 5]); // Dashed when no cue
+                this.ctx.setLineDash([5, 5]); // Dashed when no cue/outline
             }
             
             this.ctx.beginPath();
@@ -1725,12 +1817,17 @@ class ComponentPreview {
             <p><strong>Cue Border:</strong> ${this.parameters.cue_border_enabled ? 'on' : 'off'}</p>
             ${this.parameters.cue_border_enabled ? `<p><strong>Cue Color:</strong> ${this.parameters.cue_border_color} (${this.parameters.cue_border_width}px)</p>` : ''}
         ` : '';
+
+        const outlineInfo = (this.parameters.show_aperture_outline)
+            ? `<p><strong>Aperture Outline:</strong> on (${this.parameters.aperture_outline_color || '#888888'}, ${this.parameters.aperture_outline_width || 2}px)</p>`
+            : `<p><strong>Aperture Outline:</strong> off</p>`;
         
         container.innerHTML = `
             <div class="parameter-group">
                 <p><strong>Type:</strong> ${this.parameters.component_type || 'rdm'}</p>
                 <p><strong>Canvas:</strong> ${this.parameters.canvas_width}×${this.parameters.canvas_height}px</p>
                 <p><strong>Aperture:</strong> ${this.parameters.aperture_shape} (${this.parameters.aperture_size}px)</p>
+                ${outlineInfo}
                 <p><strong>Dots:</strong> ${this.parameters.total_dots}</p>
                 <p><strong>Coherence:</strong> ${Math.round(this.parameters.coherence * 100)}%</p>
                 <p><strong>Direction:</strong> ${this.parameters.coherent_direction}°</p>

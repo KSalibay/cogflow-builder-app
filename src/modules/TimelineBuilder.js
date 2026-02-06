@@ -565,6 +565,8 @@ class TimelineBuilder {
                         ? 'feedback'
                     : (paramName === 'cue_border_mode' || paramName === 'cue_border_width' || paramName === 'cue_border_color' || paramName === 'response_target_group')
                         ? 'cue'
+                        : (paramName === 'show_aperture_outline_mode' || paramName === 'aperture_outline_width' || paramName === 'aperture_outline_color')
+                            ? 'apertureOutline'
                         : (paramName === 'group_speed_mode' || paramName === 'group_1_speed' || paramName === 'group_2_speed')
                             ? 'groupSpeed'
                             : '';
@@ -628,9 +630,16 @@ class TimelineBuilder {
 
             case this.jsonBuilder.schemaValidator.parameterTypes.SELECT:
                 const options = paramDef.options || [];
-                const optionsHtml = options.map(option => 
-                    `<option value="${option}" ${displayValue === option ? 'selected' : ''}>${option}</option>`
-                ).join('');
+                const blockTypeLabel = (v) => {
+                    if (v === 'gabor-trial') return 'Gabor (fixed)';
+                    if (v === 'gabor-quest') return 'Gabor (QUEST)';
+                    return v;
+                };
+
+                const optionsHtml = options.map(option => {
+                    const label = (paramName === 'block_component_type') ? blockTypeLabel(option) : option;
+                    return `<option value="${option}" ${displayValue === option ? 'selected' : ''}>${label}</option>`;
+                }).join('');
                 return `
                     <select class="form-select ${disabledClass}" id="${inputId}" ${disabledAttr}>
                         ${optionsHtml}
@@ -839,6 +848,27 @@ class TimelineBuilder {
             updateGroupSpeedVisibility();
         }
 
+        // Aperture outline overrides: only enable width/color when mode is explicit true/false.
+        const outlineModeEl = formContainer.querySelector('#param_show_aperture_outline_mode');
+        const updateOutlineVisibility = () => {
+            const mode = (outlineModeEl ? outlineModeEl.value : 'inherit').toString().trim().toLowerCase();
+            const showDetail = (mode === 'true' || mode === 'false');
+
+            ['aperture_outline_width', 'aperture_outline_color'].forEach(p => {
+                const row = formContainer.querySelector(`[data-param-name="${p}"]`);
+                if (!row) return;
+                row.style.display = showDetail ? '' : 'none';
+                row.querySelectorAll('input, select, textarea').forEach(i => {
+                    i.disabled = !showDetail;
+                });
+            });
+        };
+
+        if (outlineModeEl) {
+            outlineModeEl.addEventListener('change', updateOutlineVisibility);
+            updateOutlineVisibility();
+        }
+
         // Dot-groups percentage coupling: keep group_1 + group_2 = 100
         const g1El = formContainer.querySelector('#param_group_1_percentage');
         const g2El = formContainer.querySelector('#param_group_2_percentage');
@@ -892,7 +922,7 @@ class TimelineBuilder {
                 : (currentTaskType === 'sart')
                     ? ['sart-trial']
                     : (currentTaskType === 'gabor')
-                        ? ['gabor-trial']
+                        ? ['gabor-trial', 'gabor-quest']
                     : ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups'];
 
             // Rebuild options if the schema contains extra entries.
@@ -932,7 +962,7 @@ class TimelineBuilder {
         const updateGaborBlockKeyVisibility = () => {
             if (!blockTypeEl) return;
             const selected = blockTypeEl.value;
-            if (selected !== 'gabor-trial') return;
+            if (selected !== 'gabor-trial' && selected !== 'gabor-quest') return;
 
             const taskEl = formContainer.querySelector('#param_gabor_response_task');
             const task = (taskEl ? taskEl.value : 'discriminate_tilt').toString();
@@ -942,6 +972,47 @@ class TimelineBuilder {
             setParamVisible('gabor_right_key', !showYesNo);
             setParamVisible('gabor_yes_key', showYesNo);
             setParamVisible('gabor_no_key', showYesNo);
+        };
+
+        const updateGaborQuestVisibility = () => {
+            if (!blockTypeEl) return;
+            const selected = blockTypeEl.value;
+            if (selected !== 'gabor-trial' && selected !== 'gabor-quest') {
+                // Ensure hidden when switching block types
+                [
+                    'gabor_quest_parameter',
+                    'gabor_quest_target_performance',
+                    'gabor_quest_start_value',
+                    'gabor_quest_start_sd',
+                    'gabor_quest_beta',
+                    'gabor_quest_delta',
+                    'gabor_quest_gamma',
+                    'gabor_quest_min_value',
+                    'gabor_quest_max_value'
+                ].forEach(p => setParamVisible(p, false));
+                return;
+            }
+
+            const modeEl = formContainer.querySelector('#param_gabor_adaptive_mode');
+            // If the user picked the QUEST block type, force quest mode so the fields appear.
+            if (selected === 'gabor-quest' && modeEl) {
+                modeEl.value = 'quest';
+            }
+
+            const mode = (modeEl ? modeEl.value : 'none').toString();
+            const showQuest = (mode === 'quest');
+
+            [
+                'gabor_quest_parameter',
+                'gabor_quest_target_performance',
+                'gabor_quest_start_value',
+                'gabor_quest_start_sd',
+                'gabor_quest_beta',
+                'gabor_quest_delta',
+                'gabor_quest_gamma',
+                'gabor_quest_min_value',
+                'gabor_quest_max_value'
+            ].forEach(p => setParamVisible(p, showQuest));
         };
 
         const updateBlockVisibility = () => {
@@ -989,8 +1060,9 @@ class TimelineBuilder {
             }
 
             // Gabor block: show the correct key fields based on response task.
-            if (selected === 'gabor-trial') {
+            if (selected === 'gabor-trial' || selected === 'gabor-quest') {
                 updateGaborBlockKeyVisibility();
+                updateGaborQuestVisibility();
             }
         };
 
@@ -1009,6 +1081,13 @@ class TimelineBuilder {
             if (gaborTaskEl) {
                 gaborTaskEl.addEventListener('change', updateGaborBlockKeyVisibility);
                 updateGaborBlockKeyVisibility();
+            }
+
+            // Gabor block: adaptive mode changes should toggle QUEST fields.
+            const gaborAdaptiveEl = formContainer.querySelector('#param_gabor_adaptive_mode');
+            if (gaborAdaptiveEl) {
+                gaborAdaptiveEl.addEventListener('change', updateGaborQuestVisibility);
+                updateGaborQuestVisibility();
             }
         }
 
@@ -1106,6 +1185,170 @@ class TimelineBuilder {
         });
 
         console.log('Collected parameters:', newParameters);
+
+        const validateCommaSeparatedNumericList = (raw, { min, max, integersOnly = false } = {}) => {
+            const text = (raw ?? '').toString();
+            const parts = text
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean);
+
+            const kept = [];
+            const invalid = [];
+
+            for (const p of parts) {
+                const n = integersOnly ? Number.parseInt(p, 10) : Number(p);
+                if (!Number.isFinite(n)) {
+                    invalid.push(p);
+                    continue;
+                }
+                if (integersOnly && `${n}` !== `${Number.parseInt(`${n}`, 10)}`) {
+                    // Defensive (should not happen in JS), treat as invalid.
+                    invalid.push(p);
+                    continue;
+                }
+                if (Number.isFinite(min) && n < min) {
+                    invalid.push(p);
+                    continue;
+                }
+                if (Number.isFinite(max) && n > max) {
+                    invalid.push(p);
+                    continue;
+                }
+                kept.push(n);
+            }
+
+            // de-dupe while preserving order
+            const deduped = Array.from(new Set(kept));
+            return {
+                sanitized: deduped.map(v => integersOnly ? `${Math.trunc(v)}` : `${v}`).join(','),
+                invalid,
+                keptCount: deduped.length
+            };
+        };
+
+        const validateCommaSeparatedTokenList = (raw, { allowed = [], caseSensitive = false } = {}) => {
+            const text = (raw ?? '').toString();
+            const parts = text
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean);
+
+            const allowedList = Array.isArray(allowed) ? allowed : [];
+            const allowedMap = new Map();
+            for (const a of allowedList) {
+                const key = caseSensitive ? `${a}` : `${a}`.toLowerCase();
+                allowedMap.set(key, `${a}`);
+            }
+
+            const kept = [];
+            const invalid = [];
+
+            for (const p of parts) {
+                const key = caseSensitive ? p : p.toLowerCase();
+                const canonical = allowedMap.get(key);
+                if (!canonical) {
+                    invalid.push(p);
+                    continue;
+                }
+                kept.push(canonical);
+            }
+
+            const deduped = Array.from(new Set(kept));
+            return {
+                sanitized: deduped.join(','),
+                invalid,
+                keptCount: deduped.length
+            };
+        };
+
+        const listRules = {
+            // Gabor ranges
+            gabor_target_tilt_options: { min: -90, max: 90, integersOnly: false },
+            gabor_distractor_orientation_options: { min: 0, max: 179, integersOnly: false },
+
+            // RDM direction fields
+            direction_options: { min: 0, max: 359, integersOnly: false },
+            practice_direction_options: { min: 0, max: 359, integersOnly: false },
+            group_1_direction_options: { min: 0, max: 359, integersOnly: false },
+            group_2_direction_options: { min: 0, max: 359, integersOnly: false },
+
+            // SART digits
+            sart_digit_options: { min: 0, max: 9, integersOnly: true }
+        };
+
+        for (const [field, rules] of Object.entries(listRules)) {
+            if (!(field in newParameters)) continue;
+            const v = newParameters[field];
+            if (typeof v !== 'string') continue;
+
+            const res = validateCommaSeparatedNumericList(v, rules);
+            if (res.invalid.length === 0) {
+                newParameters[field] = res.sanitized;
+                continue;
+            }
+
+            const rangeNote = `Allowed range: ${rules.min} to ${rules.max}${rules.integersOnly ? ' (integers only)' : ''}.`;
+            const msg =
+                `Some values in "${field}" are invalid and will be removed.\n\n` +
+                `${rangeNote}\n\n` +
+                `Invalid: ${res.invalid.join(', ')}\n\n` +
+                `Continue and auto-fix?`;
+
+            const ok = window.confirm(msg);
+            if (!ok) {
+                return; // keep modal open
+            }
+
+            newParameters[field] = res.sanitized;
+            const inputEl = modalBody.querySelector(`#param_${field}`);
+            if (inputEl) {
+                inputEl.value = res.sanitized;
+            }
+        }
+
+        const tokenListRules = {
+            // Flanker
+            flanker_congruency_options: { allowed: ['congruent', 'incongruent', 'neutral'] },
+            flanker_target_direction_options: { allowed: ['left', 'right'] },
+
+            // Gabor
+            gabor_target_location_options: { allowed: ['left', 'right'] },
+            gabor_spatial_cue_options: { allowed: ['none', 'left', 'right', 'both'] },
+            gabor_left_value_options: { allowed: ['neutral', 'high', 'low'] },
+            gabor_right_value_options: { allowed: ['neutral', 'high', 'low'] },
+            gabor_grating_waveform_options: { allowed: ['sinusoidal', 'square', 'triangle'] }
+        };
+
+        for (const [field, rules] of Object.entries(tokenListRules)) {
+            if (!(field in newParameters)) continue;
+            const v = newParameters[field];
+            if (typeof v !== 'string') continue;
+
+            const res = validateCommaSeparatedTokenList(v, rules);
+            if (res.invalid.length === 0) {
+                newParameters[field] = res.sanitized;
+                continue;
+            }
+
+            const allowedNote = `Allowed values: ${(rules.allowed || []).join(', ')}.`;
+            const msg =
+                `Some values in "${field}" are invalid and will be removed.\n\n` +
+                `${allowedNote}\n\n` +
+                `Invalid: ${res.invalid.join(', ')}\n\n` +
+                `Continue and auto-fix?`;
+
+            const ok = window.confirm(msg);
+            if (!ok) {
+                return; // keep modal open
+            }
+
+            newParameters[field] = res.sanitized;
+            const inputEl = modalBody.querySelector(`#param_${field}`);
+            if (inputEl) {
+                inputEl.value = res.sanitized;
+            }
+        }
 
         // Update the DOM element's data
         try {
