@@ -162,6 +162,21 @@ The timeline is authored in the UI and serialized from DOM `dataset.componentDat
 
 ### RDM components (`task_type: "rdm"`)
 
+### Common components (all tasks)
+
+- Instructions:
+  - `instructions` (renders/export as `html-keyboard-response`)
+- Generic stimulus/survey:
+  - `html-keyboard-response` (generic)
+  - `image-keyboard-response`
+  - `survey-response`
+- Tracking (only shown when enabled under **Data Collection**):
+  - `eye-tracking` (settings stub)
+  - `eye-tracking-calibration-instructions` (preface screen; exported as `html-keyboard-response` tagged with `data.plugin_type = "eye-tracking-calibration-instructions"`)
+  - `mouse-tracking`
+
+### RDM components (`task_type: "rdm"`)
+
 - `rdm-trial`
 - `rdm-practice`
 - `rdm-adaptive`
