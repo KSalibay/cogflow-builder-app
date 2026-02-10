@@ -8,6 +8,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 
+    <!-- WYSIWYG editor for instructions / HTML components (Quill) -->
+    <link href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" rel="stylesheet">
+
     <!-- Prevent aggressive caching when opened via file:// or a simple static server -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
@@ -74,6 +77,16 @@
                                 <option value="custom">Custom Task</option>
                             </select>
                             <small class="text-muted">This determines available components in the library</small>
+                        </div>
+
+                        <!-- Experiment Theme -->
+                        <div class="mb-4">
+                            <h6 class="fw-bold">Theme</h6>
+                            <select class="form-select" id="experimentTheme">
+                                <option value="dark" selected>Dark</option>
+                                <option value="light">Light</option>
+                            </select>
+                            <small class="text-muted">Exported as <code>ui_settings.theme</code> for the interpreter</small>
                         </div>
 
                         <!-- Data Collection Modalities -->
@@ -286,13 +299,16 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 
+    <!-- Quill WYSIWYG editor (used by instructions/html-keyboard-response editor) -->
+    <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
+
     <!-- Microsoft Graph export (MSAL + helper). Requires serving via http(s), not file:// -->
     <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
     <script src="src/graphConfig.js?v=20260123-1"></script>
     <script src="src/GraphSharePointClient.js?v=20260123-1"></script>
 
     <!-- Cache-bust local scripts -->
-    <script src="src/JsonBuilder.js?v=20260207-2"></script>
+    <script src="src/JsonBuilder.js?v=20260210-1"></script>
     <script src="src/modules/DataCollectionModules.js?v=20260114-1"></script>
     <script src="src/modules/TrialManager.js?v=20260113-10"></script>
     <script src="src/modules/TimelineBuilder.js?v=20260122-5"></script>
@@ -360,22 +376,99 @@
         function addInitialInstructionsComponent() {
             // Generate dynamic instructions text based on current experiment settings
             function generateInstructionsText() {
-                const taskName = document.getElementById('taskName')?.value || 'Random Dot Motion task';
-                const responseKeys = document.getElementById('responseKeys')?.value || 'ArrowLeft,ArrowRight';
-                
-                // Parse response keys into readable format
-                const keyList = responseKeys.split(',').map(key => {
-                    const cleanKey = key.trim();
-                    switch(cleanKey) {
+                const taskType = document.getElementById('taskType')?.value || 'rdm';
+
+                const rawTaskName = document.getElementById('taskName')?.value || '';
+                const taskDefaults = {
+                    rdm: 'Random Dot Motion task',
+                    flanker: 'Flanker task',
+                    sart: 'SART task',
+                    gabor: 'Gabor task',
+                    'soc-dashboard': 'SOC Dashboard'
+                };
+
+                // If the researcher hasn't customized taskName (blank or still default RDM),
+                // infer it from the selected task type.
+                const normalizedRaw = String(rawTaskName).trim();
+                const isDefaultRdmLabel = normalizedRaw === '' || normalizedRaw === taskDefaults.rdm;
+                const taskName = (taskType !== 'rdm' && isDefaultRdmLabel)
+                    ? (taskDefaults[taskType] || 'Experiment task')
+                    : (normalizedRaw || taskDefaults.rdm);
+
+                const formatKey = (key) => {
+                    const cleanKey = String(key || '').trim();
+                    if (!cleanKey) return '';
+                    switch (cleanKey) {
                         case 'ArrowLeft': return 'Left Arrow';
                         case 'ArrowRight': return 'Right Arrow';
                         case 'ArrowUp': return 'Up Arrow';
                         case 'ArrowDown': return 'Down Arrow';
-                        default: return cleanKey;
+                        case ' ': return 'Spacebar';
+                        case 'space': return 'Spacebar';
+                        case 'enter': return 'Enter';
+                        case 'escape': return 'Escape';
+                        default:
+                            return cleanKey.length === 1 ? cleanKey.toUpperCase() : cleanKey;
                     }
-                }).join(' and ');
-                
-                return `This is an experiment which consists of the ${taskName}. Please respond to the stimuli by pressing keys ${keyList}. Press any key to continue.`;
+                };
+
+                const joinKeys = (keys) => {
+                    const parts = String(keys || '')
+                        .split(',')
+                        .map(k => formatKey(k))
+                        .filter(Boolean);
+                    if (parts.length === 0) return '';
+                    if (parts.length === 1) return parts[0];
+                    if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
+                    return `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`;
+                };
+
+                const describeResponse = () => {
+                    if (taskType === 'flanker') {
+                        const leftKey = formatKey(document.getElementById('flankerLeftKey')?.value || 'f');
+                        const rightKey = formatKey(document.getElementById('flankerRightKey')?.value || 'j');
+                        return `using the keyboard (${leftKey} for left, ${rightKey} for right)`;
+                    }
+                    if (taskType === 'sart') {
+                        const goKey = formatKey(document.getElementById('sartGoKey')?.value || 'space');
+                        return `using the keyboard (${goKey})`;
+                    }
+                    if (taskType === 'gabor') {
+                        const mode = document.getElementById('gaborResponseTask')?.value || 'discriminate_tilt';
+                        if (mode === 'detect_target') {
+                            const yesKey = formatKey(document.getElementById('gaborYesKey')?.value || 'f');
+                            const noKey = formatKey(document.getElementById('gaborNoKey')?.value || 'j');
+                            return `using the keyboard (${yesKey} = Yes, ${noKey} = No)`;
+                        }
+                        const leftKey = formatKey(document.getElementById('gaborLeftKey')?.value || 'f');
+                        const rightKey = formatKey(document.getElementById('gaborRightKey')?.value || 'j');
+                        return `using the keyboard (${leftKey} = Left, ${rightKey} = Right)`;
+                    }
+                    if (taskType === 'soc-dashboard') {
+                        const iconsClickable = !!document.getElementById('socIconsClickable')?.checked;
+                        return iconsClickable
+                            ? 'using the mouse (dashboard icons) and the keyboard (subtasks)'
+                            : 'using the keyboard (subtasks)';
+                    }
+
+                    // Default: RDM (or unknown) uses experiment-wide response device.
+                    const device = document.getElementById('defaultResponseDevice')?.value || 'keyboard';
+                    if (device === 'mouse') {
+                        const segments = document.getElementById('mouseApertureSegments')?.value;
+                        const segText = segments ? ` (${segments} response segments)` : '';
+                        return `using the mouse${segText}`;
+                    }
+                    if (device === 'touch') return 'using touch input';
+                    if (device === 'voice') return 'using voice input';
+                    if (device === 'custom') return 'using the specified response method';
+
+                    const responseKeys = document.getElementById('responseKeys')?.value || 'ArrowLeft,ArrowRight';
+                    const keyList = joinKeys(responseKeys);
+                    return keyList ? `using the keyboard (press ${keyList})` : 'using the keyboard';
+                };
+
+                // Exported as HTML; keep it simple and readable.
+                return `<p>This experiment consists of the <strong>${taskName}</strong>. Please respond ${describeResponse()}. Press any key to continue.</p>`;
             }
             
             const timelineContainer = document.getElementById('timelineComponents');
@@ -446,22 +539,96 @@
             const htmlKeyboardComponents = document.querySelectorAll('.timeline-component[data-component-type="html-keyboard-response"]');
             
             function generateInstructionsText() {
-                const taskName = document.getElementById('taskName')?.value || 'Random Dot Motion task';
-                const responseKeys = document.getElementById('responseKeys')?.value || 'ArrowLeft,ArrowRight';
-                
-                // Parse response keys into readable format
-                const keyList = responseKeys.split(',').map(key => {
-                    const cleanKey = key.trim();
-                    switch(cleanKey) {
+                const taskType = document.getElementById('taskType')?.value || 'rdm';
+
+                const rawTaskName = document.getElementById('taskName')?.value || '';
+                const taskDefaults = {
+                    rdm: 'Random Dot Motion task',
+                    flanker: 'Flanker task',
+                    sart: 'SART task',
+                    gabor: 'Gabor task',
+                    'soc-dashboard': 'SOC Dashboard'
+                };
+
+                const normalizedRaw = String(rawTaskName).trim();
+                const isDefaultRdmLabel = normalizedRaw === '' || normalizedRaw === taskDefaults.rdm;
+                const taskName = (taskType !== 'rdm' && isDefaultRdmLabel)
+                    ? (taskDefaults[taskType] || 'Experiment task')
+                    : (normalizedRaw || taskDefaults.rdm);
+
+                const formatKey = (key) => {
+                    const cleanKey = String(key || '').trim();
+                    if (!cleanKey) return '';
+                    switch (cleanKey) {
                         case 'ArrowLeft': return 'Left Arrow';
                         case 'ArrowRight': return 'Right Arrow';
                         case 'ArrowUp': return 'Up Arrow';
                         case 'ArrowDown': return 'Down Arrow';
-                        default: return cleanKey;
+                        case ' ': return 'Spacebar';
+                        case 'space': return 'Spacebar';
+                        case 'enter': return 'Enter';
+                        case 'escape': return 'Escape';
+                        default:
+                            return cleanKey.length === 1 ? cleanKey.toUpperCase() : cleanKey;
                     }
-                }).join(' and ');
-                
-                return `This is an experiment which consists of the ${taskName}. Please respond to the stimuli by pressing keys ${keyList}. Press any key to continue.`;
+                };
+
+                const joinKeys = (keys) => {
+                    const parts = String(keys || '')
+                        .split(',')
+                        .map(k => formatKey(k))
+                        .filter(Boolean);
+                    if (parts.length === 0) return '';
+                    if (parts.length === 1) return parts[0];
+                    if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
+                    return `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`;
+                };
+
+                const describeResponse = () => {
+                    if (taskType === 'flanker') {
+                        const leftKey = formatKey(document.getElementById('flankerLeftKey')?.value || 'f');
+                        const rightKey = formatKey(document.getElementById('flankerRightKey')?.value || 'j');
+                        return `using the keyboard (${leftKey} for left, ${rightKey} for right)`;
+                    }
+                    if (taskType === 'sart') {
+                        const goKey = formatKey(document.getElementById('sartGoKey')?.value || 'space');
+                        return `using the keyboard (${goKey})`;
+                    }
+                    if (taskType === 'gabor') {
+                        const mode = document.getElementById('gaborResponseTask')?.value || 'discriminate_tilt';
+                        if (mode === 'detect_target') {
+                            const yesKey = formatKey(document.getElementById('gaborYesKey')?.value || 'f');
+                            const noKey = formatKey(document.getElementById('gaborNoKey')?.value || 'j');
+                            return `using the keyboard (${yesKey} = Yes, ${noKey} = No)`;
+                        }
+                        const leftKey = formatKey(document.getElementById('gaborLeftKey')?.value || 'f');
+                        const rightKey = formatKey(document.getElementById('gaborRightKey')?.value || 'j');
+                        return `using the keyboard (${leftKey} = Left, ${rightKey} = Right)`;
+                    }
+                    if (taskType === 'soc-dashboard') {
+                        const iconsClickable = !!document.getElementById('socIconsClickable')?.checked;
+                        return iconsClickable
+                            ? 'using the mouse (dashboard icons) and the keyboard (subtasks)'
+                            : 'using the keyboard (subtasks)';
+                    }
+
+                    // Default: RDM (or unknown) uses experiment-wide response device.
+                    const device = document.getElementById('defaultResponseDevice')?.value || 'keyboard';
+                    if (device === 'mouse') {
+                        const segments = document.getElementById('mouseApertureSegments')?.value;
+                        const segText = segments ? ` (${segments} response segments)` : '';
+                        return `using the mouse${segText}`;
+                    }
+                    if (device === 'touch') return 'using touch input';
+                    if (device === 'voice') return 'using voice input';
+                    if (device === 'custom') return 'using the specified response method';
+
+                    const responseKeys = document.getElementById('responseKeys')?.value || 'ArrowLeft,ArrowRight';
+                    const keyList = joinKeys(responseKeys);
+                    return keyList ? `using the keyboard (press ${keyList})` : 'using the keyboard';
+                };
+
+                return `<p>This experiment consists of the <strong>${taskName}</strong>. Please respond ${describeResponse()}. Press any key to continue.</p>`;
             }
             
             const newInstructionsText = generateInstructionsText();
@@ -671,14 +838,39 @@
             const currentStimulusDuration = componentData.stimulus_duration || null;
             const currentTrialDuration = componentData.trial_duration || null;
             const currentResponseEnds = componentData.response_ends_trial !== undefined ? componentData.response_ends_trial : true;
+
+            function escapeHtml(s) {
+                return String(s)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            function coerceToHtml(raw) {
+                const s = (raw === null || raw === undefined) ? '' : String(raw);
+                const trimmed = s.trim();
+                // If it already looks like HTML, keep it as-is.
+                if (/[<][a-z!/]/i.test(trimmed)) return s;
+                // Treat as plain text: split paragraphs on blank lines and preserve newlines.
+                const paras = s.split(/\n\s*\n/g).map(p => p.replace(/\n/g, '<br>'));
+                return paras.map(p => `<p>${escapeHtml(p)}</p>`).join('');
+            }
             
             modalBody.innerHTML = `
                 <div class="space-y-4">
                     <div class="mb-3">
                         <label for="instructionsText" class="form-label">Instructions Text</label>
-                        <textarea id="instructionsText" class="form-control" rows="6" 
-                                  placeholder="Enter instructions for participants...">${currentStimulus}</textarea>
-                        <div class="form-text">This text will be shown to participants before the experiment.</div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div class="form-text mb-0">This content is exported as HTML and rendered by the interpreter.</div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="toggleInstructionsHtmlBtn">Edit HTML</button>
+                        </div>
+                        <div id="instructionsEditorWrap" class="border rounded" style="background:#fff;">
+                            <div id="instructionsEditorToolbar"></div>
+                            <div id="instructionsEditor" style="min-height:220px;"></div>
+                        </div>
+                        <textarea id="instructionsText" class="form-control d-none" rows="8" placeholder="Enter HTML for participants..."></textarea>
                     </div>
                     
                     <div class="mb-3">
@@ -732,6 +924,138 @@
                     </div>
                 </div>
             `;
+
+            // Initialize Quill editor (WYSIWYG). Fall back to textarea if Quill isn't available.
+            try {
+                window._instructionsEditorState = window._instructionsEditorState || {};
+                window._instructionsEditorState.mode = 'wysiwyg';
+                window._instructionsEditorState.quill = null;
+
+                const toolbar = document.getElementById('instructionsEditorToolbar');
+                const editor = document.getElementById('instructionsEditor');
+                const htmlBtn = document.getElementById('toggleInstructionsHtmlBtn');
+                const htmlArea = document.getElementById('instructionsText');
+                const wysWrap = document.getElementById('instructionsEditorWrap');
+
+                if (window.Quill && toolbar && editor) {
+                    toolbar.innerHTML = `
+                        <span class="ql-formats">
+                            <select class="ql-header">
+                                <option selected></option>
+                                <option value="1"></option>
+                                <option value="2"></option>
+                            </select>
+                            <button class="ql-bold"></button>
+                            <button class="ql-italic"></button>
+                            <button class="ql-underline"></button>
+                        </span>
+                        <span class="ql-formats">
+                            <select class="ql-align">
+                                <option selected></option>
+                                <option value="center"></option>
+                                <option value="right"></option>
+                            </select>
+                        </span>
+                        <span class="ql-formats">
+                            <button class="ql-list" value="ordered"></button>
+                            <button class="ql-list" value="bullet"></button>
+                            <button class="ql-blockquote"></button>
+                        </span>
+                        <span class="ql-formats">
+                            <button class="ql-link"></button>
+                            <button class="ql-clean"></button>
+                        </span>
+                    `;
+
+                    const quill = new Quill(editor, {
+                        theme: 'snow',
+                        modules: {
+                            toolbar: toolbar
+                        }
+                    });
+
+                    // Populate from existing stimulus (plain text -> HTML)
+                    const initialHtml = coerceToHtml(currentStimulus);
+                    quill.clipboard.dangerouslyPasteHTML(initialHtml);
+
+                    window._instructionsEditorState.quill = quill;
+
+                    const syncHtmlAreaFromQuill = () => {
+                        try {
+                            if (!window._instructionsEditorState?.quill) return;
+                            htmlArea.value = window._instructionsEditorState.quill.root.innerHTML;
+                        } catch (e) {
+                            console.warn('Could not sync HTML textarea from Quill:', e);
+                        }
+                    };
+
+                    if (htmlBtn && htmlArea && wysWrap) {
+                        htmlBtn.addEventListener('click', () => {
+                            const mode = window._instructionsEditorState.mode || 'wysiwyg';
+                            if (mode === 'wysiwyg') {
+                                // Switch to HTML
+                                syncHtmlAreaFromQuill();
+                                window._instructionsEditorState.mode = 'html';
+                                wysWrap.classList.add('d-none');
+                                htmlArea.classList.remove('d-none');
+                                htmlBtn.textContent = 'Edit WYSIWYG';
+                            } else {
+                                // Switch to WYSIWYG
+                                const html = htmlArea.value || '';
+                                try { quill.clipboard.dangerouslyPasteHTML(html); } catch { /* ignore */ }
+                                window._instructionsEditorState.mode = 'wysiwyg';
+                                htmlArea.classList.add('d-none');
+                                wysWrap.classList.remove('d-none');
+                                htmlBtn.textContent = 'Edit HTML';
+                            }
+                        });
+                    }
+
+                    // Keep the HTML textarea updated when hidden, so save() is simple.
+                    quill.on('text-change', () => {
+                        if ((window._instructionsEditorState.mode || 'wysiwyg') === 'wysiwyg') {
+                            syncHtmlAreaFromQuill();
+                        }
+                    });
+
+                    // Initialize textarea value for good measure.
+                    syncHtmlAreaFromQuill();
+                } else {
+                    // No Quill: show raw textarea and treat current content as HTML.
+                    if (wysWrap) wysWrap.classList.add('d-none');
+                    if (htmlBtn) htmlBtn.classList.add('d-none');
+                    if (htmlArea) {
+                        htmlArea.classList.remove('d-none');
+                        htmlArea.value = coerceToHtml(currentStimulus);
+                    }
+                }
+
+                // Cleanup editor state on modal close
+                try {
+                    const cleanup = () => {
+                        try { window._instructionsEditorState = null; } catch { /* ignore */ }
+                        try { modal.removeEventListener('hidden.bs.modal', cleanup); } catch { /* ignore */ }
+                    };
+                    modal.addEventListener('hidden.bs.modal', cleanup);
+                } catch {
+                    // ignore
+                }
+            } catch (e) {
+                console.warn('Instructions WYSIWYG init failed; falling back to textarea:', e);
+                try {
+                    const htmlArea = document.getElementById('instructionsText');
+                    const wysWrap = document.getElementById('instructionsEditorWrap');
+                    const htmlBtn = document.getElementById('toggleInstructionsHtmlBtn');
+                    if (wysWrap) wysWrap.classList.add('d-none');
+                    if (htmlBtn) htmlBtn.classList.add('d-none');
+                    if (htmlArea) {
+                        htmlArea.classList.remove('d-none');
+                        htmlArea.value = currentStimulus || '';
+                    }
+                } catch {
+                    // ignore
+                }
+            }
             
             // Setup save handler
             const saveBtn = document.getElementById('saveParametersBtn');
@@ -749,7 +1073,20 @@
         function saveInstructionsComponent() {
             if (!window.editingInstructionsComponent) return;
             
-            const instructionsText = document.getElementById('instructionsText').value;
+            // Instructions stimulus is stored as HTML.
+            const instructionsTextEl = document.getElementById('instructionsText');
+            let instructionsHtml = instructionsTextEl ? instructionsTextEl.value : '';
+
+            // If Quill is active and we're in WYSIWYG mode, read from it.
+            try {
+                const st = window._instructionsEditorState;
+                if (st && st.quill && (st.mode || 'wysiwyg') === 'wysiwyg') {
+                    instructionsHtml = st.quill.root.innerHTML;
+                }
+            } catch {
+                // ignore
+            }
+
             const responseKeys = document.getElementById('instructionsResponseKeys').value;
             const promptText = document.getElementById('promptText').value;
             const stimulusDuration = document.getElementById('stimulusDuration').value;
@@ -769,7 +1106,7 @@
                 type: 'html-keyboard-response',
                 // Once edited by a human, stop auto-updating it.
                 auto_generated: false,
-                stimulus: instructionsText,
+                stimulus: instructionsHtml,
                 choices: responseKeys,
                 prompt: promptText,
                 stimulus_duration: stimulusDuration ? parseInt(stimulusDuration) : null,
@@ -798,6 +1135,16 @@
         function removeComponent(button) {
             const component = button.closest('.timeline-component');
             const timelineContainer = document.getElementById('timelineComponents');
+
+            // Cleanup any cached local assets associated with this component.
+            try {
+                const compId = component?.dataset?.builderComponentId;
+                if (compId && window.PsychJsonAssetCache && typeof window.PsychJsonAssetCache.deleteComponent === 'function') {
+                    window.PsychJsonAssetCache.deleteComponent(compId);
+                }
+            } catch {
+                // ignore
+            }
             
             component.remove();
             
@@ -816,6 +1163,97 @@
                 window.jsonBuilderInstance.updateJSON();
             }
         }
+
+        // In-memory asset cache for locally selected media (images for now).
+        // Keeps File objects + object URLs alive until the associated component is removed.
+        (function initPsychJsonAssetCache() {
+            if (window.PsychJsonAssetCache) return;
+
+            const cache = new Map(); // componentId -> Map(field -> entry)
+
+            const safeRevoke = (url) => {
+                try {
+                    if (typeof url === 'string' && url.startsWith('blob:')) {
+                        URL.revokeObjectURL(url);
+                    }
+                } catch {
+                    // ignore
+                }
+            };
+
+            window.PsychJsonAssetCache = {
+                put(componentId, field, file) {
+                    if (!componentId || !field || !file) return null;
+                    const cid = String(componentId);
+                    const f = String(field);
+
+                    let byField = cache.get(cid);
+                    if (!byField) {
+                        byField = new Map();
+                        cache.set(cid, byField);
+                    }
+
+                    const existing = byField.get(f);
+                    if (existing && existing.objectUrl) safeRevoke(existing.objectUrl);
+
+                    const objectUrl = URL.createObjectURL(file);
+                    const entry = {
+                        file,
+                        objectUrl,
+                        filename: (file && file.name) ? String(file.name) : null,
+                        mime: (file && file.type) ? String(file.type) : null
+                    };
+                    byField.set(f, entry);
+                    return entry;
+                },
+
+                get(componentId, field) {
+                    const cid = String(componentId || '');
+                    const f = String(field || '');
+                    const byField = cache.get(cid);
+                    if (!byField) return null;
+                    return byField.get(f) || null;
+                },
+
+                deleteEntry(componentId, field) {
+                    const cid = String(componentId || '');
+                    const f = String(field || '');
+                    const byField = cache.get(cid);
+                    if (!byField) return;
+                    const entry = byField.get(f);
+                    if (entry && entry.objectUrl) safeRevoke(entry.objectUrl);
+                    byField.delete(f);
+                    if (byField.size === 0) cache.delete(cid);
+                },
+
+                deleteComponent(componentId) {
+                    const cid = String(componentId || '');
+                    const byField = cache.get(cid);
+                    if (!byField) return;
+                    for (const entry of byField.values()) {
+                        if (entry && entry.objectUrl) safeRevoke(entry.objectUrl);
+                    }
+                    cache.delete(cid);
+                },
+
+                clearAll() {
+                    for (const cid of Array.from(cache.keys())) {
+                        this.deleteComponent(cid);
+                    }
+                    cache.clear();
+                },
+
+                listAllRefs() {
+                    const refs = [];
+                    for (const [cid, byField] of cache.entries()) {
+                        for (const field of byField.keys()) {
+                            refs.push(`asset://${cid}/${field}`);
+                        }
+                    }
+                    return refs;
+                }
+            };
+        })();
         
         function editRDMTrial(button) {
             // Extract trial information and populate modal

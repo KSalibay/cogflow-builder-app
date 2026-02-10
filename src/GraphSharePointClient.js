@@ -163,6 +163,70 @@
         return driveItem;
     }
 
+    async function uploadFileToOneDriveFolder({ file, filename, folderPath, contentType }) {
+        ensureHttpOrigin();
+
+        const cfg = getRuntimeConfig();
+        if (!cfg.clientId) {
+            throw new Error('Graph export is not configured: missing clientId in src/graphConfig.js (or saved settings).');
+        }
+
+        const resolvedFolder = String(folderPath || cfg.defaultUploadFolderPath || '').trim();
+        if (!resolvedFolder) {
+            throw new Error('Missing SharePoint/OneDrive folder path for export.');
+        }
+
+        if (!file) {
+            throw new Error('Missing file to upload.');
+        }
+
+        const name = String(filename || (file && file.name) || '').trim();
+        if (!name) {
+            throw new Error('Missing filename for upload.');
+        }
+
+        const msalInstance = buildMsalInstance(cfg);
+
+        // If any redirect response is present, handle it (safe even if using popup)
+        try {
+            await msalInstance.handleRedirectPromise();
+        } catch {
+            // ignore
+        }
+
+        const accessToken = await acquireToken(msalInstance, cfg);
+
+        const encodedFolder = encodePathSegments(resolvedFolder);
+        const encodedFilename = encodeURIComponent(name);
+
+        const url = `https://graph.microsoft.com/v1.0/me/drive/root:/${encodedFolder}/${encodedFilename}:/content`;
+
+        const ct = String(contentType || (file && file.type) || 'application/octet-stream');
+
+        const response = await fetch(url, {
+            method: 'PUT',
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': ct
+            },
+            body: file
+        });
+
+        if (!response.ok) {
+            let details = '';
+            try {
+                const err = await response.json();
+                details = err?.error?.message || JSON.stringify(err);
+            } catch {
+                details = await response.text();
+            }
+            throw new Error(`Graph upload failed (${response.status}): ${details}`);
+        }
+
+        const driveItem = await response.json();
+        return driveItem;
+    }
+
     async function promptAndPersistSettings() {
         const current = getRuntimeConfig();
 
@@ -190,6 +254,7 @@
     window.GraphSharePointClient = {
         getRuntimeConfig,
         promptAndPersistSettings,
-        uploadJsonToOneDriveFolder
+        uploadJsonToOneDriveFolder,
+        uploadFileToOneDriveFolder
     };
 })();

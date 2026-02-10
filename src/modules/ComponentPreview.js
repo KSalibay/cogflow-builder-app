@@ -90,6 +90,12 @@ class ComponentPreview {
             // Instructions component - show the actual stimulus text
             const stimulusText = componentData.stimulus || 'No instructions text provided';
             this.showInstructionsPreview(stimulusText, componentData);
+        } else if (componentType === 'image-keyboard-response') {
+            this.showImageKeyboardResponsePreview(componentData);
+        } else if (componentType === 'visual-angle-calibration') {
+            this.showVisualAngleCalibrationPreview(componentData);
+        } else if (componentType === 'reward-settings') {
+            this.showRewardSettingsPreview(componentData);
         } else if (componentType === 'flanker-trial') {
             this.showFlankerPreview(componentData);
         } else if (componentType === 'gabor-trial' || componentType === 'gabor-quest') {
@@ -117,6 +123,251 @@ class ComponentPreview {
             console.warn('Unknown component type for preview:', componentType);
             this.showGenericPreview(componentData);
         }
+    }
+
+    resolveMaybeAssetUrl(raw) {
+        const s = (raw ?? '').toString();
+        const m = /^asset:\/\/([^/]+)\/([^/]+)$/.exec(s);
+        if (!m) return s;
+
+        try {
+            const cid = m[1];
+            const field = m[2];
+            const entry = window.PsychJsonAssetCache?.get?.(cid, field);
+            if (entry && entry.objectUrl) return entry.objectUrl;
+        } catch {
+            // ignore
+        }
+
+        return '';
+    }
+
+    wrapCenteredPreview(html) {
+        // Builder preview modal has its own styling; include a minimal centered stage.
+        return `
+            <div style="min-height:70vh; display:flex; align-items:center; justify-content:center; padding:18px; box-sizing:border-box; background:#0b0b0b; color:rgba(255,255,255,0.9); border-radius:12px;">
+                <div style="width:min(980px, 100%);">
+                    ${html}
+                </div>
+            </div>
+        `;
+    }
+
+    showImageKeyboardResponsePreview(componentData) {
+        const previewModal = this.getPreviewModal();
+        if (!previewModal) return;
+        const { modalEl, modal } = previewModal;
+
+        const modalBody = modalEl.querySelector('.modal-body');
+        if (!modalBody) return;
+
+        const stim = this.resolveMaybeAssetUrl(componentData?.stimulus);
+        const prompt = (componentData?.prompt ?? '').toString();
+        const choices = componentData?.choices ?? 'ALL_KEYS';
+        const w = componentData?.stimulus_width;
+        const h = componentData?.stimulus_height;
+
+        const styleParts = [];
+        if (Number.isFinite(Number(w))) styleParts.push(`width:${Number(w)}px;`);
+        if (Number.isFinite(Number(h))) styleParts.push(`height:${Number(h)}px;`);
+        styleParts.push('max-width:100%; max-height:55vh; object-fit:contain;');
+
+        const imgHtml = stim
+            ? `<img src="${stim}" alt="stimulus" style="${styleParts.join(' ')}" />`
+            : `<div class="text-warning">No image stimulus set (or missing cached asset).</div>`;
+
+        const body = `
+            <h5 style="margin:0 0 10px 0;">Image + Keyboard Response</h5>
+            <div style="display:flex; justify-content:center; margin:14px 0;">${imgHtml}</div>
+            ${prompt ? `<div style="margin-top:10px; opacity:0.9;">${prompt}</div>` : ''}
+            <div style="margin-top:14px; font-size:12px; opacity:0.75;">
+                <b>Choices:</b> ${Array.isArray(choices) ? choices.join(', ') : String(choices)}
+            </div>
+        `;
+
+        modalBody.innerHTML = this.wrapCenteredPreview(body);
+        modal.show();
+    }
+
+    showVisualAngleCalibrationPreview(componentData) {
+        const previewModal = this.getPreviewModal();
+        if (!previewModal) return;
+        const { modalEl, modal } = previewModal;
+
+        const modalBody = modalEl.querySelector('.modal-body');
+        if (!modalBody) return;
+
+        const storeKey = (componentData?.store_key || '__psy_visual_angle').toString();
+        const card = (componentData?.reference_object || 'ID card').toString();
+        const cardWidth = Number(componentData?.reference_width_cm);
+        const cardHeight = Number(componentData?.reference_height_cm);
+
+        const page1 = `
+            <h5 style="margin:0 0 8px 0;">Visual Angle Calibration (Page 1/2)</h5>
+            <div style="opacity:0.85; margin-bottom:10px;">Match the on-screen rectangle to a <b>${card}</b>.</div>
+            <div style="display:flex; justify-content:center; margin:12px 0;">
+                <div style="width:320px; height:200px; border:2px solid rgba(255,255,255,0.7); border-radius:10px;"></div>
+            </div>
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                <label style="min-width:160px; opacity:0.8;">Adjust size</label>
+                <input type="range" min="50" max="150" value="100" style="flex:1;" disabled />
+                <span style="opacity:0.7;">(preview)</span>
+            </div>
+            <div style="margin-top:12px; font-size:12px; opacity:0.75;">
+                <div><b>Reference size:</b> ${Number.isFinite(cardWidth) ? cardWidth : 'n/a'}cm × ${Number.isFinite(cardHeight) ? cardHeight : 'n/a'}cm</div>
+                <div><b>Store key:</b> ${storeKey}</div>
+            </div>
+        `;
+
+        const page2 = `
+            <h5 style="margin:0 0 8px 0;">Visual Angle Calibration (Page 2/2)</h5>
+            <div style="opacity:0.85; margin-bottom:10px;">Select your approximate viewing distance.</div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; margin-top:10px;">
+                <div style="display:flex; gap:12px; align-items:center; padding:12px; border-radius:14px; border:1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.06); opacity:0.95;">
+                    <img src="img/recline.png" alt="Recline" style="width:92px; height:70px; object-fit:contain; border-radius:10px; border:1px solid rgba(255,255,255,0.14); background: rgba(0,0,0,0.25);" onerror="this.style.display='none'" />
+                    <div>
+                        <div style="font-weight:700;">Leaning back</div>
+                        <div style="font-size:12px; opacity:0.75;">(example posture)</div>
+                    </div>
+                </div>
+
+                <div style="display:flex; gap:12px; align-items:center; padding:12px; border-radius:14px; border:1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.06); opacity:0.95;">
+                    <img src="img/sitting.png" alt="Sitting" style="width:92px; height:70px; object-fit:contain; border-radius:10px; border:1px solid rgba(255,255,255,0.14); background: rgba(0,0,0,0.25);" onerror="this.style.display='none'" />
+                    <div>
+                        <div style="font-weight:700;">Normal posture</div>
+                        <div style="font-size:12px; opacity:0.75;">(example posture)</div>
+                    </div>
+                </div>
+
+                <div style="display:flex; gap:12px; align-items:center; padding:12px; border-radius:14px; border:1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.06); opacity:0.95;">
+                    <img src="img/criss-cross.png" alt="Leaning forward" style="width:92px; height:70px; object-fit:contain; border-radius:10px; border:1px solid rgba(255,255,255,0.14); background: rgba(0,0,0,0.25);" onerror="this.style.display='none'" />
+                    <div>
+                        <div style="font-weight:700;">Leaning forward</div>
+                        <div style="font-size:12px; opacity:0.75;">(example posture)</div>
+                    </div>
+                </div>
+
+                <div style="display:flex; gap:12px; align-items:center; padding:12px; border-radius:14px; border:1px dashed rgba(255,255,255,0.22); background: rgba(255,255,255,0.04); opacity:0.9;">
+                    <div style="width:92px; height:70px; display:flex; align-items:center; justify-content:center; border-radius:10px; border:1px dashed rgba(255,255,255,0.18); background: rgba(0,0,0,0.18); font-size:12px; opacity:0.8;">Manual</div>
+                    <div>
+                        <div style="font-weight:700;">Enter manually</div>
+                        <div style="font-size:12px; opacity:0.75;">(optional)</div>
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top:12px; font-size:12px; opacity:0.75;">
+                This preview is static; the Interpreter screen is interactive.
+            </div>
+        `;
+
+        modalBody.innerHTML = `
+            <ul class="nav nav-tabs" role="tablist">
+              <li class="nav-item" role="presentation"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#vac_p1" type="button" role="tab">Page 1</button></li>
+              <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#vac_p2" type="button" role="tab">Page 2</button></li>
+            </ul>
+            <div class="tab-content" style="margin-top:10px;">
+              <div class="tab-pane fade show active" id="vac_p1" role="tabpanel">${this.wrapCenteredPreview(page1)}</div>
+              <div class="tab-pane fade" id="vac_p2" role="tabpanel">${this.wrapCenteredPreview(page2)}</div>
+            </div>
+        `;
+
+        modal.show();
+    }
+
+    showRewardSettingsPreview(componentData) {
+        const previewModal = this.getPreviewModal();
+        if (!previewModal) return;
+        const { modalEl, modal } = previewModal;
+
+        const modalBody = modalEl.querySelector('.modal-body');
+        if (!modalBody) return;
+
+        const escapeHtml = (s) => {
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        };
+
+        const renderTemplate = (tpl, vars) => {
+            const raw = (tpl ?? '').toString();
+            return raw.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key) => {
+                const v = Object.prototype.hasOwnProperty.call(vars, key) ? vars[key] : '';
+                return (v === null || v === undefined) ? '' : String(v);
+            });
+        };
+
+        const rewriteAssetRefsInHtml = (html) => {
+            const raw = (html ?? '').toString();
+            return raw.replace(/asset:\/\/([A-Za-z0-9_-]+)\/([A-Za-z0-9_-]+)/g, (full) => {
+                const resolved = this.resolveMaybeAssetUrl(full);
+                return resolved || full;
+            });
+        };
+
+        const currency = (componentData?.currency_label || 'points').toString();
+        const basis = (componentData?.scoring_basis || 'both').toString();
+        const rtThresh = Number.isFinite(Number(componentData?.rt_threshold_ms)) ? Number(componentData.rt_threshold_ms) : 600;
+        const pps = Number.isFinite(Number(componentData?.points_per_success)) ? Number(componentData.points_per_success) : 1;
+        const instrTitle = (componentData?.instructions_title || 'Rewards').toString();
+        const sumTitle = (componentData?.summary_title || 'Rewards Summary').toString();
+
+        const varsInstr = {
+            currency_label: currency,
+            scoring_basis: basis,
+            scoring_basis_label: basis,
+            rt_threshold_ms: rtThresh,
+            points_per_success: pps,
+            continue_key_label: 'SPACE'
+        };
+
+        const instrHtml = componentData?.instructions_template_html
+            ? rewriteAssetRefsInHtml(renderTemplate(componentData.instructions_template_html, varsInstr))
+            : `<p>You can earn <b>${escapeHtml(currency)}</b> during the task.</p>`;
+
+        const varsSum = {
+            currency_label: currency,
+            total_points: 12,
+            rewarded_trials: 8,
+            eligible_trials: 20,
+            points_per_success: pps,
+            rt_threshold_ms: rtThresh
+        };
+
+        const sumHtml = componentData?.summary_template_html
+            ? rewriteAssetRefsInHtml(renderTemplate(componentData.summary_template_html, varsSum))
+            : `<p>Total: <b>${varsSum.total_points}</b> ${escapeHtml(currency)}.</p>`;
+
+        const instructionsScreen = `
+            <h5 style="margin:0 0 10px 0;">${escapeHtml(instrTitle)}</h5>
+            <div>${instrHtml}</div>
+            <div style="margin-top:14px; font-size:12px; opacity:0.75;">
+                <div><b>Scoring:</b> ${escapeHtml(basis)}</div>
+                <div><b>RT threshold:</b> ${rtThresh}ms</div>
+                <div><b>Points per success:</b> ${pps}</div>
+            </div>
+        `;
+
+        const summaryScreen = `
+            <h5 style="margin:0 0 10px 0;">${escapeHtml(sumTitle)}</h5>
+            <div>${sumHtml}</div>
+            <div style="margin-top:14px; font-size:12px; opacity:0.75;">Preview uses example totals.</div>
+        `;
+
+        modalBody.innerHTML = `
+            <ul class="nav nav-tabs" role="tablist">
+              <li class="nav-item" role="presentation"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#rew_instr" type="button" role="tab">Instructions</button></li>
+              <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#rew_sum" type="button" role="tab">Final summary</button></li>
+            </ul>
+            <div class="tab-content" style="margin-top:10px;">
+              <div class="tab-pane fade show active" id="rew_instr" role="tabpanel">${this.wrapCenteredPreview(instructionsScreen)}</div>
+              <div class="tab-pane fade" id="rew_sum" role="tabpanel">${this.wrapCenteredPreview(summaryScreen)}</div>
+            </div>
+        `;
+
+        modal.show();
     }
 
     wrapSocSubtaskAsSession(subtaskComponentData) {

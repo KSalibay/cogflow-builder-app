@@ -36,7 +36,7 @@
 
       /* Tiled windows */
       [data-soc-dashboard-preview-host="true"] .soc-preview-windows { position:absolute; top: 14px; right: 14px; bottom: 14px; left: 120px; z-index: 3; display:grid; gap: 10px; grid-auto-rows: 1fr; }
-      [data-soc-dashboard-preview-host="true"] .soc-preview-appwin { background: rgba(12,16,26,0.88); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; box-shadow: 0 14px 40px rgba(0,0,0,0.45); overflow:hidden; min-height: 0; }
+      [data-soc-dashboard-preview-host="true"] .soc-preview-appwin { position: relative; background: rgba(12,16,26,0.88); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; box-shadow: 0 14px 40px rgba(0,0,0,0.45); overflow:hidden; min-height: 0; }
       [data-soc-dashboard-preview-host="true"] .soc-preview-appwin .titlebar { height: 34px; display:flex; align-items:center; padding: 0 12px; background: rgba(255,255,255,0.06); border-bottom: 1px solid rgba(255,255,255,0.10); }
       [data-soc-dashboard-preview-host="true"] .soc-preview-appwin .titlebar .ttl { font-weight: 600; font-size: 12px; }
       [data-soc-dashboard-preview-host="true"] .soc-preview-appwin .content { padding: 10px 12px; height: calc(100% - 34px); overflow:auto; }
@@ -64,11 +64,36 @@
       [data-soc-dashboard-preview-host="true"] .soc-sart-go-btn:disabled { opacity: 0.5; cursor: default; }
 
       /* Per-subtask instructions overlay (preview only) */
-      [data-soc-dashboard-preview-host="true"] .soc-sart-overlay { position: absolute; inset: 0; z-index: 10; display:flex; align-items:center; justify-content:center; padding: 14px; background: rgba(2,6,23,0.72); backdrop-filter: blur(6px); }
+      [data-soc-dashboard-preview-host="true"] .soc-sart-overlay { position: absolute; inset: 0; z-index: 50; display:flex; align-items:center; justify-content:center; padding: 14px; background: rgba(2,6,23,0.72); backdrop-filter: blur(6px); }
       [data-soc-dashboard-preview-host="true"] .soc-sart-overlay .panel { max-width: 620px; width: 100%; border-radius: 14px; border: 1px solid rgba(255,255,255,0.14); background: rgba(12,16,26,0.92); box-shadow: 0 20px 70px rgba(0,0,0,0.60); padding: 14px; cursor: pointer; }
       [data-soc-dashboard-preview-host="true"] .soc-sart-overlay .panel h3 { margin: 0 0 8px 0; font-size: 14px; }
       [data-soc-dashboard-preview-host="true"] .soc-sart-overlay .panel .body { font-size: 12px; opacity: 0.95; line-height: 1.45; }
       [data-soc-dashboard-preview-host="true"] .soc-sart-overlay .panel .hint { margin-top: 10px; font-size: 12px; opacity: 0.80; }
+
+      /* WCST-like (email sorting) window */
+      [data-soc-dashboard-preview-host="true"] .soc-wcst-header { display:flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+      [data-soc-dashboard-preview-host="true"] .soc-wcst-header .hint { font-size: 12px; opacity: 0.85; }
+      [data-soc-dashboard-preview-host="true"] .soc-wcst-header .actions { display:flex; align-items: center; gap: 10px; }
+      [data-soc-dashboard-preview-host="true"] .soc-wcst-help-btn { font-size: 11px; padding: 4px 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.08); color: #fff; cursor: pointer; }
+      [data-soc-dashboard-preview-host="true"] .soc-wcst-help-btn:hover { background: rgba(255,255,255,0.12); }
+      [data-soc-dashboard-preview-host="true"] .soc-wcst-email { border: 1px solid rgba(255,255,255,0.10); background: rgba(255,255,255,0.05); border-radius: 12px; padding: 12px; }
+      [data-soc-dashboard-preview-host="true"] .soc-wcst-email.draggable { cursor: grab; }
+      [data-soc-dashboard-preview-host="true"] .soc-wcst-email.dragging { opacity: 0.72; cursor: grabbing; }
+      [data-soc-dashboard-preview-host="true"] .soc-wcst-email .top { display:flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+      [data-soc-dashboard-preview-host="true"] .soc-wcst-email .from { font-size: 12px; }
+      [data-soc-dashboard-preview-host="true"] .soc-wcst-email .subj { margin-top: 8px; font-size: 12px; }
+      [data-soc-dashboard-preview-host="true"] .soc-wcst-email .prev { margin-top: 6px; font-size: 12px; }
+      [data-soc-dashboard-preview-host="true"] .soc-wcst-email .meta { margin-top: 10px; display:flex; gap: 6px; flex-wrap: wrap; }
+      [data-soc-dashboard-preview-host="true"] .soc-wcst-pill { display:inline-block; font-size: 10px; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); }
+      [data-soc-dashboard-preview-host="true"] .soc-wcst-targets { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+      [data-soc-dashboard-preview-host="true"] .soc-wcst-target { text-align:left; padding: 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04); cursor: pointer; transition: background 120ms ease, box-shadow 120ms ease, border-color 120ms ease; user-select: none; }
+      [data-soc-dashboard-preview-host="true"] .soc-wcst-target:hover { background: rgba(255,255,255,0.07); }
+      [data-soc-dashboard-preview-host="true"] .soc-wcst-target.selected { box-shadow: inset 0 0 0 2px rgba(250,204,21,0.55); }
+      [data-soc-dashboard-preview-host="true"] .soc-wcst-target.drag-over { box-shadow: inset 0 0 0 2px rgba(96,165,250,0.70); border-color: rgba(96,165,250,0.60); background: rgba(59,130,246,0.12); }
+      [data-soc-dashboard-preview-host="true"] .soc-wcst-target-top { display:flex; justify-content: space-between; gap: 10px; align-items: baseline; margin-bottom: 8px; }
+      [data-soc-dashboard-preview-host="true"] .soc-wcst-kv { display:grid; grid-template-columns: 90px 1fr; gap: 6px 10px; font-size: 12px; }
+      [data-soc-dashboard-preview-host="true"] .soc-wcst-kv .k { opacity: 0.78; }
+      [data-soc-dashboard-preview-host="true"] .soc-wcst-footer { margin-top: 8px; font-size: 12px; opacity: 0.85; }
     `;
 
     document.head.appendChild(style);
@@ -312,7 +337,8 @@
           start();
         }
       });
-      shell.appendChild(overlay);
+      const appWinEl = containerEl.closest?.('.soc-preview-appwin') || null;
+      (appWinEl || shell).appendChild(overlay);
     } else {
       startOnce();
     }
@@ -609,7 +635,8 @@
         }
       });
 
-      shell.appendChild(overlay);
+      const appWinEl = containerEl.closest?.('.soc-preview-appwin') || null;
+      (appWinEl || shell).appendChild(overlay);
       renderRows();
     } else {
       startSubtask();
@@ -620,6 +647,808 @@
         try { document.removeEventListener('keydown', onKeyDown); } catch { /* ignore */ }
         try { shell.removeEventListener('click', onClick); } catch { /* ignore */ }
         try { window.clearInterval(intervalId); } catch { /* ignore */ }
+      }
+    };
+  }
+
+  function renderFlankerLike(containerEl, subtask) {
+    if (!containerEl) return { destroy() {} };
+
+    const normalizeKeyName = (raw) => {
+      const str = (raw ?? '').toString();
+      if (str === ' ') return ' ';
+      const t = str.trim();
+      const lower = t.toLowerCase();
+      if (lower === 'space') return ' ';
+      if (lower === 'enter') return 'Enter';
+      if (lower === 'escape' || lower === 'esc') return 'Escape';
+      if (t.length === 1) return t.toLowerCase();
+      return t;
+    };
+
+    const clamp01 = (x) => {
+      const n = Number(x);
+      if (!Number.isFinite(n)) return 0;
+      return Math.max(0, Math.min(1, n));
+    };
+
+    const pickLevel = (pHigh, pMed, pLow) => {
+      const a = Math.max(0, Number(pHigh) || 0);
+      const b = Math.max(0, Number(pMed) || 0);
+      const c = Math.max(0, Number(pLow) || 0);
+      const sum = a + b + c;
+      if (!(sum > 0)) return 1;
+      const r = Math.random() * sum;
+      if (r < a) return 2;
+      if (r < a + b) return 1;
+      return 0;
+    };
+
+    const rejectRule = ((subtask?.reject_rule ?? 'high_only').toString().trim().toLowerCase() === 'medium_or_high')
+      ? 'medium_or_high'
+      : 'high_only';
+
+    const allowKey = normalizeKeyName(subtask?.allow_key ?? 'f');
+    const rejectKey = normalizeKeyName(subtask?.reject_key ?? 'j');
+
+    const trialIntervalRaw = Number(subtask?.trial_interval_ms);
+    const trialIntervalMs = Number.isFinite(trialIntervalRaw) ? Math.max(300, Math.min(10000, Math.floor(trialIntervalRaw))) : 1400;
+    const numTrialsRaw = Number(subtask?.num_trials);
+    const numTrials = Number.isFinite(numTrialsRaw) ? Math.max(0, Math.min(5000, Math.floor(numTrialsRaw))) : 0;
+    const durationRaw = Number(subtask?.duration_ms);
+    const durationMs = Number.isFinite(durationRaw) ? Math.max(0, Math.min(3600000, Math.floor(durationRaw))) : 0;
+    const insertionIntervalMs = (numTrials > 0 && durationMs > 0)
+      ? Math.max(250, Math.min(10000, Math.floor(durationMs / Math.max(1, numTrials))))
+      : trialIntervalMs;
+    const responseWindowRaw = Number(subtask?.response_window_ms);
+    const responseWindowMs = Number.isFinite(responseWindowRaw) ? Math.max(150, Math.min(10000, Math.floor(responseWindowRaw))) : 900;
+    const flashRaw = Number(subtask?.question_flash_ms);
+    const flashMs = Number.isFinite(flashRaw) ? Math.max(80, Math.min(5000, Math.floor(flashRaw))) : 550;
+
+    const congruentP = clamp01(subtask?.congruent_probability ?? 0.5);
+    const pHigh = clamp01(subtask?.center_high_probability ?? 0.34);
+    const pMed = clamp01(subtask?.center_medium_probability ?? 0.33);
+    const pLow = clamp01(subtask?.center_low_probability ?? 0.33);
+
+    const speedRaw = Number(subtask?.scroll_speed_px_per_s);
+    const speedPxPerS = Number.isFinite(speedRaw) ? Math.max(40, Math.min(1200, speedRaw)) : 240;
+    const jerk = clamp01(subtask?.jerkiness ?? 0.35);
+    const spacingRaw = Number(subtask?.point_spacing_px);
+    const spacingPx = Number.isFinite(spacingRaw) ? Math.max(4, Math.min(24, Math.floor(spacingRaw))) : 8;
+
+    const showFeedback = (subtask?.show_feedback !== undefined) ? !!subtask.show_feedback : false;
+    const instructionsHtmlRaw = (subtask?.instructions ?? '').toString();
+    const hasInstructions = !!instructionsHtmlRaw.trim();
+    const instructionsTitle = (subtask?.instructions_title ?? 'Traffic spikes monitor').toString() || 'Traffic spikes monitor';
+
+    const substitutePlaceholders = (html, map) => {
+      let out = (html ?? '').toString();
+      for (const [k, v] of Object.entries(map || {})) {
+        const safe = escHtml((v ?? '').toString());
+        out = out.replaceAll(`{{${k}}}`, safe);
+        out = out.replaceAll(`{{${k.toLowerCase()}}}`, safe);
+      }
+      return out;
+    };
+
+    const resolvedInstructionsHtml = substitutePlaceholders(instructionsHtmlRaw, {
+      ALLOW_KEY: (allowKey === ' ' ? 'SPACE' : allowKey),
+      REJECT_KEY: (rejectKey === ' ' ? 'SPACE' : rejectKey)
+    });
+
+    const shell = document.createElement('div');
+    shell.style.position = 'relative';
+    shell.innerHTML = `
+      <div style="display:flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px;">
+        <div>
+          <h4 style="margin:0 0 4px 0;">Traffic spikes monitor</h4>
+          <div class="muted">Respond to the <b>center</b> spike when <b>Reject?</b> flashes. Ignore surrounding spikes.</div>
+        </div>
+        <div class="soc-sart-badge" id="flanker_preview_status" style="opacity:0.85;">Ready</div>
+      </div>
+
+      <div class="soc-preview-card" style="border: 1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.18); overflow:hidden;">
+        <div id="flanker_prompt" style="position: relative; height: 26px; display:flex; align-items:center; justify-content:center; font-weight: 700; letter-spacing: 0.2px; opacity: 0;">Reject?</div>
+        <div style="position: relative;">
+          <canvas id="flanker_canvas" width="720" height="190" style="width: 100%; height: 190px; display:block;"></canvas>
+          <div style="position:absolute; top: 0; bottom: 0; left: 50%; width: 0; border-left: 1px dashed rgba(250,204,21,0.75);"></div>
+        </div>
+        <div class="muted" style="margin-top:10px; font-size: 12px; display:flex; justify-content: space-between; gap: 10px;">
+          <div>ALLOW: <b>${escHtml(allowKey === ' ' ? 'SPACE' : allowKey)}</b></div>
+          <div>REJECT: <b>${escHtml(rejectKey === ' ' ? 'SPACE' : rejectKey)}</b></div>
+          <div style="opacity:0.9;">Preview only</div>
+        </div>
+      </div>
+    `;
+
+    containerEl.innerHTML = '';
+    containerEl.appendChild(shell);
+
+    const appWinEl = containerEl.closest?.('.soc-preview-appwin') || null;
+
+    const canvas = shell.querySelector('#flanker_canvas');
+    const promptEl = shell.querySelector('#flanker_prompt');
+    const statusEl = shell.querySelector('#flanker_preview_status');
+    if (!canvas) return { destroy() {} };
+    const ctx = canvas.getContext('2d');
+
+    let started = false;
+    let destroyed = false;
+
+    const N = 140;
+    const points = Array.from({ length: N }, () => ({ level: 1, trialId: null, isCenter: false }));
+    let offset = 0;
+    let lastT = null;
+    let trialSeq = 0;
+    const trialsById = new Map();
+    const pendingClusters = [];
+    let activeTrial = null;
+    let insertedTrials = 0;
+    const maxTrialsToInsert = (numTrials > 0) ? numTrials : Infinity;
+    let lastFeedbackUntil = 0;
+
+    const markerX = canvas.width / 2;
+    const approxTailX = (N - 1) * spacingPx;
+    const travelMs = Math.max(0, Math.round(((approxTailX - markerX) / Math.max(40, speedPxPerS)) * 1000));
+    const effectiveDurationMs = (numTrials > 0 && durationMs > 0) ? Math.max(0, Math.floor(durationMs - travelMs)) : 0;
+    const insertionIntervalMs2 = (numTrials > 0 && durationMs > 0)
+      ? Math.max(250, Math.min(10000, Math.floor(effectiveDurationMs / Math.max(1, numTrials)) || insertionIntervalMs))
+      : insertionIntervalMs;
+
+    const levelToY = (h, height) => {
+      const base = height - 22;
+      if (h === 2) return base - 120;
+      if (h === 1) return base - 78;
+      return base - 42;
+    };
+
+    const draw = () => {
+      if (!ctx) return;
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      // Background grid
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = 'rgba(0,0,0,0.06)';
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx.lineWidth = 1;
+      for (let y = 32; y < h; y += 32) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+
+      // Line
+      ctx.strokeStyle = 'rgba(147,197,253,0.95)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < points.length; i++) {
+        const x = (i * spacingPx) - offset;
+        const y = levelToY(points[i].level, h);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      // Spikes
+      const base = h - 22;
+      for (let i = 0; i < points.length; i++) {
+        const x = (i * spacingPx) - offset;
+        if (x < -10 || x > w + 10) continue;
+        const y = levelToY(points[i].level, h);
+        const isAnyCenter = !!points[i].isCenter && !!points[i].trialId;
+        const isActiveCenter = isAnyCenter && activeTrial && points[i].trialId === activeTrial.id;
+        const isTrialSpike = !!points[i].trialId;
+
+        if (isActiveCenter) {
+          ctx.strokeStyle = 'rgba(250,204,21,0.95)';
+          ctx.lineWidth = 3;
+        } else if (isAnyCenter) {
+          ctx.strokeStyle = 'rgba(250,204,21,0.35)';
+          ctx.lineWidth = 2;
+        } else if (isTrialSpike) {
+          ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+          ctx.lineWidth = 1;
+        } else {
+          ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+          ctx.lineWidth = 1;
+        }
+        ctx.beginPath();
+        ctx.moveTo(x, base);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+      }
+
+      // Baseline
+      ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, base);
+      ctx.lineTo(w, base);
+      ctx.stroke();
+    };
+
+    const enqueueTrialCluster = () => {
+      const centerLevel = pickLevel(pHigh, pMed, pLow);
+      const isCongruent = Math.random() < congruentP;
+      let flankerLevel = centerLevel;
+      if (!isCongruent) {
+        if (centerLevel === 2) flankerLevel = 0;
+        else if (centerLevel === 0) flankerLevel = 2;
+        else flankerLevel = (Math.random() < 0.5) ? 0 : 2;
+      }
+
+      const id = `trial_${Date.now()}_${trialSeq++}`;
+      const isRejectCorrect = (rejectRule === 'medium_or_high') ? (centerLevel >= 1) : (centerLevel === 2);
+      const trial = { id, centerLevel, flankerLevel, congruent: isCongruent, isRejectCorrect, startedAt: null, responded: false };
+      trialsById.set(id, trial);
+
+      const cluster = [flankerLevel, flankerLevel, centerLevel, flankerLevel, flankerLevel];
+      pendingClusters.push({ trialId: id, cluster, pos: 0 });
+      return trial;
+    };
+
+    const stampClusterNearMarker = (trial, cluster) => {
+      if (!trial || !Array.isArray(cluster) || cluster.length !== 5) return;
+      const leadMs = 700;
+      const leadPx = Math.max(0, Math.round((Math.max(40, speedPxPerS) * leadMs) / 1000));
+      const targetX = markerX + leadPx;
+      const centerIdx = Math.max(3, Math.min(points.length - 3, Math.round(targetX / spacingPx)));
+      const startIdx = centerIdx - 2;
+      for (let k = 0; k < 5; k++) {
+        const idx = startIdx + k;
+        if (idx < 0 || idx >= points.length) continue;
+        points[idx].level = cluster[k];
+        points[idx].trialId = trial.id;
+        points[idx].isCenter = (k === 2);
+      }
+    };
+
+    const maybeStartTrial = () => {
+      if (activeTrial) return;
+      // Start when the "center" point of a pending trial hits the canvas center.
+      const midX = canvas.width / 2;
+      for (let i = 0; i < points.length; i++) {
+        if (!points[i].isCenter || !points[i].trialId) continue;
+        const x = (i * spacingPx) - offset;
+        if (Math.abs(x - midX) <= Math.max(4, spacingPx * 0.75)) {
+          const trial = trialsById.get(points[i].trialId) || null;
+          if (!trial || trial.startedAt) continue;
+          activeTrial = trial;
+          activeTrial.startedAt = performance.now();
+          const trialId = activeTrial.id;
+          if (statusEl) statusEl.textContent = 'Decision…';
+          if (promptEl) {
+            promptEl.style.opacity = '1';
+            promptEl.style.color = 'rgba(255,255,255,0.95)';
+          }
+          window.setTimeout(() => {
+            if (destroyed) return;
+            if (promptEl) {
+              promptEl.style.color = '';
+            }
+          }, flashMs);
+          window.setTimeout(() => {
+            if (destroyed) return;
+            if (!activeTrial || activeTrial.id !== trialId) return;
+            if (activeTrial.responded) return;
+            if (statusEl) statusEl.textContent = 'Running…';
+            if (promptEl) {
+              promptEl.style.opacity = '0';
+              promptEl.style.color = '';
+            }
+            try { trialsById.delete(trialId); } catch { /* ignore */ }
+            activeTrial = null;
+          }, responseWindowMs);
+          return;
+        }
+      }
+    };
+
+    const onKeyDown = (e) => {
+      if (!started) return;
+      if (!activeTrial || !activeTrial.startedAt || activeTrial.responded) return;
+      const k = normalizeKeyName(e.key);
+      if (k !== allowKey && k !== rejectKey) return;
+      e.preventDefault();
+      activeTrial.responded = true;
+      if (statusEl) statusEl.textContent = 'Running…';
+      if (showFeedback && statusEl) {
+        const choseReject = (k === rejectKey);
+        const correct = (choseReject === !!activeTrial.isRejectCorrect);
+        statusEl.textContent = correct ? 'Correct' : 'Incorrect';
+        lastFeedbackUntil = performance.now() + 450;
+      }
+      if (promptEl) {
+        promptEl.style.opacity = '0';
+        promptEl.style.color = '';
+      }
+      try { trialsById.delete(activeTrial.id); } catch { /* ignore */ }
+      activeTrial = null;
+    };
+
+    const tick = (t) => {
+      if (destroyed) return;
+      if (!started) return;
+      if (!lastT) lastT = t;
+      const dt = Math.max(0, Math.min(0.05, (t - lastT) / 1000));
+      lastT = t;
+
+      const jitter = 1 + ((Math.random() * 2 - 1) * jerk * 0.35);
+      offset += (speedPxPerS * jitter) * dt;
+      while (offset >= spacingPx) {
+        offset -= spacingPx;
+        points.shift();
+
+        const p = { level: pickLevel(pHigh, pMed, pLow), trialId: null, isCenter: false };
+        const head = pendingClusters.length ? pendingClusters[0] : null;
+        if (head && head.cluster && head.pos < head.cluster.length) {
+          const k = head.pos;
+          p.level = head.cluster[k];
+          p.trialId = head.trialId;
+          p.isCenter = (k === 2);
+          head.pos += 1;
+          if (head.pos >= head.cluster.length) {
+            pendingClusters.shift();
+          }
+        }
+        points.push(p);
+      }
+
+      if (showFeedback && statusEl && lastFeedbackUntil && performance.now() > lastFeedbackUntil) {
+        lastFeedbackUntil = 0;
+        statusEl.textContent = activeTrial ? 'Decision…' : 'Running…';
+      }
+
+      // Self-healing: ensure the prompt and active trial clear if a timeout is missed.
+      if (activeTrial && activeTrial.startedAt) {
+        const age = Math.max(0, performance.now() - activeTrial.startedAt);
+        if (promptEl) {
+          if (age < responseWindowMs) {
+            promptEl.style.opacity = '1';
+            promptEl.style.color = (age < flashMs) ? 'rgba(255,255,255,0.95)' : '';
+          } else {
+            promptEl.style.opacity = '0';
+            promptEl.style.color = '';
+          }
+        }
+        if (age >= responseWindowMs && !activeTrial.responded) {
+          try { trialsById.delete(activeTrial.id); } catch { /* ignore */ }
+          activeTrial = null;
+          if (statusEl) statusEl.textContent = 'Running…';
+        }
+      }
+
+      draw();
+      maybeStartTrial();
+      requestAnimationFrame(tick);
+    };
+
+    const startOnce = () => {
+      if (started) return;
+      started = true;
+      if (statusEl) statusEl.textContent = 'Running…';
+
+      // Seed baseline
+      for (let i = 0; i < points.length; i++) {
+        points[i].level = pickLevel(pHigh, pMed, pLow);
+        points[i].trialId = null;
+        points[i].isCenter = false;
+      }
+      pendingClusters.length = 0;
+      try { trialsById.clear(); } catch { /* ignore */ }
+      if (promptEl) {
+        promptEl.style.opacity = '0';
+        promptEl.style.color = '';
+      }
+      insertedTrials = 0;
+      {
+        const trial = enqueueTrialCluster();
+        const cluster = pendingClusters.length ? pendingClusters[pendingClusters.length - 1]?.cluster : null;
+        if (trial && cluster) {
+          pendingClusters.pop();
+          stampClusterNearMarker(trial, cluster);
+        }
+        insertedTrials += 1;
+      }
+
+      const intervalId = window.setInterval(() => {
+        if (destroyed) return;
+        if (insertedTrials >= maxTrialsToInsert) return;
+        enqueueTrialCluster();
+        insertedTrials += 1;
+      }, insertionIntervalMs2);
+
+      document.addEventListener('keydown', onKeyDown);
+      requestAnimationFrame(tick);
+
+      return () => {
+        try { window.clearInterval(intervalId); } catch { /* ignore */ }
+      };
+    };
+
+    let stopInterval = null;
+
+    if (hasInstructions) {
+      const overlay = document.createElement('div');
+      overlay.className = 'soc-sart-overlay';
+      overlay.innerHTML = `
+        <div class="panel" role="button" tabindex="0" aria-label="Subtask instructions">
+          <h3>${escHtml(instructionsTitle)}</h3>
+          <div class="body" data-soc-overlay-body="true"></div>
+          <div class="hint">Click this popup to begin.</div>
+        </div>
+      `;
+      const body = overlay.querySelector('[data-soc-overlay-body="true"]');
+      if (body) body.innerHTML = resolvedInstructionsHtml;
+      const start = () => {
+        try { overlay.remove(); } catch { /* ignore */ }
+        stopInterval = startOnce();
+      };
+      overlay.addEventListener('click', start, { once: true });
+      overlay.addEventListener('keydown', (e) => {
+        const k = normalizeKeyName(e.key);
+        if (k === 'Enter' || k === ' ') {
+          e.preventDefault();
+          start();
+        }
+      });
+      (appWinEl || shell).appendChild(overlay);
+    } else {
+      stopInterval = startOnce();
+    }
+
+    return {
+      destroy() {
+        destroyed = true;
+        try { if (typeof stopInterval === 'function') stopInterval(); } catch { /* ignore */ }
+        try { document.removeEventListener('keydown', onKeyDown); } catch { /* ignore */ }
+        try { containerEl.innerHTML = ''; } catch { /* ignore */ }
+      }
+    };
+  }
+
+  function renderWcstLike(containerEl, subtask) {
+    if (!containerEl) return { destroy() {} };
+
+    const responseDevice = ((subtask?.response_device ?? 'keyboard').toString().trim().toLowerCase() === 'mouse') ? 'mouse' : 'keyboard';
+    const mouseMode = ((subtask?.mouse_response_mode ?? 'click').toString().trim().toLowerCase() === 'drag') ? 'drag' : 'click';
+    const keys = parseList(subtask?.choice_keys ?? subtask?.response_keys ?? '1,2,3,4').map(s => s.toLowerCase()).slice(0, 4);
+    while (keys.length < 4) keys.push(String(keys.length + 1));
+
+    const keyLabel = (k) => {
+      if (k === ' ') return 'SPACE';
+      return String(k || '').toUpperCase();
+    };
+
+    const parseLines = (x) => {
+      if (x === null || x === undefined) return [];
+      const s = String(x);
+      const lines = s.split(/\r?\n/g).map(v => v.trim()).filter(Boolean);
+      if (lines.length) return lines;
+      return parseList(s);
+    };
+
+    const senderDomains = parseList(subtask?.sender_domains ?? subtask?.sender_domain_examples ?? 'corp.test, vendor.test, typo.test, ip.test').slice(0, 4);
+    while (senderDomains.length < 4) senderDomains.push(['corp.test', 'vendor.test', 'typo.test', 'ip.test'][senderDomains.length]);
+    const senderNames = parseList(subtask?.sender_display_names ?? subtask?.sender_names ?? 'Operations, IT Vendor, Support Desk, Automated Notice').slice(0, 4);
+    while (senderNames.length < 4) senderNames.push(['Operations', 'IT Vendor', 'Support Desk', 'Automated Notice'][senderNames.length]);
+
+    const subjectUrgent = parseLines(subtask?.subject_lines_urgent ?? 'Action required: verify your account');
+    const previewUrgent = parseLines(subtask?.preview_lines_urgent ?? 'Please verify your account details to avoid interruption.');
+    const subject = subjectUrgent[0] || 'Action required: verify your account';
+    const preview = previewUrgent[0] || 'Please verify your account details to avoid interruption.';
+
+    const attachmentDocm = (subtask?.attachment_label_docm ?? 'invoice.docm').toString();
+    const linkTextShort = (subtask?.link_text_shortened ?? 'short.test/abc').toString();
+
+    const rulesRaw = subtask?.rules ?? subtask?.rule_sequence ?? 'sender_domain,subject_tone,link_style,attachment_type';
+    const rules = Array.isArray(rulesRaw) ? rulesRaw.map(String) : parseList(rulesRaw);
+    const rulesNice = rules.length ? rules.join(', ') : 'sender_domain, subject_tone, link_style, attachment_type';
+
+    const controls = (responseDevice === 'mouse')
+      ? (mouseMode === 'drag' ? 'Drag the email onto a target card to sort.' : 'Click a target card to sort.')
+      : `Press ${escHtml(keys.map(keyLabel).join(', '))} to choose the target cards.`;
+
+    const substitutePlaceholders = (html, map) => {
+      let out = (html ?? '').toString();
+      for (const [k, v] of Object.entries(map || {})) {
+        const safe = escHtml((v ?? '').toString());
+        out = out.replaceAll(`{{${k}}}`, safe);
+        out = out.replaceAll(`{{${k.toLowerCase()}}}`, safe);
+      }
+      return out;
+    };
+
+    const instructionsHtmlRaw = (subtask?.instructions ?? '').toString();
+    const hasInstructions = !!instructionsHtmlRaw.trim();
+    const instructionsTitle = (subtask?.instructions_title ?? 'Email sorting').toString() || 'Email sorting';
+    const resolvedInstructionsHtml = substitutePlaceholders(instructionsHtmlRaw, {
+      CONTROLS: controls,
+      KEYS: keys.map(keyLabel).join(', '),
+      RULES: rulesNice,
+      DOMAINS: senderDomains.join(', ')
+    });
+
+    const helpEnabled = !!(subtask?.help_overlay_enabled ?? true);
+    const helpTitle = (subtask?.help_overlay_title ?? 'Quick help').toString() || 'Quick help';
+    const defaultHelpHtml = `
+      <p><b>Goal:</b> Sort each email into one of four targets.</p>
+      <p><b>How to respond:</b> {{CONTROLS}}</p>
+      <p><b>How to decide:</b> Each target card shows a <i>prototype</i>. The correct target is the one that matches the email on the current rule dimension.</p>
+      <p><b>What the domains mean:</b> These are example sender domains used as stimulus attributes (not real destinations): <b>{{DOMAINS}}</b>.</p>
+      <p><b>Possible rules:</b> {{RULES}}</p>
+    `;
+    const helpHtmlRaw = (subtask?.help_overlay_html ?? '').toString().trim() ? subtask.help_overlay_html : defaultHelpHtml;
+    const resolvedHelpHtml = substitutePlaceholders(helpHtmlRaw, {
+      CONTROLS: controls,
+      KEYS: keys.map(keyLabel).join(', '),
+      RULES: rulesNice,
+      DOMAINS: senderDomains.join(', ')
+    });
+
+    const shell = document.createElement('div');
+    shell.style.position = 'relative';
+    shell.tabIndex = 0;
+
+    shell.innerHTML = `
+      <div class="soc-wcst-header">
+        <div>
+          <h4 style="margin:0 0 4px 0;">Email sorting (WCST-like)</h4>
+          <div class="muted">Preview only. Current rule is hidden; infer from feedback at runtime.</div>
+        </div>
+        <div class="actions">
+          ${helpEnabled ? `<button type="button" class="soc-wcst-help-btn" data-action="help">Help</button>` : ''}
+          <div class="soc-sart-badge" style="opacity:0.85;">${escHtml(responseDevice)}</div>
+        </div>
+      </div>
+
+      <div class="soc-wcst-email" data-soc-wcst-email="true">
+        <div class="top">
+          <div class="from">${escHtml(senderNames[0])} <span class="muted">&lt;alerts@${escHtml(senderDomains[0])}&gt;</span></div>
+          <div class="muted" style="font-size: 11px;">ID: MAIL-PREVIEW</div>
+        </div>
+        <div class="subj"><b>${escHtml(subject)}</b></div>
+        <div class="prev muted">${escHtml(preview)}</div>
+        <div class="meta">
+          <span class="soc-wcst-pill">Attachment: ${escHtml(attachmentDocm)}</span>
+          <span class="soc-wcst-pill">Link: ${escHtml(linkTextShort)}</span>
+        </div>
+      </div>
+
+      <div class="soc-wcst-targets" style="margin-top: 10px;">
+        ${['A', 'B', 'C', 'D'].map((id, idx) => `
+          <div class="soc-wcst-target" data-idx="${idx}" role="button" tabindex="0" aria-label="Target ${escHtml(id)}">
+            <div class="soc-wcst-target-top">
+              <div>
+                <b>Target ${responseDevice === 'keyboard' ? escHtml(keyLabel(keys[idx])) : escHtml(id)}</b>
+                ${responseDevice === 'keyboard' ? `<span class="muted" style="font-size:11px;">(prototype ${escHtml(id)})</span>` : ''}
+              </div>
+              <div class="muted" style="font-size:11px;">Prototype</div>
+            </div>
+            <div class="soc-wcst-kv">
+              <div class="k">Sender</div><div class="v">${escHtml(senderDomains[idx])}</div>
+              <div class="k">Subject</div><div class="v">${escHtml(['neutral', 'urgent', 'reward', 'threat'][idx])}</div>
+              <div class="k">Link</div><div class="v">${escHtml(['none', 'visible', 'shortened', 'mismatch'][idx])}</div>
+              <div class="k">Attachment</div><div class="v">${escHtml(['none', 'pdf', 'docm', 'zip'][idx])}</div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="soc-wcst-footer" data-soc-wcst-status="true">${controls} • Domains: ${escHtml(senderDomains.join(', '))} • Rules: ${escHtml(rulesNice)}</div>
+
+      ${helpEnabled ? `
+        <div class="soc-sart-overlay" data-soc-wcst-help="true" style="display:none;">
+          <div class="panel" role="button" tabindex="0" aria-label="WCST-like help">
+            <h3>${escHtml(helpTitle)}</h3>
+            <div class="body" data-soc-overlay-body="true"></div>
+            <div class="hint">Click to close.</div>
+          </div>
+        </div>
+      ` : ''}
+
+      ${hasInstructions ? `
+        <div class="soc-sart-overlay" data-soc-wcst-instructions="true">
+          <div class="panel" role="button" tabindex="0" aria-label="Subtask instructions">
+            <h3>${escHtml(instructionsTitle)}</h3>
+            <div class="body" data-soc-overlay-body="true"></div>
+            <div class="hint">Click this popup to begin.</div>
+          </div>
+        </div>
+      ` : ''}
+    `;
+
+    containerEl.innerHTML = '';
+    containerEl.appendChild(shell);
+
+    const emailEl = shell.querySelector('[data-soc-wcst-email="true"]');
+    const statusEl = shell.querySelector('[data-soc-wcst-status="true"]');
+    const targets = Array.from(shell.querySelectorAll('.soc-wcst-target'));
+
+    let lastTimeout = null;
+    const setStatus = (text) => {
+      if (!statusEl) return;
+      statusEl.textContent = text;
+      try {
+        if (lastTimeout) window.clearTimeout(lastTimeout);
+      } catch { /* ignore */ }
+      lastTimeout = window.setTimeout(() => {
+        statusEl.textContent = `${controls} • Domains: ${senderDomains.join(', ')} • Rules: ${rulesNice}`;
+      }, 900);
+    };
+
+    const clearSelected = () => {
+      targets.forEach(t => t.classList.remove('selected'));
+    };
+    const selectIdx = (idx) => {
+      clearSelected();
+      const el = shell.querySelector(`.soc-wcst-target[data-idx="${idx}"]`);
+      if (el) el.classList.add('selected');
+      const label = (responseDevice === 'keyboard') ? keyLabel(keys[idx]) : ['A','B','C','D'][idx];
+      setStatus(`Preview: sorted to Target ${label}`);
+    };
+
+    const onTargetClick = (e) => {
+      // Mirror runtime: when drag mode is selected, clicking targets is disabled.
+      if (responseDevice === 'mouse' && mouseMode === 'drag') return;
+      const t = e.currentTarget;
+      const idx = parseInt(t?.getAttribute('data-idx') || '-1', 10);
+      if (Number.isFinite(idx) && idx >= 0) selectIdx(idx);
+    };
+
+    const onTargetKeyDown = (e) => {
+      const k = (e.key || '').toString();
+      if (k === 'Enter' || k === ' ') {
+        e.preventDefault();
+        onTargetClick({ currentTarget: e.currentTarget });
+      }
+    };
+
+    targets.forEach((t) => {
+      t.addEventListener('click', onTargetClick);
+      t.addEventListener('keydown', onTargetKeyDown);
+    });
+
+    const onShellKeyDown = (e) => {
+      if (responseDevice !== 'keyboard') return;
+      const key = (e.key || '').toString().toLowerCase();
+      const idx = keys.findIndex(k => k === key);
+      if (idx >= 0) {
+        e.preventDefault();
+        selectIdx(idx);
+      }
+    };
+
+    shell.addEventListener('keydown', onShellKeyDown);
+
+    // Drag-to-sort preview interactivity
+    const enableDrag = (responseDevice === 'mouse' && mouseMode === 'drag');
+    if (emailEl) {
+      if (enableDrag) {
+        emailEl.classList.add('draggable');
+        emailEl.setAttribute('draggable', 'true');
+      } else {
+        emailEl.classList.remove('draggable');
+        emailEl.removeAttribute('draggable');
+      }
+    }
+
+    const onDragStart = (e) => {
+      try {
+        emailEl && emailEl.classList.add('dragging');
+        e.dataTransfer && e.dataTransfer.setData('text/plain', 'soc-wcst-preview');
+        e.dataTransfer && (e.dataTransfer.effectAllowed = 'move');
+      } catch { /* ignore */ }
+    };
+    const onDragEnd = () => {
+      try { emailEl && emailEl.classList.remove('dragging'); } catch { /* ignore */ }
+      targets.forEach(t => t.classList.remove('drag-over'));
+    };
+    const onDragOver = (e) => {
+      if (!enableDrag) return;
+      e.preventDefault();
+      e.currentTarget.classList.add('drag-over');
+      try { e.dataTransfer && (e.dataTransfer.dropEffect = 'move'); } catch { /* ignore */ }
+    };
+    const onDragLeave = (e) => {
+      e.currentTarget.classList.remove('drag-over');
+    };
+    const onDrop = (e) => {
+      if (!enableDrag) return;
+      e.preventDefault();
+      e.currentTarget.classList.remove('drag-over');
+      const idx = parseInt(e.currentTarget?.getAttribute('data-idx') || '-1', 10);
+      if (Number.isFinite(idx) && idx >= 0) selectIdx(idx);
+    };
+
+    if (emailEl && enableDrag) {
+      emailEl.addEventListener('dragstart', onDragStart);
+      emailEl.addEventListener('dragend', onDragEnd);
+    }
+    targets.forEach((t) => {
+      if (enableDrag) {
+        t.addEventListener('dragover', onDragOver);
+        t.addEventListener('dragleave', onDragLeave);
+        t.addEventListener('drop', onDrop);
+      }
+    });
+
+    // Help overlay toggle
+    const helpOverlay = shell.querySelector('[data-soc-wcst-help="true"]');
+    const helpBody = helpOverlay?.querySelector('[data-soc-overlay-body="true"]');
+    if (helpBody) helpBody.innerHTML = resolvedHelpHtml;
+    const showHelp = () => {
+      if (!helpOverlay) return;
+      helpOverlay.style.display = 'flex';
+    };
+    const hideHelp = () => {
+      if (!helpOverlay) return;
+      helpOverlay.style.display = 'none';
+    };
+    const helpBtn = shell.querySelector('[data-action="help"]');
+    if (helpBtn) helpBtn.addEventListener('click', (e) => { e.preventDefault(); showHelp(); });
+    if (helpOverlay) {
+      helpOverlay.addEventListener('click', (e) => { e.preventDefault(); hideHelp(); });
+      helpOverlay.addEventListener('keydown', (e) => {
+        const k = (e.key || '').toString();
+        if (k === 'Enter' || k === ' ' || k === 'Escape') {
+          e.preventDefault();
+          hideHelp();
+        }
+      });
+    }
+
+    // Instructions overlay (preview start gate)
+    const instOverlay = shell.querySelector('[data-soc-wcst-instructions="true"]');
+    const instBody = instOverlay?.querySelector('[data-soc-overlay-body="true"]');
+    if (instBody) instBody.innerHTML = resolvedInstructionsHtml;
+    const start = () => {
+      try { instOverlay && instOverlay.remove(); } catch { /* ignore */ }
+      // Mirror runtime: briefly auto-show help once.
+      if (helpEnabled) {
+        showHelp();
+      }
+      try { shell.focus(); } catch { /* ignore */ }
+    };
+    if (instOverlay) {
+      instOverlay.addEventListener('click', start, { once: true });
+      instOverlay.addEventListener('keydown', (e) => {
+        const k = (e.key || '').toString();
+        if (k === 'Enter' || k === ' ') {
+          e.preventDefault();
+          start();
+        }
+      });
+    } else {
+      // If no instructions, still auto-show help once so the overlay is visible in preview.
+      if (helpEnabled) {
+        showHelp();
+      }
+    }
+
+    return {
+      destroy() {
+        try { if (lastTimeout) window.clearTimeout(lastTimeout); } catch { /* ignore */ }
+        try { shell.removeEventListener('keydown', onShellKeyDown); } catch { /* ignore */ }
+        try {
+          targets.forEach(t => {
+            t.removeEventListener('click', onTargetClick);
+            t.removeEventListener('keydown', onTargetKeyDown);
+            t.removeEventListener('dragover', onDragOver);
+            t.removeEventListener('dragleave', onDragLeave);
+            t.removeEventListener('drop', onDrop);
+          });
+        } catch { /* ignore */ }
+        try {
+          if (emailEl) {
+            emailEl.removeEventListener('dragstart', onDragStart);
+            emailEl.removeEventListener('dragend', onDragEnd);
+          }
+        } catch { /* ignore */ }
       }
     };
   }
@@ -708,6 +1537,14 @@
         }
         if (rootEl && subtask && (subtask.type === 'nback-like')) {
           const handle = renderNbackLike(rootEl, subtask);
+          destroyFns.push(() => handle?.destroy?.());
+        }
+        if (rootEl && subtask && (subtask.type === 'flanker-like')) {
+          const handle = renderFlankerLike(rootEl, subtask);
+          destroyFns.push(() => handle?.destroy?.());
+        }
+        if (rootEl && subtask && (subtask.type === 'wcst-like')) {
+          const handle = renderWcstLike(rootEl, subtask);
           destroyFns.push(() => handle?.destroy?.());
         }
       } catch {

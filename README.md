@@ -65,6 +65,9 @@ Core shape (abridged):
 
 ```json
 {
+  "ui_settings": {
+    "theme": "dark"
+  },
   "experiment_type": "trial-based",
   "task_type": "rdm",
   "data_collection": {
@@ -86,6 +89,8 @@ Core shape (abridged):
 
 Notes:
 
+- **Theme** is configured in the left **Experiment Configuration** panel via the **Theme** dropdown.
+  - Exported as `ui_settings.theme` (`"dark"` or `"light"`) and consumed by the Interpreter to theme instruction screens and other UI.
 - **Data collection** currently includes `reaction-time`, `accuracy`, `correctness` (online correctness computation toggle), and `eye-tracking`.
 - **Response modalities** (keyboard/mouse/touch/voice) are configured via the Default Response UI and exported under `response_parameters`.
 
@@ -108,7 +113,10 @@ There is also a `task_type: "custom"` option intended for advanced/manual use (n
   - Timeline card title/icon also stays in sync so calibration prefaces remain visually distinct from generic Instructions.
 - Response-modality parameters are now conditionally shown/disabled in the UI.
   - Disabled fields are not saved/exported (prevents exporting irrelevant voice/mouse/touch settings when not in use).
+- Instructions authoring now supports rich text (WYSIWYG) for instruction-like components.
+  - The editor stores HTML in the config, and the JSON preview escapes `<`/`>` so tags display literally.
 - Continuous-mode defaults were expanded to include aperture outline controls so continuous exports match the interpreter’s rendering expectations.
+- Added an experiment-wide **Theme** dropdown (Dark/Light) exported as `ui_settings.theme`.
 
 ### SOC Dashboard release (Feb 2026)
 
@@ -131,15 +139,27 @@ Implemented SOC subtasks:
   - `response_paradigm: "go_nogo" | "2afc"` (modal shows only the relevant key fields)
   - `instructions` supports placeholders like `{{GO_CONTROL}}`, `{{NOGO_CONTROL}}`, `{{N}}`, `{{MATCH_FIELD}}`.
 
+- `soc-subtask-flanker-like` (exports as `type: "flanker-like"` inside `subtasks[]`)
+  - Keys: `allow_key`, `reject_key`
+  - Timing/structure: `num_trials`, `response_window_ms`, `trial_interval_ms`
+  - Rule: `reject_rule: "high_only" | "medium_or_high"`
+
+- `soc-subtask-wcst-like` (exports as `type: "wcst-like"` inside `subtasks[]`)
+  - Response mode:
+    - `response_device: "keyboard" | "mouse"`
+    - Keyboard: `choice_keys` (4 keys)
+    - Mouse: `mouse_response_mode: "click" | "drag"`
+  - Optional participant help overlay: `help_overlay_enabled`, `help_overlay_title`, `help_overlay_html`
+  - Optional researcher example libraries: `sender_domains`, `sender_display_names`, `subject_lines_*`, `preview_lines_*`, `link_*`, `attachment_label_*`
+  - Builder preview includes lightweight interactivity (no logging):
+    - keyboard: pressing the configured keys highlights the corresponding target
+    - mouse/click: clicking a target highlights it
+    - mouse/drag: the email can be dragged and dropped onto targets
+
 Scheduling (for overlaps / multitasking):
 
 - Each subtask supports `start_at_ms` / `start_delay_ms` and `duration_ms` / `end_at_ms` so windows can appear/disappear on a fixed schedule.
 - Subtasks also include a clickable instruction popup at runtime; dismissing it anchors the “true start” timing (the interpreter logs `t_subtask_ms` from that point).
-
-Planned / placeholders (next session):
-
-- `soc-subtask-flanker-like` (TBD)
-- `soc-subtask-wcst-like` (TBD)
 
 See [docs/inputs_outputs.md](docs/inputs_outputs.md) for a more detailed (but still current) reference.
 
@@ -187,6 +207,11 @@ The timeline is authored in the UI and serialized from DOM `dataset.componentDat
 ### Gabor components (`task_type: "gabor"`)
 
 - `gabor-trial`
+- Patch border parameters (set via **Gabor Experiment Settings**, per-trial overrides, or via `block.parameter_values`):
+  - `patch_border_enabled`
+  - `patch_border_width_px`
+  - `patch_border_color`
+  - `patch_border_opacity`
 - `block` (component_type can be `gabor-trial` or `gabor-quest`)
 
 ### Flanker components (`task_type: "flanker"`)
@@ -206,8 +231,8 @@ The timeline is authored in the UI and serialized from DOM `dataset.componentDat
 - Subtasks (composed into `soc-dashboard.subtasks[]` on export):
   - `soc-subtask-sart-like` (log triage Go/No-Go)
   - `soc-subtask-nback-like` (alert correlation)
-  - `soc-subtask-flanker-like` (placeholder; next session)
-  - `soc-subtask-wcst-like` (placeholder; next session)
+  - `soc-subtask-flanker-like` (traffic spikes monitor)
+  - `soc-subtask-wcst-like` (email sorting / WCST-like)
 
 ### Eye tracking
 

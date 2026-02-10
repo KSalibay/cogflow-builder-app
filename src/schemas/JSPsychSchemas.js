@@ -280,10 +280,132 @@ class JSPsychSchemas {
                         default: 'Flanker-like',
                         description: 'Subtask window title'
                     },
+                    start_at_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        min: 0,
+                        max: 3600000,
+                        description: 'Scheduled start time (ms) from SOC session start. If used with duration_ms, the window appears/disappears automatically.'
+                    },
+                    duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        min: 0,
+                        max: 3600000,
+                        description: 'Scheduled duration (ms). If 0, scheduling is disabled unless end_at_ms is provided manually in JSON.'
+                    },
+                    num_trials: {
+                        type: this.parameterTypes.INT,
+                        default: 20,
+                        min: 0,
+                        max: 5000,
+                        description: 'Number of decision epochs (trial clusters) to schedule while the window is visible. If 0, trials are scheduled by trial_interval_ms.'
+                    },
                     instructions: {
                         type: this.parameterTypes.HTML_STRING,
-                        default: '',
+                        default: '<p>You will see a scrolling <b>traffic spikes</b> monitor.</p>\n<p>When <b>Reject?</b> flashes, respond to the <b>center spike</b> directly underneath that question, ignoring surrounding spikes.</p>\n<p>Press <b>{{REJECT_KEY}}</b> to reject and <b>{{ALLOW_KEY}}</b> to allow.</p>\n<p><i>Click this popup to begin.</i></p>',
                         description: 'Optional instructions shown in a popup before this subtask begins (closing the popup marks the subtask start time)'
+                    },
+                    instructions_title: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Traffic spikes monitor',
+                        description: 'Popup title for the subtask instructions overlay'
+                    },
+
+                    allow_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'f',
+                        description: 'Keyboard key for ALLOW / "No" (e.g., f)'
+                    },
+                    reject_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'j',
+                        description: 'Keyboard key for REJECT / "Yes" (e.g., j)'
+                    },
+
+                    trial_interval_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 1400,
+                        min: 300,
+                        max: 10000,
+                        description: 'Time between decision prompts (ms)'
+                    },
+                    response_window_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 900,
+                        min: 150,
+                        max: 10000,
+                        description: 'Response deadline from prompt onset (ms)'
+                    },
+                    question_flash_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 550,
+                        min: 80,
+                        max: 5000,
+                        description: 'How long the "Reject?" prompt is visually emphasized (ms)'
+                    },
+
+                    congruent_probability: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.5,
+                        min: 0,
+                        max: 1,
+                        description: 'Probability flankers match the center spike (0–1)'
+                    },
+                    center_high_probability: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.34,
+                        min: 0,
+                        max: 1,
+                        description: 'Probability the center spike is HIGH (0–1). Probabilities are normalized at runtime.'
+                    },
+                    center_medium_probability: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.33,
+                        min: 0,
+                        max: 1,
+                        description: 'Probability the center spike is MEDIUM (0–1). Probabilities are normalized at runtime.'
+                    },
+                    center_low_probability: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.33,
+                        min: 0,
+                        max: 1,
+                        description: 'Probability the center spike is LOW (0–1). Probabilities are normalized at runtime.'
+                    },
+                    reject_rule: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'high_only',
+                        options: ['high_only', 'medium_or_high'],
+                        description: 'Which center-spike levels count as a correct REJECT'
+                    },
+
+                    scroll_speed_px_per_s: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 240,
+                        min: 40,
+                        max: 1200,
+                        description: 'Base scrolling speed of the monitor (px/s)'
+                    },
+                    jerkiness: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.35,
+                        min: 0,
+                        max: 1,
+                        description: 'How "jerky" the scrolling is (0–1)'
+                    },
+                    point_spacing_px: {
+                        type: this.parameterTypes.INT,
+                        default: 8,
+                        min: 4,
+                        max: 24,
+                        description: 'Horizontal spacing between graph points (px)'
+                    },
+
+                    show_feedback: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        description: 'Briefly show Correct/Incorrect after response (preview + interpreter)'
                     },
                     detection_response_task_enabled: {
                         type: this.parameterTypes.BOOL,
@@ -412,10 +534,215 @@ class JSPsychSchemas {
                         default: 'WCST-like',
                         description: 'Subtask window title'
                     },
+                    start_at_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        min: 0,
+                        max: 3600000,
+                        description: 'Scheduled start time (ms) from SOC session start. If used with duration_ms, the window appears/disappears automatically.'
+                    },
+                    duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        min: 0,
+                        max: 3600000,
+                        description: 'Scheduled duration (ms). If 0, scheduling is disabled unless end_at_ms is provided manually in JSON.'
+                    },
                     instructions: {
                         type: this.parameterTypes.HTML_STRING,
-                        default: '',
+                        default: '<p>Sort each email into one of four target cards.</p>\n<p>{{CONTROLS}}</p>\n<p><b>Possible rules</b>: {{RULES}}</p>\n<p><i>Click this popup to begin.</i></p>',
                         description: 'Optional instructions shown in a popup before this subtask begins (closing the popup marks the subtask start time)'
+                    },
+                    instructions_title: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Email sorting',
+                        description: 'Popup title for the subtask instructions overlay'
+                    },
+                    response_device: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'keyboard',
+                        options: ['keyboard', 'mouse'],
+                        description: 'Primary response device for this subtask'
+                    },
+                    mouse_response_mode: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'click',
+                        options: ['click', 'drag'],
+                        description: 'Mouse-only: click a target vs drag the email onto a target'
+                    },
+                    choice_keys: {
+                        type: this.parameterTypes.STRING,
+                        default: '1,2,3,4',
+                        description: 'Keyboard choice keys for targets A-D (comma-separated; ignored if response_device = mouse)'
+                    },
+                    sender_domains: {
+                        type: this.parameterTypes.STRING,
+                        default: 'corp.test, vendor.test, typo.test, ip.test',
+                        description: 'Comma- or newline-separated list of 4 example sender domains (A–D). Tip: use reserved .test domains.'
+                    },
+                    sender_display_names: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Operations, IT Vendor, Support Desk, Automated Notice',
+                        description: 'Comma- or newline-separated list of 4 sender display names aligned to sender_domains (A–D)'
+                    },
+                    subject_lines_neutral: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Weekly account summary',
+                        description: 'Example subject lines for neutral tone (newline-separated recommended). One is sampled per trial.'
+                    },
+                    subject_lines_urgent: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Action required: verify your account',
+                        description: 'Example subject lines for urgent tone (newline-separated recommended)'
+                    },
+                    subject_lines_reward: {
+                        type: this.parameterTypes.STRING,
+                        default: 'You have a new benefit available',
+                        description: 'Example subject lines for reward tone (newline-separated recommended)'
+                    },
+                    subject_lines_threat: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Account will be restricted soon',
+                        description: 'Example subject lines for threat tone (newline-separated recommended)'
+                    },
+                    preview_lines_neutral: {
+                        type: this.parameterTypes.STRING,
+                        default: 'No action needed. Review recent activity.',
+                        description: 'Example preview lines for neutral tone (newline-separated recommended). One is sampled per trial.'
+                    },
+                    preview_lines_urgent: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Please verify your account details to avoid interruption.',
+                        description: 'Example preview lines for urgent tone (newline-separated recommended)'
+                    },
+                    preview_lines_reward: {
+                        type: this.parameterTypes.STRING,
+                        default: 'A new item is available. Review details when convenient.',
+                        description: 'Example preview lines for reward tone (newline-separated recommended)'
+                    },
+                    preview_lines_threat: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Failure to act may result in restricted access.',
+                        description: 'Example preview lines for threat tone (newline-separated recommended)'
+                    },
+                    link_text_visible: {
+                        type: this.parameterTypes.STRING,
+                        default: 'portal.corp.test',
+                        description: 'Visible-link style: link text shown in the email'
+                    },
+                    link_href_visible: {
+                        type: this.parameterTypes.STRING,
+                        default: 'https://portal.corp.test/',
+                        description: 'Visible-link style: link href (displayed in data, not navigated)'
+                    },
+                    link_text_shortened: {
+                        type: this.parameterTypes.STRING,
+                        default: 'short.test/abc',
+                        description: 'Shortened-link style: link text shown in the email'
+                    },
+                    link_href_shortened: {
+                        type: this.parameterTypes.STRING,
+                        default: 'https://short.test/abc',
+                        description: 'Shortened-link style: link href (displayed in data, not navigated)'
+                    },
+                    link_text_mismatch: {
+                        type: this.parameterTypes.STRING,
+                        default: 'portal.corp.test',
+                        description: 'Mismatch-link style: link text shown in the email'
+                    },
+                    link_href_mismatch: {
+                        type: this.parameterTypes.STRING,
+                        default: 'https://vendor.test/portal',
+                        description: 'Mismatch-link style: link href (displayed in data, not navigated)'
+                    },
+                    attachment_label_pdf: {
+                        type: this.parameterTypes.STRING,
+                        default: 'report.pdf',
+                        description: 'PDF attachment filename label'
+                    },
+                    attachment_label_docm: {
+                        type: this.parameterTypes.STRING,
+                        default: 'invoice.docm',
+                        description: 'DOCM attachment filename label'
+                    },
+                    attachment_label_zip: {
+                        type: this.parameterTypes.STRING,
+                        default: 'archive.zip',
+                        description: 'ZIP attachment filename label'
+                    },
+                    help_overlay_enabled: {
+                        type: this.parameterTypes.BOOL,
+                        default: true,
+                        description: 'Show a brief in-window help overlay describing mechanics and examples'
+                    },
+                    help_overlay_title: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Quick help',
+                        description: 'Title for the in-window help overlay'
+                    },
+                    help_overlay_html: {
+                        type: this.parameterTypes.HTML_STRING,
+                        default: '<p><b>Goal:</b> Sort each email into one of four targets.</p>\n<p><b>How to respond:</b> {{CONTROLS}}</p>\n<p><b>What the domains mean:</b> example sender domains used as stimulus attributes: <b>{{DOMAINS}}</b>.</p>\n<p><b>Possible rules:</b> {{RULES}}</p>',
+                        description: 'Optional custom HTML for the help overlay. Placeholders: {{CONTROLS}}, {{DOMAINS}}, {{RULES}}, {{KEYS}}'
+                    },
+                    num_trials: {
+                        type: this.parameterTypes.INT,
+                        default: 24,
+                        min: 0,
+                        max: 5000,
+                        description: 'Number of trials (0 = unlimited until forced end / schedule end)'
+                    },
+                    response_window_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 2500,
+                        min: 200,
+                        max: 20000,
+                        description: 'Response deadline per email (ms)'
+                    },
+                    iti_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 300,
+                        min: 0,
+                        max: 20000,
+                        description: 'Inter-trial interval (ms)'
+                    },
+                    show_feedback: {
+                        type: this.parameterTypes.BOOL,
+                        default: true,
+                        description: 'Show brief on-screen feedback after each response'
+                    },
+                    feedback_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 450,
+                        min: 0,
+                        max: 5000,
+                        description: 'Feedback duration (ms)'
+                    },
+                    rules: {
+                        type: this.parameterTypes.STRING,
+                        default: 'sender_domain,subject_tone,link_style,attachment_type',
+                        description: 'Rule sequence (comma-separated): sender_domain, subject_tone, link_style, attachment_type'
+                    },
+                    rule_change_correct_streak: {
+                        type: this.parameterTypes.INT,
+                        default: 8,
+                        min: 1,
+                        max: 50,
+                        description: 'Change the rule after this many consecutive correct responses'
+                    },
+                    min_run_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        min: 0,
+                        max: 3600000,
+                        description: 'Minimum subtask runtime in ms (0 = no minimum)'
+                    },
+                    max_run_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        min: 0,
+                        max: 3600000,
+                        description: 'Maximum subtask runtime in ms (0 = no maximum). If max < min, values are swapped at runtime.'
                     },
                     detection_response_task_enabled: {
                         type: this.parameterTypes.BOOL,
@@ -643,6 +970,11 @@ class JSPsychSchemas {
                         options: ['sinusoidal', 'square', 'triangle'],
                         description: 'Waveform of the grating carrier'
                     },
+                    patch_diameter_deg: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 6,
+                        description: 'Patch diameter in degrees of visual angle (requires Visual Angle Calibration for true deg-based sizing)'
+                    },
                     spatial_cue: {
                         type: this.parameterTypes.SELECT,
                         default: 'none',
@@ -671,10 +1003,189 @@ class JSPsychSchemas {
                         default: 67,
                         description: 'Mask duration after stimulus (ms)'
                     },
+                    patch_border_enabled: {
+                        type: this.parameterTypes.BOOL,
+                        default: true,
+                        description: 'Whether to draw a circular border around each patch (stimulus + mask)'
+                    },
+                    patch_border_width_px: {
+                        type: this.parameterTypes.INT,
+                        default: 2,
+                        description: 'Patch border stroke width (px)'
+                    },
+                    patch_border_color: {
+                        type: this.parameterTypes.COLOR,
+                        default: '#FFFFFF',
+                        description: 'Patch border color (hex)'
+                    },
+                    patch_border_opacity: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.22,
+                        description: 'Patch border opacity (0–1)'
+                    },
                     detection_response_task_enabled: {
                         type: this.parameterTypes.BOOL,
                         default: false,
                         description: 'Enable/disable Detection Response Task (DRT) overlay for this component (handled by interpreter)'
+                    }
+                }
+            },
+
+            'visual-angle-calibration': {
+                name: 'visual-angle-calibration',
+                description: 'Visual angle calibration (ID/credit card screen scale + viewing distance) used to compute px/deg',
+                parameters: {
+                    title: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Visual Angle Calibration',
+                        description: 'Heading shown to participants'
+                    },
+                    instructions: {
+                        type: this.parameterTypes.HTML_STRING,
+                        default: '',
+                        description: 'Optional instructions text (HTML allowed)'
+                    },
+                    object_preset: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'id_card_long',
+                        options: ['id_card_long', 'id_card_short', 'custom'],
+                        description: 'Calibration object preset'
+                    },
+                    object_length_cm: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 8.56,
+                        description: 'Object length in cm (used when preset is custom; also shown/adjustable during calibration)'
+                    },
+                    distance_mode: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'posture_choice',
+                        options: ['posture_choice', 'manual'],
+                        description: 'How viewing distance is collected'
+                    },
+                    close_label: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Close',
+                        description: 'Label for close posture option'
+                    },
+                    close_distance_cm: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 35,
+                        description: 'Viewing distance (cm) for close posture option'
+                    },
+                    normal_label: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Normal',
+                        description: 'Label for normal posture option'
+                    },
+                    normal_distance_cm: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 50,
+                        description: 'Viewing distance (cm) for normal posture option'
+                    },
+                    far_label: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Far',
+                        description: 'Label for far posture option'
+                    },
+                    far_distance_cm: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 65,
+                        description: 'Viewing distance (cm) for far posture option'
+                    },
+                    manual_distance_default_cm: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 50,
+                        description: 'Default viewing distance (cm) shown in manual entry mode'
+                    },
+                    webcam_enabled: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        description: 'Enable optional webcam preview (does not estimate distance)'
+                    },
+                    webcam_facing_mode: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'user',
+                        options: ['user', 'environment'],
+                        description: 'Preferred camera (front/user vs back/environment)'
+                    },
+                    store_key: {
+                        type: this.parameterTypes.STRING,
+                        default: '__psy_visual_angle',
+                        description: 'Global key used to store calibration results (window[store_key])'
+                    }
+                }
+            },
+
+            'reward-settings': {
+                name: 'reward-settings',
+                description: 'Reward policy configuration + optional participant-facing instructions and end-of-experiment summary',
+                parameters: {
+                    store_key: {
+                        type: this.parameterTypes.STRING,
+                        default: '__psy_rewards',
+                        description: 'Global key used to store reward policy and state (window[store_key])'
+                    },
+                    currency_label: {
+                        type: this.parameterTypes.STRING,
+                        default: 'points',
+                        description: 'Label for the reward currency (e.g., points, tokens, cents)'
+                    },
+                    scoring_basis: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'both',
+                        options: ['accuracy', 'reaction_time', 'both'],
+                        description: 'What constitutes a rewarded trial'
+                    },
+                    rt_threshold_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 600,
+                        description: 'Reaction time cutoff (ms) for reaction-time or both modes'
+                    },
+                    points_per_success: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 1,
+                        description: 'Points awarded for each rewarded trial'
+                    },
+                    require_correct_for_rt: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        description: 'If true, RT-based rewards require correctness when correctness is available'
+                    },
+                    calculate_on_the_fly: {
+                        type: this.parameterTypes.BOOL,
+                        default: true,
+                        description: 'If true, reward points are computed as trials finish; if false, they are computed at summary time using recorded outcomes'
+                    },
+                    show_summary_at_end: {
+                        type: this.parameterTypes.BOOL,
+                        default: true,
+                        description: 'If true, interpreter shows a reward summary screen at the end'
+                    },
+                    continue_key: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'space',
+                        options: ['space', 'enter', 'ALL_KEYS'],
+                        description: 'Key(s) used to continue past instructions/summary'
+                    },
+                    instructions_title: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Rewards',
+                        description: 'Title shown on the reward instructions screen'
+                    },
+                    instructions_template_html: {
+                        type: this.parameterTypes.HTML_STRING,
+                        default: '<p>You can earn <b>{{currency_label}}</b> during this study.</p>\n<ul>\n<li><b>Basis</b>: {{scoring_basis_label}}</li>\n<li><b>RT threshold</b>: {{rt_threshold_ms}} ms</li>\n<li><b>Points per success</b>: {{points_per_success}}</li>\n</ul>\n<p>Press {{continue_key_label}} to begin.</p>',
+                        description: 'Participant instructions (HTML allowed). Variables: {{currency_label}}, {{scoring_basis_label}}, {{rt_threshold_ms}}, {{points_per_success}}, {{continue_key_label}}'
+                    },
+                    summary_title: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Rewards Summary',
+                        description: 'Title shown on the end-of-experiment summary screen'
+                    },
+                    summary_template_html: {
+                        type: this.parameterTypes.HTML_STRING,
+                        default: '<p><b>Total earned</b>: {{total_points}} {{currency_label}}</p>\n<p><b>Rewarded trials</b>: {{rewarded_trials}} / {{eligible_trials}}</p>\n<p>Press {{continue_key_label}} to finish.</p>',
+                        description: 'Summary HTML. Variables also include: {{total_points}}, {{rewarded_trials}}, {{eligible_trials}}'
                     }
                 }
             },
@@ -1190,11 +1701,29 @@ class JSPsychSchemas {
                         blockTarget: 'gabor-trial,gabor-quest',
                         description: 'Gabor: comma-separated distractor orientations (degrees) to sample from. Allowed range: 0 to 179.'
                     },
+                    gabor_spatial_cue_enabled: {
+                        type: this.parameterTypes.BOOL,
+                        default: true,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor: enable sampling spatial cue presence per trial (when false: spatial_cue forced to none)'
+                    },
                     gabor_spatial_cue_options: {
                         type: this.parameterTypes.STRING,
                         default: 'none,left,right,both',
                         blockTarget: 'gabor-trial,gabor-quest',
                         description: 'Gabor: comma-separated spatial cue options to sample from. Allowed: none, left, right, both.'
+                    },
+                    gabor_spatial_cue_probability: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 1,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor: probability a trial contains a spatial cue (0–1)'
+                    },
+                    gabor_value_cue_enabled: {
+                        type: this.parameterTypes.BOOL,
+                        default: true,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor: enable sampling value cue presence per trial (when false: left/right_value forced to neutral)'
                     },
                     gabor_left_value_options: {
                         type: this.parameterTypes.STRING,
@@ -1208,6 +1737,12 @@ class JSPsychSchemas {
                         blockTarget: 'gabor-trial,gabor-quest',
                         description: 'Gabor: comma-separated right value cue options to sample from. Allowed: neutral, high, low.'
                     },
+                    gabor_value_cue_probability: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 1,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor: probability a trial contains value cues (0–1)'
+                    },
                     gabor_spatial_frequency_min: {
                         type: this.parameterTypes.FLOAT,
                         default: 0.06,
@@ -1220,11 +1755,47 @@ class JSPsychSchemas {
                         blockTarget: 'gabor-trial,gabor-quest',
                         description: 'Gabor: spatial frequency max (cycles per pixel)'
                     },
+                    gabor_patch_diameter_deg_min: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 6,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor: patch diameter min (degrees of visual angle)'
+                    },
+                    gabor_patch_diameter_deg_max: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 6,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor: patch diameter max (degrees of visual angle)'
+                    },
                     gabor_grating_waveform_options: {
                         type: this.parameterTypes.STRING,
                         default: 'sinusoidal',
                         blockTarget: 'gabor-trial,gabor-quest',
                         description: 'Gabor: comma-separated grating waveforms to sample from. Allowed: sinusoidal, square, triangle.'
+                    },
+                    gabor_patch_border_enabled: {
+                        type: this.parameterTypes.BOOL,
+                        default: true,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor: draw circular patch border (applies to stimulus + mask + placeholders)'
+                    },
+                    gabor_patch_border_width_px: {
+                        type: this.parameterTypes.INT,
+                        default: 2,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor: patch border line width (px)'
+                    },
+                    gabor_patch_border_color: {
+                        type: this.parameterTypes.COLOR,
+                        default: '#FFFFFF',
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor: patch border color'
+                    },
+                    gabor_patch_border_opacity: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.22,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor: patch border opacity (0–1)'
                     },
                     gabor_adaptive_mode: {
                         type: this.parameterTypes.SELECT,
@@ -1708,7 +2279,7 @@ class JSPsychSchemas {
                 optional_fields: [
                     'num_trials', 'default_iti', 'randomize_order', 
                     'on_finish', 'on_trial_start', 'on_trial_finish',
-                    'data_collection', 'experiment_type', 'task_type'
+                    'data_collection', 'experiment_type', 'task_type', 'ui_settings'
                 ],
                 validation_rules: {
                     timeline: { 
@@ -1733,7 +2304,7 @@ class JSPsychSchemas {
                 required_fields: ['timeline', 'frame_rate'],
                 optional_fields: [
                     'duration', 'update_interval', 'on_frame_update',
-                    'data_collection', 'experiment_type', 'task_type'
+                    'data_collection', 'experiment_type', 'task_type', 'ui_settings'
                 ],
                 validation_rules: {
                     timeline: { 
@@ -1766,7 +2337,7 @@ class JSPsychSchemas {
                     'num_trials', 'default_iti', 'randomize_order', 
                     'stimulus_width', 'stimulus_height', 'background_color',
                     'on_finish', 'on_trial_start', 'on_trial_finish',
-                    'data_collection', 'experiment_type', 'task_type'
+                    'data_collection', 'experiment_type', 'task_type', 'ui_settings'
                 ],
                 validation_rules: {
                     timeline: { 
@@ -1802,7 +2373,7 @@ class JSPsychSchemas {
                 required_fields: ['timeline'],
                 optional_fields: [
                     'experiment_type', 'data_collection', 'task_type',
-                    'on_finish', 'on_trial_start', 'on_trial_finish'
+                    'on_finish', 'on_trial_start', 'on_trial_finish', 'ui_settings'
                 ],
                 validation_rules: {
                     timeline: { 

@@ -561,8 +561,12 @@ class TimelineBuilder {
             
             const responseGroup = (paramName === 'mouse_segments' || paramName === 'mouse_start_angle_deg' || paramName === 'mouse_selection_mode' || paramName === 'go_button')
                 ? 'mouse'
+                : (paramName === 'mouse_response_mode')
+                    ? 'mouse'
                 : (paramName === 'response_keys' || paramName === 'go_key')
                     ? 'keyboard'
+                    : (paramName === 'choice_keys')
+                        ? 'keyboard'
                     : (paramName === 'feedback_mode' || paramName === 'feedback_duration_ms')
                         ? 'feedback'
                     : (paramName === 'cue_border_mode' || paramName === 'cue_border_width' || paramName === 'cue_border_color' || paramName === 'response_target_group')
@@ -630,6 +634,43 @@ class TimelineBuilder {
         
         // Handle different parameter types
         switch (paramDef.type) {
+            case this.jsonBuilder.schemaValidator.parameterTypes.IMAGE: {
+                const safeVal = (displayValue === undefined || displayValue === null) ? '' : String(displayValue);
+                const helpId = `${inputId}__help`;
+                const fileId = `${inputId}__file`;
+                const previewId = `${inputId}__preview`;
+                const clearId = `${inputId}__clear`;
+
+                return `
+                    <div class="d-flex flex-column gap-2">
+                        <div class="input-group">
+                            <span class="input-group-text">URL</span>
+                            <input type="text" class="form-control ${disabledClass}" id="${inputId}" value="${this.escapeHtmlAttr(safeVal)}" ${disabledAttr} aria-describedby="${helpId}">
+                        </div>
+
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <input type="file" class="form-control form-control-sm ${disabledClass}" id="${fileId}" accept="image/*" ${disabledAttr}
+                                   data-psy-image-file="1" data-psy-image-param="${this.escapeHtmlAttr(String(paramName))}" style="max-width: 360px;">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="${clearId}" ${disabledAttr}
+                                    data-psy-image-clear="1" data-psy-image-param="${this.escapeHtmlAttr(String(paramName))}">
+                                Clear local file
+                            </button>
+                            <small class="text-muted" id="${helpId}">
+                                Tip: choose a local file to preview; it is stored as <code>asset://...</code> until exported.
+                            </small>
+                        </div>
+
+                        <div>
+                            <div class="small text-muted mb-1">Preview</div>
+                            <div class="border rounded p-2" style="background:#fff;">
+                                <img id="${previewId}" alt="image preview" style="max-width: 100%; max-height: 320px; display:none;" />
+                                <div class="text-muted" data-psy-image-empty="1" style="display:none;">No image selected.</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
             case this.jsonBuilder.schemaValidator.parameterTypes.BOOL:
                 return `
                     <div class="form-check form-switch">
@@ -1048,6 +1089,48 @@ class TimelineBuilder {
             ].forEach(p => setParamVisible(p, showQuest));
         };
 
+        const updateGaborCueVisibility = () => {
+            if (!blockTypeEl) return;
+            const selected = blockTypeEl.value;
+
+            // If switching away from Gabor, ensure these are hidden.
+            if (selected !== 'gabor-trial' && selected !== 'gabor-quest') {
+                [
+                    'gabor_spatial_cue_options',
+                    'gabor_spatial_cue_probability',
+                    'gabor_left_value_options',
+                    'gabor_right_value_options',
+                    'gabor_value_cue_probability'
+                ].forEach(p => setParamVisible(p, false));
+                return;
+            }
+
+            const spatialEnabledEl = formContainer.querySelector('#param_gabor_spatial_cue_enabled');
+            const spatialEnabled = spatialEnabledEl ? !!spatialEnabledEl.checked : true;
+            if (!spatialEnabled) {
+                const optsEl = formContainer.querySelector('#param_gabor_spatial_cue_options');
+                const probEl = formContainer.querySelector('#param_gabor_spatial_cue_probability');
+                if (optsEl) optsEl.value = 'none,left,right,both';
+                if (probEl) probEl.value = '1';
+            }
+            setParamVisible('gabor_spatial_cue_options', spatialEnabled);
+            setParamVisible('gabor_spatial_cue_probability', spatialEnabled);
+
+            const valueEnabledEl = formContainer.querySelector('#param_gabor_value_cue_enabled');
+            const valueEnabled = valueEnabledEl ? !!valueEnabledEl.checked : true;
+            if (!valueEnabled) {
+                const lvEl = formContainer.querySelector('#param_gabor_left_value_options');
+                const rvEl = formContainer.querySelector('#param_gabor_right_value_options');
+                const probEl = formContainer.querySelector('#param_gabor_value_cue_probability');
+                if (lvEl) lvEl.value = 'neutral,high,low';
+                if (rvEl) rvEl.value = 'neutral,high,low';
+                if (probEl) probEl.value = '1';
+            }
+            setParamVisible('gabor_left_value_options', valueEnabled);
+            setParamVisible('gabor_right_value_options', valueEnabled);
+            setParamVisible('gabor_value_cue_probability', valueEnabled);
+        };
+
         const updateBlockVisibility = () => {
             if (!blockTypeEl) return;
             const selected = blockTypeEl.value;
@@ -1096,6 +1179,7 @@ class TimelineBuilder {
             if (selected === 'gabor-trial' || selected === 'gabor-quest') {
                 updateGaborBlockKeyVisibility();
                 updateGaborQuestVisibility();
+                updateGaborCueVisibility();
             }
         };
 
@@ -1122,6 +1206,17 @@ class TimelineBuilder {
                 gaborAdaptiveEl.addEventListener('change', updateGaborQuestVisibility);
                 updateGaborQuestVisibility();
             }
+
+            // Gabor block: cue-enabled toggles should show/hide their detail controls.
+            const spatialCueEnabledEl = formContainer.querySelector('#param_gabor_spatial_cue_enabled');
+            if (spatialCueEnabledEl) {
+                spatialCueEnabledEl.addEventListener('change', updateGaborCueVisibility);
+            }
+            const valueCueEnabledEl = formContainer.querySelector('#param_gabor_value_cue_enabled');
+            if (valueCueEnabledEl) {
+                valueCueEnabledEl.addEventListener('change', updateGaborCueVisibility);
+            }
+            updateGaborCueVisibility();
         }
 
         // Gabor trial: response task changes should re-evaluate key visibility.
@@ -1130,6 +1225,142 @@ class TimelineBuilder {
             gaborTrialTaskEl.addEventListener('change', updateGaborTrialKeyVisibility);
             updateGaborTrialKeyVisibility();
         }
+
+        // IMAGE parameters: local file picker + preview + cache binding
+        try {
+            this.setupImageParameterInputs(formContainer);
+        } catch (e) {
+            console.warn('Image parameter setup failed:', e);
+        }
+    }
+
+    ensureBuilderComponentId(componentEl) {
+        if (!componentEl) return null;
+        if (componentEl.dataset && componentEl.dataset.builderComponentId) {
+            return componentEl.dataset.builderComponentId;
+        }
+
+        let id = null;
+        try {
+            if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+                id = window.crypto.randomUUID();
+            }
+        } catch {
+            id = null;
+        }
+
+        if (!id) {
+            const rand = Math.floor(Math.random() * 1e9);
+            id = `comp_${Date.now()}_${rand}`;
+        }
+
+        try {
+            componentEl.dataset.builderComponentId = id;
+        } catch {
+            // ignore
+        }
+        return id;
+    }
+
+    parseAssetRef(ref) {
+        const s = (ref || '').toString();
+        const m = /^asset:\/\/([^/]+)\/([^/]+)$/.exec(s);
+        if (!m) return null;
+        return { componentId: m[1], field: m[2] };
+    }
+
+    setupImageParameterInputs(formContainer) {
+        if (!formContainer) return;
+
+        const componentEl = this.jsonBuilder.currentEditingComponent;
+        const componentId = this.ensureBuilderComponentId(componentEl);
+
+        const updatePreview = (paramName) => {
+            const inputId = `param_${paramName}`;
+            const urlEl = formContainer.querySelector(`#${CSS.escape(inputId)}`);
+            const previewEl = formContainer.querySelector(`#${CSS.escape(inputId)}__preview`);
+            const emptyEl = previewEl?.parentElement?.querySelector('[data-psy-image-empty="1"]');
+
+            const raw = urlEl ? (urlEl.value || '') : '';
+            let src = raw;
+
+            const parsed = this.parseAssetRef(raw);
+            if (parsed && window.PsychJsonAssetCache && typeof window.PsychJsonAssetCache.get === 'function') {
+                const entry = window.PsychJsonAssetCache.get(parsed.componentId, parsed.field);
+                if (entry && entry.objectUrl) {
+                    src = entry.objectUrl;
+                } else {
+                    src = '';
+                }
+            }
+
+            if (previewEl) {
+                if (src) {
+                    previewEl.src = src;
+                    previewEl.style.display = '';
+                    if (emptyEl) emptyEl.style.display = 'none';
+                } else {
+                    previewEl.removeAttribute('src');
+                    previewEl.style.display = 'none';
+                    if (emptyEl) emptyEl.style.display = '';
+                }
+            }
+        };
+
+        // Bind each IMAGE file input
+        const fileInputs = formContainer.querySelectorAll('input[type="file"][data-psy-image-file="1"]');
+        fileInputs.forEach((fileEl) => {
+            const paramName = fileEl.getAttribute('data-psy-image-param') || '';
+            if (!paramName) return;
+
+            // On file pick: store in cache and write asset:// ref into the URL input
+            fileEl.addEventListener('change', () => {
+                try {
+                    if (!componentId) return;
+                    const file = fileEl.files && fileEl.files[0] ? fileEl.files[0] : null;
+
+                    const urlInput = formContainer.querySelector(`#${CSS.escape(`param_${paramName}`)}`);
+                    if (!urlInput) return;
+
+                    if (file && window.PsychJsonAssetCache && typeof window.PsychJsonAssetCache.put === 'function') {
+                        window.PsychJsonAssetCache.put(componentId, paramName, file);
+                        urlInput.value = `asset://${componentId}/${paramName}`;
+                    }
+
+                    updatePreview(paramName);
+                } catch (e) {
+                    console.warn('Failed to bind image file:', e);
+                }
+            });
+
+            // Initial preview (in case the field already contains asset://...)
+            updatePreview(paramName);
+        });
+
+        // Clear local file button
+        const clearButtons = formContainer.querySelectorAll('button[data-psy-image-clear="1"]');
+        clearButtons.forEach((btn) => {
+            const paramName = btn.getAttribute('data-psy-image-param') || '';
+            if (!paramName) return;
+            btn.addEventListener('click', () => {
+                try {
+                    const urlInput = formContainer.querySelector(`#${CSS.escape(`param_${paramName}`)}`);
+                    const fileInput = formContainer.querySelector(`#${CSS.escape(`param_${paramName}`)}__file`);
+                    if (fileInput) fileInput.value = '';
+
+                    // If it's an asset ref, delete from cache
+                    const parsed = this.parseAssetRef(urlInput ? urlInput.value : '');
+                    if (parsed && window.PsychJsonAssetCache && typeof window.PsychJsonAssetCache.deleteEntry === 'function') {
+                        window.PsychJsonAssetCache.deleteEntry(parsed.componentId, parsed.field);
+                    }
+
+                    if (urlInput) urlInput.value = '';
+                    updatePreview(paramName);
+                } catch (e) {
+                    console.warn('Failed to clear image asset:', e);
+                }
+            });
+        });
     }
 
     saveComponentParameters() {
@@ -1195,7 +1426,21 @@ class TimelineBuilder {
                 return;
             }
 
+            // Skip helper inputs for IMAGE parameters (file picker, etc.)
+            try {
+                if (input.matches && input.matches('[data-psy-image-file="1"]')) {
+                    return;
+                }
+            } catch {
+                // ignore
+            }
+
             const paramName = input.id.replace('param_', '');
+
+            // Skip IMAGE helper ids
+            if (paramName.endsWith('__file') || paramName.endsWith('__preview')) {
+                return;
+            }
 
             // Skip COLOR helper hex inputs (UI-only)
             if (paramName.endsWith('_hex')) {
@@ -1221,6 +1466,24 @@ class TimelineBuilder {
 
             newParameters[paramName] = value;
         });
+
+        // Gabor block cue toggles: when disabled, reset dependent fields so the saved component stays clean.
+        if ((currentData.type || '') === 'block') {
+            const blockType = (newParameters.block_component_type ?? currentData.block_component_type ?? '').toString();
+            const isGaborBlock = (blockType === 'gabor-trial' || blockType === 'gabor-quest');
+
+            if (isGaborBlock) {
+                if (newParameters.gabor_spatial_cue_enabled === false) {
+                    newParameters.gabor_spatial_cue_options = 'none,left,right,both';
+                    newParameters.gabor_spatial_cue_probability = 1;
+                }
+                if (newParameters.gabor_value_cue_enabled === false) {
+                    newParameters.gabor_left_value_options = 'neutral,high,low';
+                    newParameters.gabor_right_value_options = 'neutral,high,low';
+                    newParameters.gabor_value_cue_probability = 1;
+                }
+            }
+        }
 
         console.log('Collected parameters:', newParameters);
 
@@ -1414,6 +1677,32 @@ class TimelineBuilder {
                     ...currentData, // Include any other existing properties
                     ...newParameters // Override with new parameters
                 };
+            }
+
+            // WCST-like: keep output clean when toggling response device.
+            // If the user switches to mouse, remove keyboard-only choice_keys.
+            // If the user switches to keyboard, remove mouse-only mouse_response_mode.
+            try {
+                const isWcst = (updatedData.type === 'soc-subtask-wcst-like' || updatedData.type === 'wcst-like');
+                if (isWcst) {
+                    const rawDevice = (updatedData.response_device ?? currentData.response_device ?? 'keyboard').toString().trim().toLowerCase();
+                    const device = (rawDevice === 'mouse') ? 'mouse' : 'keyboard';
+
+                    const containers = [];
+                    if (updatedData && typeof updatedData === 'object') containers.push(updatedData);
+                    if (updatedData.parameters && typeof updatedData.parameters === 'object') containers.push(updatedData.parameters);
+
+                    for (const c of containers) {
+                        if (!c || typeof c !== 'object') continue;
+                        if (device === 'mouse') {
+                            if (Object.prototype.hasOwnProperty.call(c, 'choice_keys')) delete c.choice_keys;
+                        } else {
+                            if (Object.prototype.hasOwnProperty.call(c, 'mouse_response_mode')) delete c.mouse_response_mode;
+                        }
+                    }
+                }
+            } catch {
+                // ignore
             }
             
             // Final safety check - ensure type is never lost

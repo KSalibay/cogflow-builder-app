@@ -33,7 +33,6 @@ class JsonBuilder {
         this.onDataCollectionChange = this.onDataCollectionChange.bind(this);
         this.onTaskTypeChange = this.onTaskTypeChange.bind(this);
     }
-
     /**
      * Show/hide UI sections based on current settings
      */
@@ -86,6 +85,43 @@ class JsonBuilder {
         }
     }
 
+    applyGaborPatchBorderVisibility() {
+        const enabled = !!document.getElementById('gaborPatchBorderEnabled')?.checked;
+        const details = document.getElementById('gaborPatchBorderDetails');
+        if (!details) return;
+        details.style.display = enabled ? '' : 'none';
+    }
+
+    applyGaborCueVisibility() {
+        const spatialEnabled = !!document.getElementById('gaborSpatialCueEnabled')?.checked;
+        const spatialDetails = document.getElementById('gaborSpatialCueDetails');
+
+        if (!spatialEnabled) {
+            const opts = document.getElementById('gaborSpatialCueOptions');
+            const prob = document.getElementById('gaborSpatialCueProbability');
+            if (opts) opts.value = 'none,left,right,both';
+            if (prob) prob.value = '1';
+        }
+        if (spatialDetails) {
+            spatialDetails.style.display = spatialEnabled ? '' : 'none';
+        }
+
+        const valueEnabled = !!document.getElementById('gaborValueCueEnabled')?.checked;
+        const valueDetails = document.getElementById('gaborValueCueDetails');
+
+        if (!valueEnabled) {
+            const lv = document.getElementById('gaborLeftValueOptions');
+            const rv = document.getElementById('gaborRightValueOptions');
+            const prob = document.getElementById('gaborValueCueProbability');
+            if (lv) lv.value = 'neutral,high,low';
+            if (rv) rv.value = 'neutral,high,low';
+            if (prob) prob.value = '1';
+        }
+        if (valueDetails) {
+            valueDetails.style.display = valueEnabled ? '' : 'none';
+        }
+    }
+
     bindGaborSettingsUI() {
         const responseTaskEl = document.getElementById('gaborResponseTask');
         if (!responseTaskEl) return;
@@ -93,6 +129,8 @@ class JsonBuilder {
         // Prevent stacking listeners across re-renders.
         if (responseTaskEl.dataset.bound === '1') {
             this.applyGaborResponseTaskVisibility();
+            this.applyGaborPatchBorderVisibility();
+            this.applyGaborCueVisibility();
             return;
         }
 
@@ -102,7 +140,155 @@ class JsonBuilder {
             this.updateJSON();
         });
 
+        const borderToggleEl = document.getElementById('gaborPatchBorderEnabled');
+        if (borderToggleEl && borderToggleEl.dataset.bound !== '1') {
+            borderToggleEl.dataset.bound = '1';
+            borderToggleEl.addEventListener('change', () => {
+                this.applyGaborPatchBorderVisibility();
+                this.updateJSON();
+            });
+        }
+
+        const spatialCueToggleEl = document.getElementById('gaborSpatialCueEnabled');
+        if (spatialCueToggleEl && spatialCueToggleEl.dataset.bound !== '1') {
+            spatialCueToggleEl.dataset.bound = '1';
+            spatialCueToggleEl.addEventListener('change', () => {
+                this.applyGaborCueVisibility();
+                this.updateJSON();
+            });
+        }
+
+        const valueCueToggleEl = document.getElementById('gaborValueCueEnabled');
+        if (valueCueToggleEl && valueCueToggleEl.dataset.bound !== '1') {
+            valueCueToggleEl.dataset.bound = '1';
+            valueCueToggleEl.addEventListener('change', () => {
+                this.applyGaborCueVisibility();
+                this.updateJSON();
+            });
+        }
+
         this.applyGaborResponseTaskVisibility();
+        this.applyGaborPatchBorderVisibility();
+        this.applyGaborCueVisibility();
+    }
+
+    findRewardSettingsTimelineElements() {
+        const timelineContainer = document.getElementById('timelineComponents');
+        if (!timelineContainer) return [];
+
+        const els = Array.from(timelineContainer.querySelectorAll('.timeline-component'));
+        const matches = [];
+
+        for (const el of els) {
+            const directType = el.dataset.componentType;
+            if (directType === 'reward-settings') {
+                matches.push(el);
+                continue;
+            }
+            try {
+                const d = JSON.parse(el.dataset.componentData || '{}');
+                if (d && d.type === 'reward-settings') matches.push(el);
+            } catch {
+                // ignore
+            }
+        }
+
+        return matches;
+    }
+
+    syncRewardsToggleFromTimeline() {
+        const toggle = document.getElementById('rewardsEnabled');
+        if (!toggle) return;
+        const any = this.findRewardSettingsTimelineElements().length > 0;
+        toggle.checked = any;
+    }
+
+    applyRewardsEnabled(enabled) {
+        const timelineContainer = document.getElementById('timelineComponents');
+        if (!timelineContainer) return;
+
+        const existing = this.findRewardSettingsTimelineElements();
+
+        if (enabled) {
+            if (existing.length > 0) return;
+
+            // Build a component definition from the library (so defaults stay consistent).
+            const defs = this.getComponentDefinitions();
+            const rewardDef = defs.find(d => d && (d.id === 'reward-settings' || d.type === 'reward-settings'));
+            if (!rewardDef) {
+                console.warn('Reward Settings component definition not found');
+                return;
+            }
+
+            // Add via the normal path (creates DOM + componentData).
+            this.addComponentToTimeline(rewardDef);
+
+            // Move it near the top: after any instruction-like prefaces, otherwise first.
+            const added = this.findRewardSettingsTimelineElements().slice(-1)[0];
+            if (added) {
+                added.dataset.autoAddedByRewardsToggle = '1';
+
+                const items = Array.from(timelineContainer.querySelectorAll('.timeline-component'));
+                const instructionLike = items.filter(el => {
+                    const t = el.dataset.componentType;
+                    const builderId = el.dataset.builderComponentId;
+                    return t === 'html-keyboard-response' && (builderId === 'instructions' || builderId === 'eye-tracking-calibration-instructions');
+                });
+
+                const anchor = instructionLike.length > 0 ? instructionLike[instructionLike.length - 1] : null;
+                if (anchor && anchor.nextSibling) {
+                    timelineContainer.insertBefore(added, anchor.nextSibling);
+                } else if (anchor) {
+                    timelineContainer.appendChild(added);
+                } else {
+                    const first = timelineContainer.querySelector('.timeline-component');
+                    if (first) timelineContainer.insertBefore(added, first);
+                }
+            }
+
+            // Hide empty-state if needed
+            const emptyState = timelineContainer.querySelector('.empty-timeline');
+            if (emptyState) emptyState.style.display = 'none';
+            return;
+        }
+
+        // Disable: remove all reward-settings components.
+        for (const el of existing) {
+            el.remove();
+        }
+
+        // Restore empty state if needed
+        const hasAny = timelineContainer.querySelector('.timeline-component');
+        const emptyState = timelineContainer.querySelector('.empty-timeline');
+        if (emptyState) emptyState.style.display = hasAny ? 'none' : '';
+    }
+
+    bindRewardsToggleUI() {
+        const toggle = document.getElementById('rewardsEnabled');
+        if (!toggle) return;
+
+        // Rewards are currently implemented for trial-based timelines.
+        if (this.experimentType !== 'trial-based') {
+            toggle.disabled = true;
+            toggle.checked = false;
+            toggle.title = 'Rewards are currently supported in trial-based experiments.';
+            return;
+        }
+
+        toggle.disabled = false;
+        toggle.title = '';
+
+        // Ensure UI reflects timeline state when panel is re-rendered.
+        this.syncRewardsToggleFromTimeline();
+
+        if (toggle.dataset.bound === '1') return;
+        toggle.dataset.bound = '1';
+
+        toggle.addEventListener('change', () => {
+            const enabled = !!toggle.checked;
+            this.applyRewardsEnabled(enabled);
+            this.updateJSON();
+        });
     }
 
     /**
@@ -129,7 +315,6 @@ class JsonBuilder {
         
         console.log('PsychJSON Builder initialized successfully');
     }
-
     /**
      * Initialize all modules
      */
@@ -164,6 +349,14 @@ class JsonBuilder {
         const taskTypeEl = document.getElementById('taskType');
         if (taskTypeEl) {
             taskTypeEl.addEventListener('change', this.onTaskTypeChange);
+        }
+
+        // Experiment theme dropdown
+        const themeEl = document.getElementById('experimentTheme');
+        if (themeEl) {
+            themeEl.addEventListener('change', () => {
+                this.updateJSON();
+            });
         }
 
         // Main action buttons
@@ -449,7 +642,9 @@ class JsonBuilder {
             'html-button-response',
             'image-keyboard-response',
             'survey-response',
-            'instructions'
+            'instructions',
+            'visual-angle-calibration',
+            'reward-settings'
         ]);
         if (alwaysAllowed.has(type)) return true;
 
@@ -505,6 +700,10 @@ class JsonBuilder {
         if (taskType === 'soc-dashboard') {
             if (type === 'soc-dashboard') return true;
             if (type === 'soc-dashboard-icon') return true;
+            if (type === 'soc-subtask-sart-like') return true;
+            if (type === 'soc-subtask-flanker-like') return true;
+            if (type === 'soc-subtask-nback-like') return true;
+            if (type === 'soc-subtask-wcst-like') return true;
             return false;
         }
 
@@ -814,6 +1013,31 @@ class JsonBuilder {
                 </div>
 
                 <div class="parameter-row">
+                    <label class="parameter-label">Patch Border:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="gaborPatchBorderEnabled" checked>
+                            <label class="form-check-label" for="gaborPatchBorderEnabled">Draw circular border around each patch</label>
+                        </div>
+                    </div>
+                    <div class="parameter-help">Controls the circle border drawn around the Gabor stimulus + mask</div>
+                </div>
+                <div id="gaborPatchBorderDetails">
+                <div class="parameter-row">
+                    <label class="parameter-label">Border Width (px):</label>
+                    <input type="number" class="form-control parameter-input" id="gaborPatchBorderWidthPx" value="2" min="0" max="50" step="1">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Border Color:</label>
+                    <input type="color" class="form-control parameter-input" id="gaborPatchBorderColor" value="#ffffff">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Border Opacity (0–1):</label>
+                    <input type="number" class="form-control parameter-input" id="gaborPatchBorderOpacity" value="0.22" min="0" max="1" step="0.01">
+                </div>
+                </div>
+
+                <div class="parameter-row">
                     <label class="parameter-label">Spatial Frequency (cyc/px):</label>
                     <input type="number" class="form-control parameter-input" id="gaborSpatialFrequency" value="0.06" min="0.001" max="0.5" step="0.001">
                     <div class="parameter-help">Spatial frequency of the grating carrier (Gaussian envelope)</div>
@@ -829,9 +1053,66 @@ class JsonBuilder {
                 </div>
 
                 <div class="parameter-row">
+                    <label class="parameter-label">Patch Diameter (deg):</label>
+                    <input type="number" class="form-control parameter-input" id="gaborPatchDiameterDeg" value="6" min="0.1" max="60" step="0.1">
+                    <div class="parameter-help">Primary size control: patch diameter in degrees of visual angle. For true degree-based sizing, add a Visual Angle Calibration component before Gabor trials/blocks.</div>
+                </div>
+
+                <div class="parameter-row">
                     <label class="parameter-label">Spatial Cue Validity (0–1):</label>
                     <input type="number" class="form-control parameter-input" id="gaborSpatialCueValidity" value="0.8" min="0" max="1" step="0.01">
                     <div class="parameter-help">Directional arrow indicates this probability the target is at the cued location</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Spatial Cue Enabled:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="gaborSpatialCueEnabled" checked>
+                            <label class="form-check-label" for="gaborSpatialCueEnabled">Enable</label>
+                        </div>
+                    </div>
+                    <div class="parameter-help">Gabor: enable sampling spatial cue presence per trial (when false: spatial_cue forced to none)</div>
+                </div>
+                <div id="gaborSpatialCueDetails">
+                    <div class="parameter-row">
+                        <label class="parameter-label">Spatial Cue Options:</label>
+                        <input type="text" class="form-control parameter-input" id="gaborSpatialCueOptions" value="none,left,right,both">
+                        <div class="parameter-help">Gabor: comma-separated spatial cue options to sample from. Allowed: none, left, right, both.</div>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Spatial Cue Probability:</label>
+                        <input type="number" class="form-control parameter-input" id="gaborSpatialCueProbability" value="1" min="0" max="1" step="0.01">
+                        <div class="parameter-help">Gabor: probability a trial contains a spatial cue (0–1)</div>
+                    </div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Value Cue Enabled:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="gaborValueCueEnabled" checked>
+                            <label class="form-check-label" for="gaborValueCueEnabled">Enable</label>
+                        </div>
+                    </div>
+                    <div class="parameter-help">Gabor: enable sampling value cue presence per trial (when false: left/right_value forced to neutral)</div>
+                </div>
+                <div id="gaborValueCueDetails">
+                    <div class="parameter-row">
+                        <label class="parameter-label">Left Value Options:</label>
+                        <input type="text" class="form-control parameter-input" id="gaborLeftValueOptions" value="neutral,high,low">
+                        <div class="parameter-help">Gabor: comma-separated left value cue options to sample from. Allowed: neutral, high, low.</div>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Right Value Options:</label>
+                        <input type="text" class="form-control parameter-input" id="gaborRightValueOptions" value="neutral,high,low">
+                        <div class="parameter-help">Gabor: comma-separated right value cue options to sample from. Allowed: neutral, high, low.</div>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Value Cue Probability:</label>
+                        <input type="number" class="form-control parameter-input" id="gaborValueCueProbability" value="1" min="0" max="1" step="0.01">
+                        <div class="parameter-help">Gabor: probability a trial contains value cues (0–1)</div>
+                    </div>
                 </div>
 
                 <div class="parameter-row">
@@ -980,6 +1261,16 @@ class JsonBuilder {
                             <label class="form-check-label" for="randomizeOrder">Enable randomization</label>
                         </div>
                     </div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Rewards Enabled:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="rewardsEnabled">
+                            <label class="form-check-label" for="rewardsEnabled">Enable rewards</label>
+                        </div>
+                    </div>
+                    <div class="parameter-help">When enabled, the Builder adds a Reward Settings component to the timeline so reward policy doesn’t clutter experiment-wide defaults.</div>
                 </div>
             </div>
             
@@ -1212,6 +1503,9 @@ class JsonBuilder {
 
         // Task-specific conditional UI (Gabor response keys)
         this.bindGaborSettingsUI();
+
+        // Rewards toggle (experiment-wide)
+        this.bindRewardsToggleUI();
         
         // Add specific listener for coherence slider
         const coherenceSlider = document.getElementById('motionCoherence');
@@ -1409,6 +1703,30 @@ class JsonBuilder {
                 </div>
 
                 <div class="parameter-row">
+                    <label class="parameter-label">Patch Border:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="gaborPatchBorderEnabled" checked>
+                            <label class="form-check-label" for="gaborPatchBorderEnabled">Draw circular border around each patch</label>
+                        </div>
+                    </div>
+                </div>
+                <div id="gaborPatchBorderDetails">
+                <div class="parameter-row">
+                    <label class="parameter-label">Border Width (px):</label>
+                    <input type="number" class="form-control parameter-input" id="gaborPatchBorderWidthPx" value="2" min="0" max="50" step="1">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Border Color:</label>
+                    <input type="color" class="form-control parameter-input" id="gaborPatchBorderColor" value="#ffffff">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Border Opacity (0–1):</label>
+                    <input type="number" class="form-control parameter-input" id="gaborPatchBorderOpacity" value="0.22" min="0" max="1" step="0.01">
+                </div>
+                </div>
+
+                <div class="parameter-row">
                     <label class="parameter-label">Spatial Frequency (cyc/px):</label>
                     <input type="number" class="form-control parameter-input" id="gaborSpatialFrequency" value="0.06" min="0.001" max="0.5" step="0.001">
                 </div>
@@ -1424,6 +1742,57 @@ class JsonBuilder {
                 <div class="parameter-row">
                     <label class="parameter-label">Spatial Cue Validity (0–1):</label>
                     <input type="number" class="form-control parameter-input" id="gaborSpatialCueValidity" value="0.8" min="0" max="1" step="0.01">
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Spatial Cue Enabled:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="gaborSpatialCueEnabled" checked>
+                            <label class="form-check-label" for="gaborSpatialCueEnabled">Enable</label>
+                        </div>
+                    </div>
+                    <div class="parameter-help">Gabor: enable sampling spatial cue presence per trial (when false: spatial_cue forced to none)</div>
+                </div>
+                <div id="gaborSpatialCueDetails">
+                    <div class="parameter-row">
+                        <label class="parameter-label">Spatial Cue Options:</label>
+                        <input type="text" class="form-control parameter-input" id="gaborSpatialCueOptions" value="none,left,right,both">
+                        <div class="parameter-help">Gabor: comma-separated spatial cue options to sample from. Allowed: none, left, right, both.</div>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Spatial Cue Probability:</label>
+                        <input type="number" class="form-control parameter-input" id="gaborSpatialCueProbability" value="1" min="0" max="1" step="0.01">
+                        <div class="parameter-help">Gabor: probability a trial contains a spatial cue (0–1)</div>
+                    </div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Value Cue Enabled:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="gaborValueCueEnabled" checked>
+                            <label class="form-check-label" for="gaborValueCueEnabled">Enable</label>
+                        </div>
+                    </div>
+                    <div class="parameter-help">Gabor: enable sampling value cue presence per trial (when false: left/right_value forced to neutral)</div>
+                </div>
+                <div id="gaborValueCueDetails">
+                    <div class="parameter-row">
+                        <label class="parameter-label">Left Value Options:</label>
+                        <input type="text" class="form-control parameter-input" id="gaborLeftValueOptions" value="neutral,high,low">
+                        <div class="parameter-help">Gabor: comma-separated left value cue options to sample from. Allowed: neutral, high, low.</div>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Right Value Options:</label>
+                        <input type="text" class="form-control parameter-input" id="gaborRightValueOptions" value="neutral,high,low">
+                        <div class="parameter-help">Gabor: comma-separated right value cue options to sample from. Allowed: neutral, high, low.</div>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Value Cue Probability:</label>
+                        <input type="number" class="form-control parameter-input" id="gaborValueCueProbability" value="1" min="0" max="1" step="0.01">
+                        <div class="parameter-help">Gabor: probability a trial contains value cues (0–1)</div>
+                    </div>
                 </div>
 
                 <div class="parameter-row">
@@ -1568,6 +1937,16 @@ class JsonBuilder {
                     <label class="parameter-label">Update Interval (ms):</label>
                     <input type="number" class="form-control parameter-input" id="updateInterval" value="16" min="1">
                     <div class="parameter-help">Parameter update interval in milliseconds</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Rewards Enabled:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="rewardsEnabled">
+                            <label class="form-check-label" for="rewardsEnabled">Enable rewards</label>
+                        </div>
+                    </div>
+                    <div class="parameter-help">When enabled, the Builder adds a Reward Settings component to the timeline so reward policy doesn’t clutter experiment-wide defaults.</div>
                 </div>
             </div>
 
@@ -1793,6 +2172,9 @@ class JsonBuilder {
 
         // Task-specific conditional UI (Gabor response keys)
         this.bindGaborSettingsUI();
+
+        // Rewards toggle (experiment-wide)
+        this.bindRewardsToggleUI();
         
         // Add specific listener for coherence slider
         const coherenceSlider = document.getElementById('motionCoherence');
@@ -1826,6 +2208,44 @@ class JsonBuilder {
     getComponentDefinitions() {
         const taskType = document.getElementById('taskType')?.value || 'rdm';
         const unitName = (this.experimentType === 'continuous') ? 'Frame' : 'Trial';
+
+        const createComponentDefFromSchema = (schemaId, { name, icon, description, category } = {}) => {
+            const schema = this.schemaValidator?.pluginSchemas?.[schemaId];
+            const params = {};
+
+            const mapType = (t) => {
+                const s = (t ?? '').toString();
+                if (s === 'BOOL') return 'boolean';
+                if (s === 'SELECT') return 'select';
+                if (s === 'INT' || s === 'FLOAT') return 'number';
+                if (s === 'COLOR') return 'COLOR';
+                // HTML_STRING / STRING / IMAGE => edit as string in Builder (IMAGE gets special handling)
+                if (s === 'HTML_STRING' || s === 'STRING' || s === 'IMAGE') return 'string';
+                return 'string';
+            };
+
+            if (schema && schema.parameters && typeof schema.parameters === 'object') {
+                for (const [key, def] of Object.entries(schema.parameters)) {
+                    if (!def || typeof def !== 'object') continue;
+                    const out = { type: mapType(def.type), default: def.default };
+                    if (Array.isArray(def.options)) out.options = def.options;
+                    if (def.min !== undefined) out.min = def.min;
+                    if (def.max !== undefined) out.max = def.max;
+                    if (def.step !== undefined) out.step = def.step;
+                    params[key] = out;
+                }
+            }
+
+            return {
+                id: schemaId,
+                name: name || schema?.name || schemaId,
+                icon: icon || 'fas fa-puzzle-piece',
+                description: description || schema?.description || '',
+                category: category || 'task',
+                type: schemaId,
+                parameters: params
+            };
+        };
 
         const createBlockComponentDef = (currentTaskType) => {
             const baseOptions = (currentTaskType === 'flanker')
@@ -1890,13 +2310,25 @@ class JsonBuilder {
                 gabor_target_location_options: { type: 'string', default: 'left,right' },
                 gabor_target_tilt_options: { type: 'string', default: '-45,45' },
                 gabor_distractor_orientation_options: { type: 'string', default: '0,90' },
+                gabor_spatial_cue_enabled: { type: 'boolean', default: true },
                 gabor_spatial_cue_options: { type: 'string', default: 'none,left,right,both' },
+                gabor_spatial_cue_probability: { type: 'number', default: 1, min: 0, max: 1, step: 0.01 },
+                gabor_value_cue_enabled: { type: 'boolean', default: true },
                 gabor_left_value_options: { type: 'string', default: 'neutral,high,low' },
                 gabor_right_value_options: { type: 'string', default: 'neutral,high,low' },
+                gabor_value_cue_probability: { type: 'number', default: 1, min: 0, max: 1, step: 0.01 },
 
                 gabor_spatial_frequency_min: { type: 'number', default: 0.06, min: 0.001, max: 0.5, step: 0.001 },
                 gabor_spatial_frequency_max: { type: 'number', default: 0.06, min: 0.001, max: 0.5, step: 0.001 },
                 gabor_grating_waveform_options: { type: 'string', default: 'sinusoidal' },
+
+                gabor_patch_diameter_deg_min: { type: 'number', default: 6, min: 0.1, max: 60, step: 0.1 },
+                gabor_patch_diameter_deg_max: { type: 'number', default: 6, min: 0.1, max: 60, step: 0.1 },
+
+                gabor_patch_border_enabled: { type: 'boolean', default: true },
+                gabor_patch_border_width_px: { type: 'number', default: 2, min: 0, max: 50, step: 1 },
+                gabor_patch_border_color: { type: 'COLOR', default: '#ffffff' },
+                gabor_patch_border_opacity: { type: 'number', default: 0.22, min: 0, max: 1, step: 0.01 },
 
                 // Optional adaptive staircase per-block (stored in exported block.parameter_values.adaptive)
                 gabor_adaptive_mode: { type: 'select', default: 'none', options: ['none', 'quest'] },
@@ -2016,6 +2448,7 @@ class JsonBuilder {
                 },
                 data: {
                     type: 'html-keyboard-response',
+                    auto_generated: true,
                     stimulus: 'Welcome to the experiment.\n\nPlease read the instructions carefully and press any key to continue.',
                     choices: 'ALL_KEYS',
                     prompt: '',
@@ -2051,8 +2484,191 @@ class JsonBuilder {
                         ]
                     }
                 }
+            },
+            {
+                id: 'visual-angle-calibration',
+                name: 'Visual Angle Calibration',
+                icon: 'fas fa-ruler-combined',
+                description: 'Calibrate screen px/cm and compute px/deg (ID/credit card on screen + distance choice; optional webcam preview)',
+                category: 'setup',
+                type: 'visual-angle-calibration',
+                parameters: {
+                    title: { type: 'string', default: 'Visual Angle Calibration' },
+                    instructions: { type: 'string', default: 'Place an ID/credit card flat against the screen and match the on-screen bar. Then estimate your viewing distance.' },
+
+                    object_preset: { type: 'select', default: 'id_card_long', options: ['id_card_long', 'id_card_short', 'custom'] },
+                    object_length_cm: { type: 'number', default: 8.56, min: 0.1, max: 100, step: 0.001 },
+
+                    distance_mode: { type: 'select', default: 'posture_choice', options: ['posture_choice', 'manual'] },
+
+                    close_label: { type: 'string', default: 'Close' },
+                    close_distance_cm: { type: 'number', default: 35, min: 1, max: 200, step: 0.1 },
+                    normal_label: { type: 'string', default: 'Normal' },
+                    normal_distance_cm: { type: 'number', default: 50, min: 1, max: 200, step: 0.1 },
+                    far_label: { type: 'string', default: 'Far' },
+                    far_distance_cm: { type: 'number', default: 65, min: 1, max: 200, step: 0.1 },
+
+                    manual_distance_default_cm: { type: 'number', default: 50, min: 1, max: 200, step: 0.1 },
+
+                    webcam_enabled: { type: 'boolean', default: false },
+                    webcam_facing_mode: { type: 'select', default: 'user', options: ['user', 'environment'] },
+
+                    store_key: { type: 'string', default: '__psy_visual_angle' }
+                }
+            },
+            {
+                id: 'reward-settings',
+                name: 'Reward Settings',
+                icon: 'fas fa-coins',
+                description: 'Define reward policy (RT/accuracy/both), thresholds, and optional end-of-experiment summary screen',
+                category: 'setup',
+                type: 'reward-settings',
+                parameters: {
+                    store_key: { type: 'string', default: '__psy_rewards' },
+                    currency_label: { type: 'string', default: 'points' },
+
+                    scoring_basis: { type: 'select', default: 'both', options: ['accuracy', 'reaction_time', 'both'] },
+                    rt_threshold_ms: { type: 'number', default: 600, min: 0, max: 60000, step: 1 },
+                    points_per_success: { type: 'number', default: 1, min: 0, max: 1000, step: 0.1 },
+                    require_correct_for_rt: { type: 'boolean', default: false },
+
+                    calculate_on_the_fly: { type: 'boolean', default: true },
+                    show_summary_at_end: { type: 'boolean', default: true },
+                    continue_key: { type: 'select', default: 'space', options: ['space', 'enter', 'ALL_KEYS'] },
+
+                    instructions_title: { type: 'string', default: 'Rewards' },
+                    instructions_template_html: {
+                        type: 'string',
+                        default: '<p>You can earn <b>{{currency_label}}</b> during this study.</p>\n<ul>\n<li><b>Basis</b>: {{scoring_basis_label}}</li>\n<li><b>RT threshold</b>: {{rt_threshold_ms}} ms</li>\n<li><b>Points per success</b>: {{points_per_success}}</li>\n</ul>\n<p>Press {{continue_key_label}} to begin.</p>'
+                    },
+
+                    summary_title: { type: 'string', default: 'Rewards Summary' },
+                    summary_template_html: {
+                        type: 'string',
+                        default: '<p><b>Total earned</b>: {{total_points}} {{currency_label}}</p>\n<p><b>Rewarded trials</b>: {{rewarded_trials}} / {{eligible_trials}}</p>\n<p>Press {{continue_key_label}} to finish.</p>'
+                    }
+                }
             }
         ];
+
+        // SOC Dashboard (continuous-only): add the SOC session + helper components.
+        if (taskType === 'soc-dashboard') {
+            baseComponents.push(
+                createComponentDefFromSchema('soc-dashboard', {
+                    name: `SOC Dashboard Session`,
+                    icon: 'fas fa-desktop',
+                    description: 'Windows-like SOC session shell (subtasks and icons are composed into this on export)',
+                    category: 'task'
+                }),
+                createComponentDefFromSchema('soc-dashboard-icon', {
+                    name: 'SOC Desktop Icon',
+                    icon: 'fas fa-icons',
+                    description: 'Builder-only: desktop icon composed into the SOC session at export',
+                    category: 'task'
+                }),
+                createComponentDefFromSchema('soc-subtask-sart-like', {
+                    name: 'SOC Subtask: SART-like',
+                    icon: 'fas fa-list-check',
+                    description: 'Builder-only: subtask window composed into the SOC session at export',
+                    category: 'task'
+                }),
+                createComponentDefFromSchema('soc-subtask-nback-like', {
+                    name: 'SOC Subtask: N-back-like',
+                    icon: 'fas fa-repeat',
+                    description: 'Builder-only: subtask window composed into the SOC session at export',
+                    category: 'task'
+                }),
+                createComponentDefFromSchema('soc-subtask-flanker-like', {
+                    name: 'SOC Subtask: Flanker-like',
+                    icon: 'fas fa-arrows-left-right',
+                    description: 'Builder-only: subtask window composed into the SOC session at export',
+                    category: 'task'
+                }),
+                createComponentDefFromSchema('soc-subtask-wcst-like', {
+                    name: 'SOC Subtask: WCST-like',
+                    icon: 'fas fa-shapes',
+                    description: 'Builder-only: subtask window composed into the SOC session at export',
+                    category: 'task'
+                })
+            );
+
+            // Keep generic stimulus components available while authoring SOC timelines.
+            baseComponents.push(
+                {
+                    id: 'html-keyboard-response',
+                    name: 'HTML + Keyboard',
+                    icon: 'fas fa-keyboard',
+                    description: 'Show HTML content and collect keyboard response',
+                    category: 'basic',
+                    parameters: {
+                        stimulus: { type: 'string', default: '<p>Press a key to continue.</p>' },
+                        choices: { type: 'select', default: 'ALL_KEYS', options: ['ALL_KEYS', 'space', 'enter', 'escape'] },
+                        prompt: { type: 'string', default: '' },
+                        stimulus_duration: { type: 'number', default: null, min: 0, max: 30000 },
+                        trial_duration: { type: 'number', default: null, min: 0, max: 60000 },
+                        response_ends_trial: { type: 'boolean', default: true }
+                    }
+                },
+                {
+                    id: 'image-keyboard-response',
+                    name: 'Image + Keyboard',
+                    icon: 'fas fa-image',
+                    description: 'Show image and collect keyboard response',
+                    category: 'stimulus',
+                    parameters: {
+                        stimulus: { type: 'string', default: 'img/sample.jpg' },
+                        choices: { type: 'array', default: ['f', 'j'] },
+                        stimulus_duration: { type: 'number', default: null },
+                        trial_duration: { type: 'number', default: null }
+                    }
+                },
+                {
+                    id: 'html-button-response',
+                    name: 'HTML + Button',
+                    icon: 'fas fa-mouse-pointer',
+                    description: 'Show HTML content and collect button response',
+                    category: 'stimulus',
+                    parameters: {
+                        stimulus: { type: 'string', default: '<p>Click a button</p>' },
+                        choices: { type: 'array', default: ['Option 1', 'Option 2'] },
+                        trial_duration: { type: 'number', default: null }
+                    }
+                }
+            );
+
+            // Data-collection components (same behavior as other tasks)
+            if (this.dataCollection['mouse-tracking']) {
+                baseComponents.push({
+                    id: 'mouse-tracking',
+                    name: 'Mouse Tracking',
+                    icon: 'fas fa-mouse',
+                    description: 'Track mouse movement and clicks',
+                    category: 'tracking',
+                    parameters: {
+                        track_movement: { type: 'boolean', default: true },
+                        track_clicks: { type: 'boolean', default: true },
+                        sampling_rate: { type: 'number', default: 50 }
+                    }
+                });
+            }
+
+            if (this.dataCollection['eye-tracking']) {
+                baseComponents.push({
+                    id: 'eye-tracking',
+                    name: 'Eye Tracking',
+                    icon: 'fas fa-eye',
+                    description: 'WebGazer-based eye tracking',
+                    category: 'tracking',
+                    parameters: {
+                        calibration_points: { type: 'number', default: 9 },
+                        prediction_points: { type: 'number', default: 50 },
+                        sample_rate: { type: 'number', default: 30 }
+                    }
+                });
+            }
+
+            return baseComponents;
+        }
 
         // For Flanker/SART/Gabor, show only task-appropriate components.
         if (taskType === 'flanker' || taskType === 'sart' || taskType === 'gabor') {
@@ -2121,12 +2737,19 @@ class JsonBuilder {
                         spatial_frequency_cyc_per_px: { type: 'number', default: 0.06, min: 0.001, max: 0.5, step: 0.001 },
                         grating_waveform: { type: 'select', default: 'sinusoidal', options: ['sinusoidal', 'square', 'triangle'] },
 
+                        patch_diameter_deg: { type: 'number', default: 6, min: 0.1, max: 60, step: 0.1 },
+
                         spatial_cue: { type: 'select', default: 'none', options: ['none', 'left', 'right', 'both'] },
                         left_value: { type: 'select', default: 'neutral', options: ['neutral', 'high', 'low'] },
                         right_value: { type: 'select', default: 'neutral', options: ['neutral', 'high', 'low'] },
 
                         stimulus_duration_ms: { type: 'number', default: 67, min: 0, max: 10000 },
                         mask_duration_ms: { type: 'number', default: 67, min: 0, max: 10000 },
+
+                        patch_border_enabled: { type: 'boolean', default: true },
+                        patch_border_width_px: { type: 'number', default: 2, min: 0, max: 50, step: 1 },
+                        patch_border_color: { type: 'COLOR', default: '#ffffff' },
+                        patch_border_opacity: { type: 'number', default: 0.22, min: 0, max: 1, step: 0.01 },
 
                         detection_response_task_enabled: { type: 'boolean', default: false }
                     }
@@ -2546,6 +3169,11 @@ class JsonBuilder {
             // Ensure detection-response-task flag exists for traceability
             const instructionsData = {
                 ...(componentDef.data || {}),
+                // Default Instructions cards should follow the auto-generated template until a human edits them.
+                // Calibration preface instructions should not be auto-templated.
+                auto_generated: componentDef.id === 'instructions'
+                    ? !!(componentDef.data?.auto_generated ?? true)
+                    : false,
                 detection_response_task_enabled: !!(componentDef.data?.detection_response_task_enabled ?? false)
             };
             instructionsComponent.dataset.componentData = JSON.stringify(instructionsData);
@@ -2693,6 +3321,13 @@ class JsonBuilder {
      */
     clearTimeline() {
         if (confirm('Are you sure you want to clear the entire timeline?')) {
+            try {
+                if (window.PsychJsonAssetCache && typeof window.PsychJsonAssetCache.clearAll === 'function') {
+                    window.PsychJsonAssetCache.clearAll();
+                }
+            } catch {
+                // ignore
+            }
             this.timeline = [];
             this.componentCounter = 0;
             this.timelineBuilder.renderTimeline();
@@ -2721,10 +3356,18 @@ class JsonBuilder {
      */
     generateJSON() {
         const taskType = document.getElementById('taskType')?.value || 'rdm';
+        const theme = (document.getElementById('experimentTheme')?.value || 'dark').toString();
+        const rewardsEnabled = !!document.getElementById('rewardsEnabled')?.checked;
         const config = {
             experiment_type: this.experimentType,
             task_type: taskType,
             data_collection: { ...this.dataCollection },
+            ui_settings: {
+                theme: (theme === 'light') ? 'light' : 'dark'
+            },
+            reward_settings: {
+                enabled: rewardsEnabled
+            },
             timeline: this.getTimelineFromDOM()
         };
 
@@ -2838,6 +3481,15 @@ class JsonBuilder {
         }
 
         if (taskType === 'gabor') {
+            const parseStringList = (raw) => {
+                if (raw === undefined || raw === null) return [];
+                return raw
+                    .toString()
+                    .split(',')
+                    .map(s => s.trim())
+                    .filter(Boolean);
+            };
+
             const responseTask = document.getElementById('gaborResponseTask')?.value || 'discriminate_tilt';
             const leftKey = document.getElementById('gaborLeftKey')?.value || 'f';
             const rightKey = document.getElementById('gaborRightKey')?.value || 'j';
@@ -2851,6 +3503,21 @@ class JsonBuilder {
             const spatialCueValidity = (spatialCueValidityRaw !== undefined && spatialCueValidityRaw !== null && `${spatialCueValidityRaw}` !== '')
                 ? parseFloat(spatialCueValidityRaw)
                 : 0.8;
+
+            const spatialCueEnabled = !!document.getElementById('gaborSpatialCueEnabled')?.checked;
+            const spatialCueOptions = parseStringList(document.getElementById('gaborSpatialCueOptions')?.value || 'none,left,right,both');
+            const spatialCueProbRaw = document.getElementById('gaborSpatialCueProbability')?.value;
+            const spatialCueProb = (spatialCueProbRaw !== undefined && spatialCueProbRaw !== null && `${spatialCueProbRaw}` !== '')
+                ? parseFloat(spatialCueProbRaw)
+                : 1;
+
+            const valueCueEnabled = !!document.getElementById('gaborValueCueEnabled')?.checked;
+            const leftValueOptions = parseStringList(document.getElementById('gaborLeftValueOptions')?.value || 'neutral,high,low');
+            const rightValueOptions = parseStringList(document.getElementById('gaborRightValueOptions')?.value || 'neutral,high,low');
+            const valueCueProbRaw = document.getElementById('gaborValueCueProbability')?.value;
+            const valueCueProb = (valueCueProbRaw !== undefined && valueCueProbRaw !== null && `${valueCueProbRaw}` !== '')
+                ? parseFloat(valueCueProbRaw)
+                : 1;
 
             const fixationMsRaw = document.getElementById('gaborFixationMs')?.value;
             const placeholdersMsRaw = document.getElementById('gaborPlaceholdersMs')?.value;
@@ -2866,6 +3533,22 @@ class JsonBuilder {
                 : 0.06;
             const waveform = (document.getElementById('gaborGratingWaveform')?.value || 'sinusoidal').toString();
 
+            const patchDiameterDegRaw = document.getElementById('gaborPatchDiameterDeg')?.value;
+            const patchDiameterDeg = (patchDiameterDegRaw !== undefined && patchDiameterDegRaw !== null && `${patchDiameterDegRaw}` !== '')
+                ? parseFloat(patchDiameterDegRaw)
+                : 6;
+
+            const patchBorderEnabled = !!document.getElementById('gaborPatchBorderEnabled')?.checked;
+            const patchBorderWidthRaw = document.getElementById('gaborPatchBorderWidthPx')?.value;
+            const patchBorderWidth = (patchBorderWidthRaw !== undefined && patchBorderWidthRaw !== null && `${patchBorderWidthRaw}` !== '')
+                ? Number.parseInt(patchBorderWidthRaw, 10)
+                : 2;
+            const patchBorderColor = (document.getElementById('gaborPatchBorderColor')?.value || '#ffffff').toString();
+            const patchBorderOpacityRaw = document.getElementById('gaborPatchBorderOpacity')?.value;
+            const patchBorderOpacity = (patchBorderOpacityRaw !== undefined && patchBorderOpacityRaw !== null && `${patchBorderOpacityRaw}` !== '')
+                ? Number.parseFloat(patchBorderOpacityRaw)
+                : 0.22;
+
             config.gabor_settings = {
                 response_task: responseTask,
                 left_key: leftKey,
@@ -2879,7 +3562,23 @@ class JsonBuilder {
                 spatial_frequency_cyc_per_px: Number.isFinite(spatialFreq) ? spatialFreq : 0.06,
                 grating_waveform: waveform,
 
+                patch_diameter_deg: Number.isFinite(patchDiameterDeg) ? Math.max(0.1, patchDiameterDeg) : 6,
+
+                patch_border_enabled: patchBorderEnabled,
+                patch_border_width_px: Number.isFinite(patchBorderWidth) ? Math.max(0, Math.min(50, patchBorderWidth)) : 2,
+                patch_border_color: patchBorderColor,
+                patch_border_opacity: Number.isFinite(patchBorderOpacity) ? Math.max(0, Math.min(1, patchBorderOpacity)) : 0.22,
+
                 spatial_cue_validity: Number.isFinite(spatialCueValidity) ? spatialCueValidity : 0.8,
+
+                spatial_cue_enabled: spatialCueEnabled,
+                spatial_cue_probability: Number.isFinite(spatialCueProb) ? Math.max(0, Math.min(1, spatialCueProb)) : 1,
+                spatial_cue_options: Array.isArray(spatialCueOptions) ? spatialCueOptions : ['none', 'left', 'right', 'both'],
+
+                value_cue_enabled: valueCueEnabled,
+                value_cue_probability: Number.isFinite(valueCueProb) ? Math.max(0, Math.min(1, valueCueProb)) : 1,
+                left_value_options: Array.isArray(leftValueOptions) ? leftValueOptions : ['neutral', 'high', 'low'],
+                right_value_options: Array.isArray(rightValueOptions) ? rightValueOptions : ['neutral', 'high', 'low'],
 
                 fixation_ms: fixationMsRaw ? parseInt(fixationMsRaw) : 1000,
                 placeholders_ms: placeholdersMsRaw ? parseInt(placeholdersMsRaw) : 400,
@@ -2996,6 +3695,13 @@ class JsonBuilder {
         const yesKey = document.getElementById('gaborYesKey')?.value || 'f';
         const noKey = document.getElementById('gaborNoKey')?.value || 'j';
 
+        const patchDiameterDeg = Number.parseFloat(document.getElementById('gaborPatchDiameterDeg')?.value || '6');
+
+        const patchBorderEnabled = !!document.getElementById('gaborPatchBorderEnabled')?.checked;
+        const patchBorderWidth = Number.parseInt(document.getElementById('gaborPatchBorderWidthPx')?.value || '2', 10);
+        const patchBorderColor = (document.getElementById('gaborPatchBorderColor')?.value || '#ffffff').toString();
+        const patchBorderOpacity = Number.parseFloat(document.getElementById('gaborPatchBorderOpacity')?.value || '0.22');
+
         return {
             type: 'gabor-trial',
             name: 'Gabor Defaults',
@@ -3020,16 +3726,54 @@ class JsonBuilder {
             spatial_frequency_cyc_per_px: Number.parseFloat(document.getElementById('gaborSpatialFrequency')?.value || '0.06'),
             grating_waveform: (document.getElementById('gaborGratingWaveform')?.value || 'sinusoidal').toString(),
 
+            patch_diameter_deg: Number.isFinite(patchDiameterDeg) ? Math.max(0.1, patchDiameterDeg) : 6,
+
             // Optional colors to render value cues in preview
             high_value_color: document.getElementById('gaborHighValueColor')?.value || '#00aa00',
             low_value_color: document.getElementById('gaborLowValueColor')?.value || '#0066ff',
+
+            patch_border_enabled: patchBorderEnabled,
+            patch_border_width_px: Number.isFinite(patchBorderWidth) ? Math.max(0, Math.min(50, patchBorderWidth)) : 2,
+            patch_border_color: patchBorderColor,
+            patch_border_opacity: Number.isFinite(patchBorderOpacity) ? Math.max(0, Math.min(1, patchBorderOpacity)) : 0.22,
 
             detection_response_task_enabled: false
         };
     }
 
+    /**
+     * Build a preview payload for the current SOC Dashboard defaults.
+     */
+    getCurrentSocDashboardDefaults() {
+        return {
+            type: 'soc-dashboard',
+            name: 'SOC Dashboard Defaults',
+            title: (document.getElementById('socTitle')?.value || 'SOC Dashboard').toString(),
+            wallpaper_url: (document.getElementById('socWallpaperUrl')?.value || '').toString().trim(),
+            background_color: (document.getElementById('socBackgroundColor')?.value || '#0b1220').toString(),
+            default_app: (document.getElementById('socDefaultApp')?.value || 'soc').toString(),
+            num_tasks: parseInt(document.getElementById('socNumTasks')?.value || '1', 10),
+            trial_duration_ms: parseInt(document.getElementById('socSessionDurationMs')?.value || '60000', 10),
+            end_key: (document.getElementById('socEndKey')?.value || 'escape').toString(),
+            icons_clickable: !!document.getElementById('socIconsClickable')?.checked,
+            log_icon_clicks: !!document.getElementById('socLogIconClicks')?.checked,
+            icon_clicks_are_distractors: !!document.getElementById('socIconClicksAreDistractors')?.checked,
+            detection_response_task_enabled: false
+        };
+    }
+
+    getSocDashboardDefaultsForNewComponent() {
+        const d = this.getCurrentSocDashboardDefaults();
+        const { type, name, ...rest } = d;
+        // Ensure predictable arrays for composition/preview, even before export.
+        rest.desktop_icons = [];
+        rest.subtasks = [];
+        return rest;
+    }
+
     getGaborDefaultsForNewComponent() {
         // Defaults panel values; used when adding new Gabor timeline items.
+        const patchDiameterDeg = Number.parseFloat(document.getElementById('gaborPatchDiameterDeg')?.value || '6');
         return {
             response_task: document.getElementById('gaborResponseTask')?.value || 'discriminate_tilt',
             left_key: document.getElementById('gaborLeftKey')?.value || 'f',
@@ -3039,7 +3783,14 @@ class JsonBuilder {
             stimulus_duration_ms: parseInt(document.getElementById('gaborStimulusDurationMs')?.value || '67', 10),
             mask_duration_ms: parseInt(document.getElementById('gaborMaskDurationMs')?.value || '67', 10),
             spatial_frequency_cyc_per_px: Number.parseFloat(document.getElementById('gaborSpatialFrequency')?.value || '0.06'),
-            grating_waveform: (document.getElementById('gaborGratingWaveform')?.value || 'sinusoidal').toString()
+            grating_waveform: (document.getElementById('gaborGratingWaveform')?.value || 'sinusoidal').toString(),
+
+            patch_diameter_deg: Number.isFinite(patchDiameterDeg) ? Math.max(0.1, patchDiameterDeg) : 6,
+
+            patch_border_enabled: !!document.getElementById('gaborPatchBorderEnabled')?.checked,
+            patch_border_width_px: Number.parseInt(document.getElementById('gaborPatchBorderWidthPx')?.value || '2', 10),
+            patch_border_color: (document.getElementById('gaborPatchBorderColor')?.value || '#ffffff').toString(),
+            patch_border_opacity: Number.parseFloat(document.getElementById('gaborPatchBorderOpacity')?.value || '0.22')
         };
     }
 
@@ -3052,6 +3803,9 @@ class JsonBuilder {
         const freq = Number.parseFloat(document.getElementById('gaborSpatialFrequency')?.value || '0.06');
         const safeFreq = Number.isFinite(freq) ? freq : 0.06;
 
+        const pd = Number.parseFloat(document.getElementById('gaborPatchDiameterDeg')?.value || '6');
+        const safePd = Number.isFinite(pd) ? Math.max(0.1, pd) : 6;
+
         return {
             gabor_response_task: document.getElementById('gaborResponseTask')?.value || 'discriminate_tilt',
             gabor_left_key: document.getElementById('gaborLeftKey')?.value || 'f',
@@ -3062,6 +3816,23 @@ class JsonBuilder {
             gabor_spatial_frequency_min: safeFreq,
             gabor_spatial_frequency_max: safeFreq,
             gabor_grating_waveform_options: (document.getElementById('gaborGratingWaveform')?.value || 'sinusoidal').toString(),
+
+            gabor_patch_diameter_deg_min: safePd,
+            gabor_patch_diameter_deg_max: safePd,
+
+            gabor_patch_border_enabled: !!document.getElementById('gaborPatchBorderEnabled')?.checked,
+            gabor_patch_border_width_px: Number.parseInt(document.getElementById('gaborPatchBorderWidthPx')?.value || '2', 10),
+            gabor_patch_border_color: (document.getElementById('gaborPatchBorderColor')?.value || '#ffffff').toString(),
+            gabor_patch_border_opacity: Number.parseFloat(document.getElementById('gaborPatchBorderOpacity')?.value || '0.22'),
+
+            gabor_spatial_cue_enabled: !!document.getElementById('gaborSpatialCueEnabled')?.checked,
+            gabor_spatial_cue_options: (document.getElementById('gaborSpatialCueOptions')?.value || 'none,left,right,both').toString(),
+            gabor_spatial_cue_probability: Number.parseFloat(document.getElementById('gaborSpatialCueProbability')?.value || '1'),
+
+            gabor_value_cue_enabled: !!document.getElementById('gaborValueCueEnabled')?.checked,
+            gabor_left_value_options: (document.getElementById('gaborLeftValueOptions')?.value || 'neutral,high,low').toString(),
+            gabor_right_value_options: (document.getElementById('gaborRightValueOptions')?.value || 'neutral,high,low').toString(),
+            gabor_value_cue_probability: Number.parseFloat(document.getElementById('gaborValueCueProbability')?.value || '1'),
 
             gabor_adaptive_mode: 'none',
             gabor_quest_parameter: 'target_tilt_deg',
@@ -3647,6 +4418,14 @@ class JsonBuilder {
                 values.spatial_cue = Array.from(new Set(cues));
             }
 
+            if (blockComponent.gabor_spatial_cue_enabled !== undefined) {
+                values.spatial_cue_enabled = !!blockComponent.gabor_spatial_cue_enabled;
+            }
+            const pSpatial = Number(blockComponent.gabor_spatial_cue_probability);
+            if (Number.isFinite(pSpatial)) {
+                values.spatial_cue_probability = Math.max(0, Math.min(1, pSpatial));
+            }
+
             const lv = parseStringList(blockComponent.gabor_left_value_options);
             if (lv.length > 0) {
                 values.left_value = Array.from(new Set(lv));
@@ -3657,11 +4436,39 @@ class JsonBuilder {
                 values.right_value = Array.from(new Set(rv));
             }
 
+            if (blockComponent.gabor_value_cue_enabled !== undefined) {
+                values.value_cue_enabled = !!blockComponent.gabor_value_cue_enabled;
+            }
+            const pValue = Number(blockComponent.gabor_value_cue_probability);
+            if (Number.isFinite(pValue)) {
+                values.value_cue_probability = Math.max(0, Math.min(1, pValue));
+            }
+
             addWindow('spatial_frequency_cyc_per_px', blockComponent.gabor_spatial_frequency_min, blockComponent.gabor_spatial_frequency_max);
+
+            addWindow('patch_diameter_deg', blockComponent.gabor_patch_diameter_deg_min, blockComponent.gabor_patch_diameter_deg_max);
 
             const waveforms = parseStringList(blockComponent.gabor_grating_waveform_options);
             if (waveforms.length > 0) {
                 values.grating_waveform = Array.from(new Set(waveforms));
+            }
+
+            if (blockComponent.gabor_patch_border_enabled !== undefined) {
+                values.patch_border_enabled = !!blockComponent.gabor_patch_border_enabled;
+            }
+            const bw = Number(blockComponent.gabor_patch_border_width_px);
+            if (Number.isFinite(bw)) {
+                values.patch_border_width_px = Math.max(0, Math.min(50, bw));
+            }
+            const bc = (typeof blockComponent.gabor_patch_border_color === 'string')
+                ? blockComponent.gabor_patch_border_color.trim()
+                : '';
+            if (bc) {
+                values.patch_border_color = bc;
+            }
+            const bo = Number(blockComponent.gabor_patch_border_opacity);
+            if (Number.isFinite(bo)) {
+                values.patch_border_opacity = Math.max(0, Math.min(1, bo));
             }
 
             const adaptiveMode = isGaborQuestBlock
@@ -4156,7 +4963,15 @@ class JsonBuilder {
      * Add basic JSON syntax highlighting
      */
     highlightJSON(json) {
-        return json
+        // Important: JSON Preview is rendered via innerHTML.
+        // Escape HTML-sensitive characters first so that HTML embedded in JSON string
+        // values (e.g., Instructions stimulus) is shown literally and not interpreted.
+        const escaped = String(json)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+
+        return escaped
             .replace(/("([^"\\]|\\.)*")\s*:/g, '<span class="json-key">$1</span>:')
             .replace(/:\s*("([^"\\]|\\.)*")/g, ': <span class="json-string">$1</span>')
             .replace(/:\s*(\d+\.?\d*)/g, ': <span class="json-number">$1</span>')
@@ -4223,8 +5038,7 @@ class JsonBuilder {
      * Export JSON file
      */
     async exportJSON() {
-        const config = this.generateJSON();
-        const json = JSON.stringify(config, null, 2);
+        let config = this.generateJSON();
 
         const naming = this.getExportFilename(config);
         if (!naming) return;
@@ -4233,6 +5047,18 @@ class JsonBuilder {
         const graphClient = window.GraphSharePointClient;
         if (graphClient?.uploadJsonToOneDriveFolder) {
             try {
+                // Upload any cached local assets (images) referenced by asset://... in the config.
+                if (graphClient.uploadFileToOneDriveFolder && window.PsychJsonAssetCache) {
+                    try {
+                        config = await this.uploadAssetRefsToGraphAndRewriteConfig(config, naming, graphClient);
+                    } catch (e) {
+                        console.warn('Asset upload failed (continuing with JSON-only):', e);
+                        this.showValidationResult('warning', `Asset upload failed; exporting JSON only. (${e?.message || 'Unknown error'})`);
+                    }
+                }
+
+                const json = JSON.stringify(config, null, 2);
+
                 const runtime = graphClient.getRuntimeConfig?.() || {};
                 if (!runtime.clientId) {
                     const shouldConfigure = confirm(
@@ -4268,15 +5094,27 @@ class JsonBuilder {
             } catch (error) {
                 console.error('Graph export failed:', error);
                 this.showValidationResult('warning', `Graph export failed; falling back to local download. (${error?.message || 'Unknown error'})`);
-                return this.exportJSONLegacy({ json, filename: naming.filename });
+                return this.exportJSONLegacy({ json: JSON.stringify(config, null, 2), filename: naming.filename });
             }
         }
 
         // Fallback: local download + open SharePoint folder URL.
+        const json = JSON.stringify(config, null, 2);
         return this.exportJSONLegacy({ json, filename: naming.filename });
     }
 
     exportJSONLegacy({ json, filename }) {
+        // If the config contains asset:// refs, local download will not include the binary files.
+        // We warn so the researcher knows to use Graph export (or replace with URLs).
+        try {
+            const assetRefs = this.findAssetRefsInString(json);
+            if (assetRefs.length > 0) {
+                this.showValidationResult('warning', `This config references ${assetRefs.length} local asset(s) (asset://...). Use "Export to SharePoint" to upload images, or replace with URLs.`);
+            }
+        } catch {
+            // ignore
+        }
+
         this.downloadJsonToFile(json, filename);
 
         const sharepointUrl = this.getSharePointFolderUrl();
@@ -4290,6 +5128,95 @@ class JsonBuilder {
         } else {
             this.showValidationResult('success', `Saved ${filename}. (SharePoint URL not set.)`);
         }
+    }
+
+    findAssetRefsInString(rawText) {
+        const text = (rawText ?? '').toString();
+        const re = /asset:\/\/([A-Za-z0-9_-]+)\/([A-Za-z0-9_-]+)/g;
+        const out = [];
+        let m;
+        while ((m = re.exec(text)) !== null) {
+            out.push(`asset://${m[1]}/${m[2]}`);
+        }
+        return Array.from(new Set(out));
+    }
+
+    async uploadAssetRefsToGraphAndRewriteConfig(config, naming, graphClient) {
+        const cfg = (config && typeof config === 'object') ? config : {};
+        const jsonText = JSON.stringify(cfg);
+        const refs = this.findAssetRefsInString(jsonText);
+        if (refs.length === 0) return cfg;
+
+        const base = String(naming?.filename || 'export').replace(/\.json$/i, '');
+        const sanitizeFileName = (s) => {
+            return String(s || '')
+                .replace(/[^A-Za-z0-9._-]/g, '_')
+                .replace(/_+/g, '_')
+                .replace(/^_+|_+$/g, '')
+                .slice(0, 160) || 'asset';
+        };
+
+        const uploadedByRef = new Map();
+
+        for (const ref of refs) {
+            const m = /^asset:\/\/([^/]+)\/([^/]+)$/.exec(ref);
+            if (!m) continue;
+            const componentId = m[1];
+            const field = m[2];
+
+            const entry = window.PsychJsonAssetCache?.get?.(componentId, field);
+            const file = entry?.file;
+            if (!file) {
+                console.warn('Missing cached file for', ref);
+                continue;
+            }
+
+            const originalName = entry?.filename || file.name || `${field}`;
+            const extMatch = /\.[A-Za-z0-9]{1,8}$/.exec(originalName);
+            const ext = extMatch ? extMatch[0] : '';
+
+            const outName = sanitizeFileName(`${base}-asset-${componentId}-${field}`) + ext;
+
+            if (!uploadedByRef.has(ref)) {
+                await graphClient.uploadFileToOneDriveFolder({
+                    file,
+                    filename: outName,
+                    contentType: entry?.mime || file.type || 'application/octet-stream'
+                });
+                uploadedByRef.set(ref, outName);
+            }
+        }
+
+        // Rewrite any asset:// refs anywhere in the config (including HTML templates)
+        const replaceInString = (s) => {
+            const raw = (s ?? '').toString();
+            return raw.replace(/asset:\/\/([A-Za-z0-9_-]+)\/([A-Za-z0-9_-]+)/g, (full) => {
+                const mapped = uploadedByRef.get(full);
+                return mapped ? mapped : full;
+            });
+        };
+
+        const rewriteDeep = (x) => {
+            if (typeof x === 'string') return replaceInString(x);
+            if (Array.isArray(x)) return x.map(rewriteDeep);
+            if (x && typeof x === 'object') {
+                const out = {};
+                for (const [k, v] of Object.entries(x)) {
+                    out[k] = rewriteDeep(v);
+                }
+                return out;
+            }
+            return x;
+        };
+
+        const rewritten = rewriteDeep(cfg);
+        const uploadedCount = uploadedByRef.size;
+        if (uploadedCount > 0) {
+            this.showValidationResult('success', `Uploaded ${uploadedCount} image asset(s) referenced by asset://...`);
+        } else {
+            this.showValidationResult('warning', `Found ${refs.length} asset reference(s), but no cached files were available to upload.`);
+        }
+        return rewritten;
     }
 
     /**

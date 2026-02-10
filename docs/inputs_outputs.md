@@ -17,6 +17,8 @@ This document describes the *current* UI inputs and the JSON output produced by 
 - `experiment_type`: `trial-based` | `continuous`
 - `task_type`: `rdm` | `sart` | `flanker` | `stroop` | `nback` | `simon` | `custom`
 - `data_collection`: object of booleans
+- `ui_settings`: optional UI settings for the interpreter
+  - `theme`: `dark` | `light`
 - `timeline`: array of components (serialized from the DOM)
 - `display_parameters`, `aperture_parameters`, `dot_parameters`, `motion_parameters`, `timing_parameters`, `response_parameters`: experiment-wide defaults
 
