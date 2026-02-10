@@ -2616,7 +2616,7 @@ class JsonBuilder {
                     description: 'Show image and collect keyboard response',
                     category: 'stimulus',
                     parameters: {
-                        stimulus: { type: 'string', default: 'img/sample.jpg' },
+                        stimulus: { type: 'string', default: 'img/sitting.png' },
                         choices: { type: 'array', default: ['f', 'j'] },
                         stimulus_duration: { type: 'number', default: null },
                         trial_duration: { type: 'number', default: null }
@@ -2780,7 +2780,7 @@ class JsonBuilder {
                     description: 'Show image and collect keyboard response',
                     category: 'stimulus',
                     parameters: {
-                        stimulus: { type: 'string', default: 'img/sample.jpg' },
+                        stimulus: { type: 'string', default: 'img/sitting.png' },
                         choices: { type: 'array', default: ['f', 'j'] },
                         stimulus_duration: { type: 'number', default: null },
                         trial_duration: { type: 'number', default: null }
@@ -3016,7 +3016,7 @@ class JsonBuilder {
                 description: 'Show image and collect keyboard response',
                 category: 'stimulus',
                 parameters: {
-                    stimulus: { type: 'string', default: 'img/sample.jpg' },
+                    stimulus: { type: 'string', default: 'img/sitting.png' },
                     choices: { type: 'array', default: ['f', 'j'] },
                     stimulus_duration: { type: 'number', default: null },
                     trial_duration: { type: 'number', default: null }
