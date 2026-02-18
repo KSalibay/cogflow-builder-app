@@ -70,6 +70,18 @@
       [data-soc-dashboard-preview-host="true"] .soc-sart-overlay .panel .body { font-size: 12px; opacity: 0.95; line-height: 1.45; }
       [data-soc-dashboard-preview-host="true"] .soc-sart-overlay .panel .hint { margin-top: 10px; font-size: 12px; opacity: 0.80; }
 
+      /* PVT-like (preview) */
+      [data-soc-dashboard-preview-host="true"] .soc-pvt-status { font-size: 12px; opacity: 0.9; }
+      [data-soc-dashboard-preview-host="true"] .soc-pvt-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+      [data-soc-dashboard-preview-host="true"] .soc-pvt-alert-overlay { position: absolute; inset: 0; z-index: 56; display:none; align-items:center; justify-content:center; padding: 14px; background: rgba(2,6,23,0.62); backdrop-filter: blur(4px); }
+      [data-soc-dashboard-preview-host="true"] .soc-pvt-alert-overlay.show { display:flex; }
+      [data-soc-dashboard-preview-host="true"] .soc-pvt-alert-overlay .panel { position: relative; max-width: 520px; width: 100%; border-radius: 16px; border: 1px solid rgba(255,255,255,0.16); background: rgba(12,16,26,0.94); box-shadow: 0 20px 70px rgba(0,0,0,0.62); padding: 16px; cursor: pointer; }
+      [data-soc-dashboard-preview-host="true"] .soc-pvt-alert-overlay .kicker { font-size: 12px; opacity: 0.85; }
+      [data-soc-dashboard-preview-host="true"] .soc-pvt-alert-overlay .count { margin-top: 10px; font-size: 56px; font-weight: 800; letter-spacing: -0.5px; }
+      [data-soc-dashboard-preview-host="true"] .soc-pvt-alert-overlay .hint { margin-top: 10px; font-size: 12px; opacity: 0.85; }
+      [data-soc-dashboard-preview-host="true"] .soc-pvt-flash { position:absolute; inset:0; border-radius: 16px; background: rgba(239,68,68,0.25); box-shadow: inset 0 0 0 1px rgba(239,68,68,0.25); display:block; opacity: 0; transition: opacity 60ms linear; pointer-events: none; }
+      [data-soc-dashboard-preview-host="true"] .soc-pvt-flash.show { opacity: 1; }
+
       /* WCST-like (email sorting) window */
       [data-soc-dashboard-preview-host="true"] .soc-wcst-header { display:flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
       [data-soc-dashboard-preview-host="true"] .soc-wcst-header .hint { font-size: 12px; opacity: 0.85; }
@@ -647,6 +659,410 @@
         try { document.removeEventListener('keydown', onKeyDown); } catch { /* ignore */ }
         try { shell.removeEventListener('click', onClick); } catch { /* ignore */ }
         try { window.clearInterval(intervalId); } catch { /* ignore */ }
+      }
+    };
+  }
+
+  function renderPvtLike(containerEl, subtask) {
+    if (!containerEl) return { destroy() {} };
+
+    const normalizeKeyName = (raw) => {
+      const str = (raw ?? '').toString();
+      if (str === ' ') return ' ';
+      const t = str.trim();
+      const lower = t.toLowerCase();
+      if (lower === 'space') return ' ';
+      if (lower === 'enter') return 'Enter';
+      if (lower === 'escape' || lower === 'esc') return 'Escape';
+      if (t.length === 1) return t.toLowerCase();
+      return t;
+    };
+
+    const clamp = (x, lo, hi) => {
+      const n = Number(x);
+      if (!Number.isFinite(n)) return lo;
+      return Math.max(lo, Math.min(hi, n));
+    };
+
+    const cfg = (() => {
+      const o = (subtask && typeof subtask === 'object') ? subtask : {};
+      const responseDevice = (o.response_device || 'keyboard').toString().trim().toLowerCase() === 'mouse' ? 'mouse' : 'keyboard';
+      const responseKey = normalizeKeyName(o.response_key ?? 'space');
+      let minAlert = Number(o.alert_min_interval_ms);
+      let maxAlert = Number(o.alert_max_interval_ms);
+      minAlert = Number.isFinite(minAlert) ? Math.max(250, Math.floor(minAlert)) : 2000;
+      maxAlert = Number.isFinite(maxAlert) ? Math.max(250, Math.floor(maxAlert)) : 6000;
+      if (maxAlert < minAlert) {
+        const tmp = minAlert;
+        minAlert = maxAlert;
+        maxAlert = tmp;
+      }
+
+      return {
+        visible_entries: clamp(o.visible_entries, 3, 30),
+        log_scroll_interval_ms: clamp(o.log_scroll_interval_ms ?? o.scroll_interval_ms, 50, 5000),
+        response_device: responseDevice,
+        response_key: responseKey,
+        countdown_seconds: clamp(o.countdown_seconds, 0, 10),
+        flash_duration_ms: clamp(o.flash_duration_ms, 20, 2000),
+        response_window_ms: clamp(o.response_window_ms, 100, 20000),
+        alert_min_interval_ms: minAlert,
+        alert_max_interval_ms: maxAlert,
+        show_countdown: (o.show_countdown !== undefined) ? !!o.show_countdown : true,
+        show_red_flash: (o.show_red_flash !== undefined) ? !!o.show_red_flash : true
+      };
+    })();
+
+    const fmt = (ts) => {
+      const d = new Date(ts);
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mm = String(d.getMinutes()).padStart(2, '0');
+      const ss = String(d.getSeconds()).padStart(2, '0');
+      return `${hh}:${mm}:${ss}`;
+    };
+
+    const randInt = (min, max) => {
+      const a = Math.ceil(min);
+      const b = Math.floor(max);
+      return Math.floor(Math.random() * (b - a + 1)) + a;
+    };
+
+    const pick = (arr, fallback) => {
+      if (!Array.isArray(arr) || arr.length === 0) return fallback;
+      return arr[randInt(0, arr.length - 1)];
+    };
+
+    const randomIp = () => `${randInt(10, 199)}.${randInt(0, 255)}.${randInt(0, 255)}.${randInt(1, 254)}`;
+
+    const resolvedControl = (cfg.response_device === 'keyboard')
+      ? (cfg.response_key === ' ' ? 'SPACE' : cfg.response_key)
+      : 'CLICK';
+
+    containerEl.innerHTML = `
+      <div class="soc-sart-shell" id="soc_pvt_shell">
+        <div class="soc-sart-toolbar">
+          <div>
+            <h4 style="margin:0 0 4px 0;">Incident alerts (PVT-like)</h4>
+            <div class="muted">Press <b>${escHtml(resolvedControl)}</b> when the <b>red flash</b> appears. Early responses count as false starts.</div>
+          </div>
+          <div class="meta">
+            <span class="pill">Device: <b>${escHtml(cfg.response_device)}</b></span>
+            <span class="pill">Key: <b>${escHtml(cfg.response_device === 'keyboard' ? (cfg.response_key === ' ' ? 'space' : cfg.response_key) : 'click')}</b></span>
+            <span class="pill">Countdown: <b>${escHtml(String(cfg.countdown_seconds))}s</b></span>
+            <span class="pill">Preview</span>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; justify-content: space-between; gap: 10px;">
+          <div class="muted" style="font-size: 12px;">Alerts are randomly scheduled between ${escHtml(String(cfg.alert_min_interval_ms))}–${escHtml(String(cfg.alert_max_interval_ms))}ms.</div>
+          <div class="soc-pvt-status" id="soc_pvt_status">Ready</div>
+        </div>
+
+        <div class="soc-sart-tablewrap">
+          <table class="soc-sart-table">
+            <thead>
+              <tr><th style="width: 86px;">Time</th><th style="width: 58px;">Lvl</th><th>Message</th></tr>
+            </thead>
+            <tbody id="soc_pvt_tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    `;
+
+    const shellEl = containerEl.querySelector('#soc_pvt_shell');
+    const statusEl = containerEl.querySelector('#soc_pvt_status');
+    const tbodyEl = containerEl.querySelector('#soc_pvt_tbody');
+
+    const appWinEl = containerEl.closest?.('.soc-preview-appwin') || null;
+    const overlayHost = appWinEl || shellEl || containerEl;
+
+    const overlayEl = document.createElement('div');
+    overlayEl.className = 'soc-pvt-alert-overlay';
+    overlayEl.innerHTML = `
+      <div class="panel" role="button" tabindex="0" aria-label="Alert">
+        <div class="kicker">Alert incoming</div>
+        <div class="count" id="soc_pvt_count">—</div>
+        <div class="hint">Respond when the red flash appears. (${escHtml(resolvedControl)})</div>
+        <div class="soc-pvt-flash" id="soc_pvt_flash"></div>
+      </div>
+    `;
+    overlayHost.appendChild(overlayEl);
+
+    const overlayCountEl = overlayEl.querySelector('#soc_pvt_count');
+    const flashEl = overlayEl.querySelector('#soc_pvt_flash');
+
+    const timeouts = [];
+    const intervals = [];
+    const clearAll = () => {
+      for (const id of timeouts) {
+        try { window.clearTimeout(id); } catch { /* ignore */ }
+      }
+      timeouts.length = 0;
+      for (const id of intervals) {
+        try { window.clearInterval(id); } catch { /* ignore */ }
+      }
+      intervals.length = 0;
+    };
+
+    const state = {
+      started: false,
+      ended: false,
+      lines: [],
+      presented: 0,
+      responded: 0,
+      false_starts: 0,
+      timeouts: 0,
+      last_rt_ms: null,
+      current: null
+    };
+
+    const addLine = (lvl, msg) => {
+      state.lines.push({ ts: Date.now(), lvl: (lvl || 'INFO').toString(), msg: (msg || '').toString() });
+      if (state.lines.length > 200) state.lines.splice(0, state.lines.length - 200);
+    };
+
+    const renderLines = () => {
+      if (!tbodyEl) return;
+      const lines = state.lines.slice(-cfg.visible_entries);
+      tbodyEl.innerHTML = lines.map((ln) => `
+        <tr>
+          <td>${escHtml(fmt(ln.ts))}</td>
+          <td><span class="soc-sart-badge">${escHtml(ln.lvl)}</span></td>
+          <td class="soc-pvt-mono">${escHtml(ln.msg)}</td>
+        </tr>
+      `).join('');
+    };
+
+    const randomLogLine = () => {
+      const lvl = (Math.random() < 0.10) ? 'WARN' : 'INFO';
+      const svc = pick(['auth-service', 'edge-proxy', 'payments-api', 'ids', 'db', 'monitor', 'vpn-gw'], 'svc');
+      const msg = pick([
+        'heartbeat ok',
+        'token refresh ok',
+        'routing table updated',
+        `conn=${randInt(8, 64)} pool healthy`,
+        `p95 latency=${randInt(40, 220)}ms`,
+        'signature set synced',
+        `unexpected login from ${randomIp()}`
+      ], 'event');
+      return { lvl, msg: `${svc}: ${msg}` };
+    };
+
+    const updateStatus = () => {
+      if (!statusEl) return;
+      const parts = [
+        `P:${state.presented}`,
+        `R:${state.responded}`,
+        `FS:${state.false_starts}`,
+        `TO:${state.timeouts}`
+      ];
+      if (Number.isFinite(state.last_rt_ms)) parts.push(`RT:${state.last_rt_ms}ms`);
+      statusEl.textContent = state.started ? parts.join(' · ') : 'Ready';
+    };
+
+    const hideAlert = () => {
+      try { overlayEl.classList.remove('show'); } catch { /* ignore */ }
+      try { flashEl && flashEl.classList.remove('show'); } catch { /* ignore */ }
+      if (overlayCountEl) overlayCountEl.textContent = '—';
+      state.current = null;
+    };
+
+    const scheduleNextAlert = () => {
+      if (!state.started || state.ended) return;
+      const gap = randInt(cfg.alert_min_interval_ms, cfg.alert_max_interval_ms);
+      const id = window.setTimeout(() => {
+        if (!state.started || state.ended) return;
+        beginAlert();
+      }, gap);
+      timeouts.push(id);
+    };
+
+    const beginAlert = () => {
+      if (!state.started || state.ended) return;
+
+      const id = `preview_${Date.now()}_${state.presented + 1}`;
+      state.presented += 1;
+      state.current = {
+        id,
+        flash_onset_ts: null,
+        responded: false
+      };
+      updateStatus();
+
+      overlayEl.classList.add('show');
+      if (flashEl) flashEl.classList.remove('show');
+
+      const doFlash = () => {
+        const cur = state.current;
+        if (!cur || cur.id !== id) return;
+        cur.flash_onset_ts = performance.now();
+
+        if (cfg.show_red_flash && flashEl) {
+          flashEl.classList.add('show');
+          const tid = window.setTimeout(() => {
+            try { flashEl.classList.remove('show'); } catch { /* ignore */ }
+          }, cfg.flash_duration_ms);
+          timeouts.push(tid);
+        }
+
+        if (overlayCountEl) overlayCountEl.textContent = 'GO';
+
+        const timeoutId = window.setTimeout(() => {
+          const cur2 = state.current;
+          if (!cur2 || cur2.id !== id) return;
+          if (cur2.responded) return;
+
+          state.timeouts += 1;
+          addLine('WARN', 'timeout');
+          renderLines();
+          updateStatus();
+          hideAlert();
+          scheduleNextAlert();
+        }, cfg.response_window_ms);
+        timeouts.push(timeoutId);
+      };
+
+      if (!cfg.show_countdown || cfg.countdown_seconds <= 0) {
+        if (overlayCountEl) overlayCountEl.textContent = '…';
+        doFlash();
+        return;
+      }
+
+      let remaining = Math.max(0, Math.floor(cfg.countdown_seconds));
+      const tick = () => {
+        const cur = state.current;
+        if (!cur || cur.id !== id) return;
+
+        if (overlayCountEl) overlayCountEl.textContent = String(Math.max(1, remaining));
+        remaining -= 1;
+        if (remaining <= 0) {
+          doFlash();
+          return;
+        }
+        const tid = window.setTimeout(tick, 1000);
+        timeouts.push(tid);
+      };
+      tick();
+    };
+
+    const respond = (source) => {
+      if (!state.started || state.ended) return;
+
+      const cur = state.current;
+      const active = cur && Number.isFinite(cur.flash_onset_ts);
+      if (!active) {
+        state.false_starts += 1;
+        addLine('WARN', `false start (${source})`);
+        renderLines();
+        updateStatus();
+        return;
+      }
+
+      if (cur.responded) return;
+      cur.responded = true;
+      state.responded += 1;
+
+      const rt = Math.max(0, Math.round(performance.now() - cur.flash_onset_ts));
+      state.last_rt_ms = rt;
+
+      addLine('INFO', `response rt=${rt}ms`);
+      renderLines();
+      updateStatus();
+      hideAlert();
+      scheduleNextAlert();
+    };
+
+    const onKeyDown = (e) => {
+      if (!state.started || state.ended) return;
+      if (cfg.response_device !== 'keyboard') return;
+      const k = normalizeKeyName(e.key);
+      const rkRaw = (cfg.response_key ?? ' ').toString();
+      const isAll = rkRaw.trim().toUpperCase() === 'ALL_KEYS';
+      const rk = normalizeKeyName(rkRaw);
+      if (!isAll && k !== rk) return;
+      e.preventDefault();
+      respond('keyboard');
+    };
+
+    overlayEl.addEventListener('click', () => {
+      if (cfg.response_device !== 'mouse') return;
+      respond('mouse');
+    });
+    overlayEl.addEventListener('keydown', (e) => {
+      const k = normalizeKeyName(e.key);
+      if (k === 'Enter' || k === ' ') {
+        if (cfg.response_device !== 'mouse') return;
+        e.preventDefault();
+        respond('mouse');
+      }
+    });
+
+    const start = () => {
+      if (state.started) return;
+      state.started = true;
+      updateStatus();
+
+      // Prime some lines
+      for (let i = 0; i < 8; i++) {
+        const { lvl, msg } = randomLogLine();
+        addLine(lvl, msg);
+      }
+      renderLines();
+
+      document.addEventListener('keydown', onKeyDown);
+
+      const iid = window.setInterval(() => {
+        if (!state.started || state.ended) return;
+        const { lvl, msg } = randomLogLine();
+        addLine(lvl, msg);
+        renderLines();
+      }, cfg.log_scroll_interval_ms);
+      intervals.push(iid);
+
+      scheduleNextAlert();
+    };
+
+    // Instructions overlay gate (consistent with other subtasks)
+    const instructionsHtmlRaw = (subtask?.instructions ?? '').toString();
+    const hasInstructions = !!instructionsHtmlRaw.trim();
+    if (hasInstructions) {
+      const title = (subtask?.instructions_title ?? 'Incident alert monitor').toString() || 'Incident alert monitor';
+      const overlay = document.createElement('div');
+      overlay.className = 'soc-sart-overlay';
+      overlay.innerHTML = `
+        <div class="panel" role="button" tabindex="0" aria-label="Instructions">
+          <h3>${escHtml(title)}</h3>
+          <div class="body">${instructionsHtmlRaw}</div>
+          <div class="hint">Click to begin</div>
+        </div>
+      `;
+
+      const startOnce = () => {
+        try { overlay.remove(); } catch { /* ignore */ }
+        start();
+      };
+
+      overlay.addEventListener('click', startOnce, { once: true });
+      overlay.addEventListener('keydown', (e) => {
+        const k = normalizeKeyName(e.key);
+        if (k === 'Enter' || k === ' ') {
+          e.preventDefault();
+          startOnce();
+        }
+      });
+
+      (appWinEl || containerEl).appendChild(overlay);
+    } else {
+      start();
+    }
+
+    return {
+      destroy() {
+        state.ended = true;
+        hideAlert();
+        clearAll();
+        try { document.removeEventListener('keydown', onKeyDown); } catch { /* ignore */ }
+        try { overlayEl.remove(); } catch { /* ignore */ }
       }
     };
   }
@@ -1545,6 +1961,10 @@
         }
         if (rootEl && subtask && (subtask.type === 'wcst-like')) {
           const handle = renderWcstLike(rootEl, subtask);
+          destroyFns.push(() => handle?.destroy?.());
+        }
+        if (rootEl && subtask && (subtask.type === 'pvt-like')) {
+          const handle = renderPvtLike(rootEl, subtask);
           destroyFns.push(() => handle?.destroy?.());
         }
       } catch {

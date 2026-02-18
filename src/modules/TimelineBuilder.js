@@ -995,6 +995,12 @@ class TimelineBuilder {
                 ? ['flanker-trial']
                 : (currentTaskType === 'sart')
                     ? ['sart-trial']
+                    : (currentTaskType === 'simon')
+                        ? ['simon-trial']
+                    : (currentTaskType === 'pvt')
+                        ? ['pvt-trial']
+                    : (currentTaskType === 'stroop')
+                        ? ['stroop-trial']
                     : (currentTaskType === 'gabor')
                         ? ['gabor-trial', 'gabor-quest']
                     : ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups'];
@@ -1181,6 +1187,52 @@ class TimelineBuilder {
                 updateGaborQuestVisibility();
                 updateGaborCueVisibility();
             }
+
+            // Stroop block: hide keyboard-only fields when mouse is effective, and
+            // toggle between color-naming (choice keys) vs congruency (two keys).
+            if (selected === 'stroop-trial') {
+                updateStroopBlockResponseVisibility();
+            }
+        };
+
+        const updateStroopBlockResponseVisibility = () => {
+            if (!blockTypeEl) return;
+            const selected = blockTypeEl.value;
+            if (selected !== 'stroop-trial') return;
+
+            const deviceEl = formContainer.querySelector('#param_stroop_response_device');
+            const modeEl = formContainer.querySelector('#param_stroop_response_mode');
+
+            const defaultDevice = (document.getElementById('stroopDefaultResponseDevice')?.value || 'keyboard').toString();
+            const defaultMode = (document.getElementById('stroopDefaultResponseMode')?.value || 'color_naming').toString();
+
+            const rawDevice = (deviceEl ? deviceEl.value : 'inherit').toString();
+            const rawMode = (modeEl ? modeEl.value : 'inherit').toString();
+
+            const effectiveDevice = (rawDevice === 'inherit' || rawDevice === '') ? defaultDevice : rawDevice;
+            const effectiveMode = (rawMode === 'inherit' || rawMode === '') ? defaultMode : rawMode;
+
+            const isMouse = effectiveDevice === 'mouse';
+            const isCongruency = effectiveMode === 'congruency';
+
+            // Mouse: no keyboard mappings.
+            if (isMouse) {
+                setParamVisible('stroop_choice_keys', false);
+                setParamVisible('stroop_congruent_key', false);
+                setParamVisible('stroop_incongruent_key', false);
+                return;
+            }
+
+            // Keyboard: show only the relevant mapping fields.
+            if (isCongruency) {
+                setParamVisible('stroop_choice_keys', false);
+                setParamVisible('stroop_congruent_key', true);
+                setParamVisible('stroop_incongruent_key', true);
+            } else {
+                setParamVisible('stroop_choice_keys', true);
+                setParamVisible('stroop_congruent_key', false);
+                setParamVisible('stroop_incongruent_key', false);
+            }
         };
 
         if (blockTypeEl) {
@@ -1217,6 +1269,17 @@ class TimelineBuilder {
                 valueCueEnabledEl.addEventListener('change', updateGaborCueVisibility);
             }
             updateGaborCueVisibility();
+
+            // Stroop block: response device/mode should update keyboard field visibility.
+            const stroopDeviceEl = formContainer.querySelector('#param_stroop_response_device');
+            if (stroopDeviceEl) {
+                stroopDeviceEl.addEventListener('change', updateStroopBlockResponseVisibility);
+            }
+            const stroopModeEl = formContainer.querySelector('#param_stroop_response_mode');
+            if (stroopModeEl) {
+                stroopModeEl.addEventListener('change', updateStroopBlockResponseVisibility);
+            }
+            updateStroopBlockResponseVisibility();
         }
 
         // Gabor trial: response task changes should re-evaluate key visibility.
@@ -1467,10 +1530,29 @@ class TimelineBuilder {
             newParameters[paramName] = value;
         });
 
+        // Block length: default to (and cap at) the experiment-wide length.
+        // Researchers may shorten blocks, but cannot extend them beyond the experiment length.
+        try {
+            if ((currentData.type || '') === 'block') {
+                const cap = this.jsonBuilder?.getExperimentWideLengthCapForBlocks?.();
+                const proposed = Number.parseInt(newParameters.block_length ?? currentData.block_length ?? '', 10);
+                if (Number.isFinite(cap) && cap > 0 && Number.isFinite(proposed) && proposed > cap) {
+                    newParameters.block_length = cap;
+                    const inputEl = modalBody.querySelector('#param_block_length');
+                    if (inputEl) inputEl.value = String(cap);
+                    window.alert(`Block length cannot exceed the experiment length (${cap}). It has been set to ${cap}.`);
+                }
+            }
+        } catch {
+            // ignore
+        }
+
         // Gabor block cue toggles: when disabled, reset dependent fields so the saved component stays clean.
         if ((currentData.type || '') === 'block') {
             const blockType = (newParameters.block_component_type ?? currentData.block_component_type ?? '').toString();
             const isGaborBlock = (blockType === 'gabor-trial' || blockType === 'gabor-quest');
+
+            const isStroopBlock = (blockType === 'stroop-trial');
 
             if (isGaborBlock) {
                 if (newParameters.gabor_spatial_cue_enabled === false) {
@@ -1481,6 +1563,33 @@ class TimelineBuilder {
                     newParameters.gabor_left_value_options = 'neutral,high,low';
                     newParameters.gabor_right_value_options = 'neutral,high,low';
                     newParameters.gabor_value_cue_probability = 1;
+                }
+            }
+
+            if (isStroopBlock) {
+                // Always drop legacy field (we now use the experiment-wide stimuli palette)
+                if (Object.prototype.hasOwnProperty.call(newParameters, 'stroop_ink_color_options')) {
+                    delete newParameters.stroop_ink_color_options;
+                }
+
+                const defaultDevice = (document.getElementById('stroopDefaultResponseDevice')?.value || 'keyboard').toString();
+                const defaultMode = (document.getElementById('stroopDefaultResponseMode')?.value || 'color_naming').toString();
+
+                const rawDevice = (newParameters.stroop_response_device ?? currentData.stroop_response_device ?? 'inherit').toString();
+                const rawMode = (newParameters.stroop_response_mode ?? currentData.stroop_response_mode ?? 'inherit').toString();
+
+                const effectiveDevice = (rawDevice === 'inherit' || rawDevice === '') ? defaultDevice : rawDevice;
+                const effectiveMode = (rawMode === 'inherit' || rawMode === '') ? defaultMode : rawMode;
+
+                if (effectiveDevice === 'mouse') {
+                    if (Object.prototype.hasOwnProperty.call(newParameters, 'stroop_choice_keys')) delete newParameters.stroop_choice_keys;
+                    if (Object.prototype.hasOwnProperty.call(newParameters, 'stroop_congruent_key')) delete newParameters.stroop_congruent_key;
+                    if (Object.prototype.hasOwnProperty.call(newParameters, 'stroop_incongruent_key')) delete newParameters.stroop_incongruent_key;
+                } else if (effectiveMode === 'congruency') {
+                    if (Object.prototype.hasOwnProperty.call(newParameters, 'stroop_choice_keys')) delete newParameters.stroop_choice_keys;
+                } else {
+                    if (Object.prototype.hasOwnProperty.call(newParameters, 'stroop_congruent_key')) delete newParameters.stroop_congruent_key;
+                    if (Object.prototype.hasOwnProperty.call(newParameters, 'stroop_incongruent_key')) delete newParameters.stroop_incongruent_key;
                 }
             }
         }
@@ -1698,6 +1807,49 @@ class TimelineBuilder {
                             if (Object.prototype.hasOwnProperty.call(c, 'choice_keys')) delete c.choice_keys;
                         } else {
                             if (Object.prototype.hasOwnProperty.call(c, 'mouse_response_mode')) delete c.mouse_response_mode;
+                        }
+                    }
+                }
+            } catch {
+                // ignore
+            }
+
+            // Stroop Block: keep output clean and consistent with effective device/mode.
+            try {
+                const isBlock = (updatedData.type === 'block');
+                if (isBlock) {
+                    const blockType = (updatedData.block_component_type ?? updatedData.component_type ?? '').toString();
+                    if (blockType === 'stroop-trial') {
+                        const defaultDevice = (document.getElementById('stroopDefaultResponseDevice')?.value || 'keyboard').toString();
+                        const defaultMode = (document.getElementById('stroopDefaultResponseMode')?.value || 'color_naming').toString();
+
+                        const containers = [];
+                        if (updatedData && typeof updatedData === 'object') containers.push(updatedData);
+                        if (updatedData.parameters && typeof updatedData.parameters === 'object') containers.push(updatedData.parameters);
+
+                        // Determine effective values from the top-level block fields (same across containers)
+                        const rawDevice = (updatedData.stroop_response_device ?? 'inherit').toString();
+                        const rawMode = (updatedData.stroop_response_mode ?? 'inherit').toString();
+                        const effectiveDevice = (rawDevice === 'inherit' || rawDevice === '') ? defaultDevice : rawDevice;
+                        const effectiveMode = (rawMode === 'inherit' || rawMode === '') ? defaultMode : rawMode;
+
+                        for (const c of containers) {
+                            if (!c || typeof c !== 'object') continue;
+
+                            if (Object.prototype.hasOwnProperty.call(c, 'stroop_ink_color_options')) {
+                                delete c.stroop_ink_color_options;
+                            }
+
+                            if (effectiveDevice === 'mouse') {
+                                if (Object.prototype.hasOwnProperty.call(c, 'stroop_choice_keys')) delete c.stroop_choice_keys;
+                                if (Object.prototype.hasOwnProperty.call(c, 'stroop_congruent_key')) delete c.stroop_congruent_key;
+                                if (Object.prototype.hasOwnProperty.call(c, 'stroop_incongruent_key')) delete c.stroop_incongruent_key;
+                            } else if (effectiveMode === 'congruency') {
+                                if (Object.prototype.hasOwnProperty.call(c, 'stroop_choice_keys')) delete c.stroop_choice_keys;
+                            } else {
+                                if (Object.prototype.hasOwnProperty.call(c, 'stroop_congruent_key')) delete c.stroop_congruent_key;
+                                if (Object.prototype.hasOwnProperty.call(c, 'stroop_incongruent_key')) delete c.stroop_incongruent_key;
+                            }
                         }
                     }
                 }

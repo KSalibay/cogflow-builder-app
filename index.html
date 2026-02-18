@@ -67,13 +67,14 @@
                             <h6 class="fw-bold">Task Type</h6>
                             <select class="form-select" id="taskType">
                                 <option value="rdm" selected>Random Dot Motion (RDM)</option>
-                                <option value="stroop" disabled>Stroop Task (Coming Soon)</option>
+                                <option value="stroop">Stroop Task</option>
                                 <option value="nback" disabled>N-Back (Coming Soon)</option>
-                                <option value="simon" disabled>Simon Task (Coming Soon)</option>
+                                <option value="simon">Simon Task</option>
+                                <option value="pvt">Psychomotor Vigilance Task (PVT)</option>
                                 <option value="gabor">Gabor Patch Task</option>
                                 <option value="flanker">Flanker Task</option>
                                 <option value="sart">SART</option>
-                                <option value="soc-dashboard" disabled>SOC Dashboard (Continuous only)</option>
+                                <option value="soc-dashboard">SOC Dashboard</option>
                                 <option value="custom">Custom Task</option>
                             </select>
                             <small class="text-muted">This determines available components in the library</small>
@@ -308,14 +309,14 @@
     <script src="src/GraphSharePointClient.js?v=20260123-1"></script>
 
     <!-- Cache-bust local scripts -->
-    <script src="src/JsonBuilder.js?v=20260210-1"></script>
+    <script src="src/JsonBuilder.js?v=20260218-3"></script>
     <script src="src/modules/DataCollectionModules.js?v=20260114-1"></script>
     <script src="src/modules/TrialManager.js?v=20260113-10"></script>
-    <script src="src/modules/TimelineBuilder.js?v=20260122-5"></script>
-    <script src="src/modules/SocDashboardPreview.js?v=20260207-1"></script>
-    <script src="src/modules/ComponentPreview.js?v=20260122-7"></script>
+    <script src="src/modules/TimelineBuilder.js?v=20260218-3"></script>
+    <script src="src/modules/SocDashboardPreview.js?v=20260218-1"></script>
+    <script src="src/modules/ComponentPreview.js?v=20260219-2"></script>
     <script src="src/schemas/RDMTaskSchema.js?v=20260113-10"></script>
-    <script src="src/schemas/JSPsychSchemas.js?v=20260207-1"></script>
+    <script src="src/schemas/JSPsychSchemas.js?v=20260219-1"></script>
     <script src="src/schemas/UnifiedSchema.js?v=20260113-10"></script>
 
     <script>
@@ -327,8 +328,10 @@
             // Store globally for access from other functions
             window.jsonBuilderInstance = jsonBuilder;
             
-            // Initialize ComponentPreview
-            window.componentPreview = new ComponentPreview();
+            // Initialize ComponentPreview (guard against double-init)
+            if (!window.componentPreview) {
+                window.componentPreview = new ComponentPreview();
+            }
             
             // Initialize timeline sortable functionality
             initializeTimelineSorting();
@@ -381,8 +384,11 @@
                 const rawTaskName = document.getElementById('taskName')?.value || '';
                 const taskDefaults = {
                     rdm: 'Random Dot Motion task',
+                    stroop: 'Stroop task',
                     flanker: 'Flanker task',
                     sart: 'SART task',
+                    simon: 'Simon task',
+                    pvt: 'PVT task',
                     gabor: 'Gabor task',
                     'soc-dashboard': 'SOC Dashboard'
                 };
@@ -544,8 +550,11 @@
                 const rawTaskName = document.getElementById('taskName')?.value || '';
                 const taskDefaults = {
                     rdm: 'Random Dot Motion task',
+                    stroop: 'Stroop task',
                     flanker: 'Flanker task',
                     sart: 'SART task',
+                    simon: 'Simon task',
+                    pvt: 'PVT task',
                     gabor: 'Gabor task',
                     'soc-dashboard': 'SOC Dashboard'
                 };

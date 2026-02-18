@@ -94,14 +94,17 @@ Notes:
 - **Data collection** currently includes `reaction-time`, `accuracy`, `correctness` (online correctness computation toggle), and `eye-tracking`.
 - **Response modalities** (keyboard/mouse/touch/voice) are configured via the Default Response UI and exported under `response_parameters`.
 
-### Supported tasks (5)
+### Supported tasks (8)
 
-The Builder currently supports five task types via the **Task Type** dropdown:
+The Builder currently supports eight task types via the **Task Type** dropdown:
 
 - `task_type: "rdm"` — Random Dot Motion (RDM)
 - `task_type: "gabor"` — Gabor Patch task
 - `task_type: "flanker"` — Flanker task
 - `task_type: "sart"` — Sustained Attention to Response Task (SART)
+- `task_type: "stroop"` — Stroop task
+- `task_type: "simon"` — Simon task
+- `task_type: "pvt"` — Psychomotor Vigilance Task (PVT)
 - `task_type: "soc-dashboard"` — multi-window SOC desktop session (continuous-mode only)
 
 There is also a `task_type: "custom"` option intended for advanced/manual use (no task-specific components; generic components + tracking only).
@@ -117,6 +120,8 @@ There is also a `task_type: "custom"` option intended for advanced/manual use (n
   - The editor stores HTML in the config, and the JSON preview escapes `<`/`>` so tags display literally.
 - Continuous-mode defaults were expanded to include aperture outline controls so continuous exports match the interpreter’s rendering expectations.
 - Added an experiment-wide **Theme** dropdown (Dark/Light) exported as `ui_settings.theme`.
+- Added trial-based tasks: **Stroop**, **Simon**, and **PVT** end-to-end (authoring UI defaults, timeline components, Block support, and Component Preview renderers).
+- Added a new SOC Dashboard subtask: `soc-subtask-pvt-like` (PVT-inspired vigilance window; interactive preview).
 
 ### SOC Dashboard release (Feb 2026)
 
@@ -156,6 +161,14 @@ Implemented SOC subtasks:
     - mouse/click: clicking a target highlights it
     - mouse/drag: the email can be dragged and dropped onto targets
 
+- `soc-subtask-pvt-like` (exports as `type: "pvt-like"` inside `subtasks[]`)
+  - Goal: respond as fast as possible to a red flash embedded in a noisy alert/log stream.
+  - Parameters:
+    - `response_device: "keyboard" | "mouse"`, `response_key`
+    - `countdown_seconds`, `flash_duration_ms`, `response_window_ms`
+    - `alert_min_interval_ms`, `alert_max_interval_ms`
+  - Preview is interactive (countdown + flash + responses/false starts) so you can tune timings.
+
 Scheduling (for overlaps / multitasking):
 
 - Each subtask supports `start_at_ms` / `start_delay_ms` and `duration_ms` / `end_at_ms` so windows can appear/disappear on a fixed schedule.
@@ -163,24 +176,16 @@ Scheduling (for overlaps / multitasking):
 
 See [docs/inputs_outputs.md](docs/inputs_outputs.md) for a more detailed (but still current) reference.
 
+### Component Preview modal
+
+The **Component Preview** modal supports:
+
+- SOC components and subtasks (including `soc-subtask-pvt-like`) with interactive previews
+- Trial-based task components including `stroop-trial`, `simon-trial`, and `pvt-trial` (lightweight renderers; PVT preview includes an interactive timing simulation)
+
 ## Timeline components
 
 The timeline is authored in the UI and serialized from DOM `dataset.componentData`. Supported component types include:
-
-### Common components (all tasks)
-
-- Instructions:
-  - `instructions` (renders/export as `html-keyboard-response`)
-- Generic stimulus/survey:
-  - `html-keyboard-response` (generic)
-  - `image-keyboard-response`
-  - `survey-response`
-- Tracking (only shown when enabled under **Data Collection**):
-  - `eye-tracking` (settings stub)
-  - `eye-tracking-calibration-instructions` (preface screen; exported as `html-keyboard-response` tagged with `data.plugin_type = "eye-tracking-calibration-instructions"`)
-  - `mouse-tracking`
-
-### RDM components (`task_type: "rdm"`)
 
 ### Common components (all tasks)
 
@@ -224,6 +229,21 @@ The timeline is authored in the UI and serialized from DOM `dataset.componentDat
 - `sart-trial`
 - `block` (component_type can be `sart-trial`)
 
+### Stroop components (`task_type: "stroop"`)
+
+- `stroop-trial`
+- `block` (component_type can be `stroop-trial`)
+
+### Simon components (`task_type: "simon"`)
+
+- `simon-trial`
+- `block` (component_type can be `simon-trial`)
+
+### PVT components (`task_type: "pvt"`)
+
+- `pvt-trial`
+- `block` (component_type can be `pvt-trial`)
+
 ### SOC Dashboard components (`task_type: "soc-dashboard"`)
 
 - `soc-dashboard` (SOC desktop “session container”)
@@ -233,6 +253,7 @@ The timeline is authored in the UI and serialized from DOM `dataset.componentDat
   - `soc-subtask-nback-like` (alert correlation)
   - `soc-subtask-flanker-like` (traffic spikes monitor)
   - `soc-subtask-wcst-like` (email sorting / WCST-like)
+  - `soc-subtask-pvt-like` (incident alert monitor / PVT-like vigilance)
 
 ### Eye tracking
 
@@ -275,10 +296,10 @@ Blocks let you represent many trials without expanding them into a long explicit
   "component_type": "rdm-trial",
   "length": 100,
   "sampling_mode": "per-trial",
-  "parameter_windows": {
-    "coherence": { "min": 0.2, "max": 0.8 },
-    "speed": { "min": 4, "max": 10 }
-  },
+  "parameter_windows": [
+    { "parameter": "coherence", "min": 0.2, "max": 0.8 },
+    { "parameter": "speed", "min": 4, "max": 10 }
+  ],
   "parameter_values": {
     "direction": [0, 180],
     "dot_color": "#FFFFFF"

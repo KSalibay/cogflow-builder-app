@@ -172,6 +172,228 @@ class JsonBuilder {
         this.applyGaborCueVisibility();
     }
 
+    applyStroopResponseVisibility() {
+        const mode = (document.getElementById('stroopDefaultResponseMode')?.value || 'color_naming').toString();
+        const device = (document.getElementById('stroopDefaultResponseDevice')?.value || 'keyboard').toString();
+
+        const colorNamingKeys = document.getElementById('stroopColorNamingKeysGroup');
+        const congruencyKeys = document.getElementById('stroopCongruencyKeysGroup');
+        const keyboardOnlyNote = document.getElementById('stroopKeyboardOnlyNote');
+
+        const usingKeyboard = device === 'keyboard';
+        if (keyboardOnlyNote) keyboardOnlyNote.style.display = usingKeyboard ? 'none' : '';
+
+        if (colorNamingKeys) {
+            colorNamingKeys.style.display = (mode === 'color_naming' && usingKeyboard) ? '' : 'none';
+        }
+        if (congruencyKeys) {
+            congruencyKeys.style.display = (mode === 'congruency' && usingKeyboard) ? '' : 'none';
+        }
+    }
+
+    applySimonResponseVisibility() {
+        const device = (document.getElementById('simonDefaultResponseDevice')?.value || 'keyboard').toString();
+
+        const keyboardOnlyNote = document.getElementById('simonKeyboardOnlyNote');
+        const keyboardGroup = document.getElementById('simonKeyboardKeysGroup');
+
+        const usingKeyboard = device === 'keyboard';
+        if (keyboardOnlyNote) keyboardOnlyNote.style.display = usingKeyboard ? 'none' : '';
+        if (keyboardGroup) keyboardGroup.style.display = usingKeyboard ? '' : 'none';
+    }
+
+    renderStroopStimuliRows() {
+        const sizeEl = document.getElementById('stroopStimulusSetSize');
+        const rowsEl = document.getElementById('stroopStimuliRows');
+        if (!sizeEl || !rowsEl) return;
+
+        const rawN = Number.parseInt(sizeEl.value || '4', 10);
+        const n = Number.isFinite(rawN) ? Math.max(2, Math.min(7, rawN)) : 4;
+        if (`${n}` !== `${rawN}`) sizeEl.value = `${n}`;
+
+        // Preserve existing values when possible
+        const existing = {};
+        for (let i = 1; i <= 7; i += 1) {
+            const nameEl = document.getElementById(`stroopStimulusName_${i}`);
+            const colorEl = document.getElementById(`stroopStimulusColor_${i}`);
+            if (nameEl || colorEl) {
+                existing[i] = {
+                    name: nameEl?.value,
+                    color: colorEl?.value
+                };
+            }
+        }
+
+        const defaults = [
+            { name: 'RED', color: '#ff0000' },
+            { name: 'GREEN', color: '#00aa00' },
+            { name: 'BLUE', color: '#0066ff' },
+            { name: 'YELLOW', color: '#ffd200' },
+            { name: 'PURPLE', color: '#7a3cff' },
+            { name: 'ORANGE', color: '#ff7a00' },
+            { name: 'PINK', color: '#ff3c8f' }
+        ];
+
+        let html = '';
+        for (let i = 1; i <= 7; i += 1) {
+            const rowVisible = i <= n;
+            const fallback = defaults[i - 1] || { name: `COLOR_${i}`, color: '#ffffff' };
+            const nameVal = (existing[i]?.name ?? fallback.name).toString();
+            const colorVal = (existing[i]?.color ?? fallback.color).toString();
+
+            html += `
+                <div class="parameter-row" style="${rowVisible ? '' : 'display:none;'}">
+                    <label class="parameter-label">Stimulus ${i}:</label>
+                    <div class="parameter-input d-flex gap-2">
+                        <input type="text" class="form-control" id="stroopStimulusName_${i}" value="${nameVal.replaceAll('"', '&quot;')}">
+                        <input type="color" class="form-control" style="max-width: 80px;" id="stroopStimulusColor_${i}" value="${colorVal}">
+                    </div>
+                    <div class="parameter-help">Name (word) + ink color (hex)</div>
+                </div>
+            `;
+        }
+
+        rowsEl.innerHTML = html;
+
+        // Ensure changes propagate to JSON
+        rowsEl.querySelectorAll('input').forEach(el => {
+            el.addEventListener('change', this.updateJSON);
+        });
+    }
+
+    bindStroopSettingsUI() {
+        const sizeEl = document.getElementById('stroopStimulusSetSize');
+        if (!sizeEl) return;
+
+        if (sizeEl.dataset.bound === '1') {
+            this.renderStroopStimuliRows();
+            this.applyStroopResponseVisibility();
+            return;
+        }
+
+        sizeEl.dataset.bound = '1';
+        sizeEl.addEventListener('change', () => {
+            this.renderStroopStimuliRows();
+            this.updateJSON();
+        });
+
+        const modeEl = document.getElementById('stroopDefaultResponseMode');
+        if (modeEl && modeEl.dataset.bound !== '1') {
+            modeEl.dataset.bound = '1';
+            modeEl.addEventListener('change', () => {
+                this.applyStroopResponseVisibility();
+                this.updateJSON();
+            });
+        }
+
+        const deviceEl = document.getElementById('stroopDefaultResponseDevice');
+        if (deviceEl && deviceEl.dataset.bound !== '1') {
+            deviceEl.dataset.bound = '1';
+            deviceEl.addEventListener('change', () => {
+                this.applyStroopResponseVisibility();
+                this.updateJSON();
+            });
+        }
+
+        this.renderStroopStimuliRows();
+        this.applyStroopResponseVisibility();
+    }
+
+    bindSimonSettingsUI() {
+        const devEl = document.getElementById('simonDefaultResponseDevice');
+        if (!devEl) return;
+
+        if (devEl.dataset.bound === '1') {
+            this.applySimonResponseVisibility();
+            return;
+        }
+
+        devEl.dataset.bound = '1';
+        devEl.addEventListener('change', () => {
+            this.applySimonResponseVisibility();
+            this.updateJSON();
+        });
+
+        // Bind color/name inputs
+        ['simonStimulusName_1', 'simonStimulusColor_1', 'simonStimulusName_2', 'simonStimulusColor_2',
+            'simonLeftKey', 'simonRightKey', 'simonCircleDiameterPx',
+            'simonStimulusDurationMs', 'simonTrialDurationMs', 'simonItiMs'
+        ].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el || el.dataset.bound === '1') return;
+            el.dataset.bound = '1';
+            el.addEventListener('change', () => this.updateJSON());
+        });
+
+        this.applySimonResponseVisibility();
+    }
+
+    bindPvtSettingsUI() {
+        const devEl = document.getElementById('pvtDefaultResponseDevice');
+        if (!devEl) return;
+
+        if (devEl.dataset.bound === '1') {
+            this.applyPvtResponseVisibility();
+            return;
+        }
+
+        devEl.dataset.bound = '1';
+        devEl.addEventListener('change', () => {
+            this.applyPvtResponseVisibility();
+            this.updateJSON();
+        });
+
+        const fbEl = document.getElementById('pvtFeedbackEnabled');
+        if (fbEl && fbEl.dataset.bound !== '1') {
+            fbEl.dataset.bound = '1';
+            fbEl.addEventListener('change', () => {
+                this.applyPvtFeedbackVisibility();
+                this.updateJSON();
+            });
+        }
+
+        const extraEl = document.getElementById('pvtAddTrialPerFalseStart');
+        if (extraEl && extraEl.dataset.bound !== '1') {
+            extraEl.dataset.bound = '1';
+            extraEl.addEventListener('change', () => this.updateJSON());
+        }
+
+        // Bind inputs
+        [
+            'pvtResponseKey',
+            'pvtForeperiodMs',
+            'pvtTrialDurationMs',
+            'pvtItiMs',
+            'pvtFeedbackMessage'
+        ].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el || el.dataset.bound === '1') return;
+            el.dataset.bound = '1';
+            el.addEventListener('change', () => this.updateJSON());
+        });
+
+        this.applyPvtResponseVisibility();
+        this.applyPvtFeedbackVisibility();
+    }
+
+    applyPvtResponseVisibility() {
+        const dev = (document.getElementById('pvtDefaultResponseDevice')?.value || 'keyboard').toString();
+        const keyGroup = document.getElementById('pvtKeyboardKeysGroup');
+        const note = document.getElementById('pvtKeyboardOnlyNote');
+        if (!keyGroup || !note) return;
+
+        const usesKeyboard = (dev === 'keyboard' || dev === 'both');
+        keyGroup.style.display = usesKeyboard ? '' : 'none';
+        note.style.display = usesKeyboard ? 'none' : '';
+    }
+
+    applyPvtFeedbackVisibility() {
+        const enabled = !!document.getElementById('pvtFeedbackEnabled')?.checked;
+        const group = document.getElementById('pvtFeedbackMessageGroup');
+        if (!group) return;
+        group.style.display = enabled ? '' : 'none';
+    }
+
     findRewardSettingsTimelineElements() {
         const timelineContainer = document.getElementById('timelineComponents');
         if (!timelineContainer) return [];
@@ -521,7 +743,7 @@ class JsonBuilder {
         const prevTaskType = this.currentTaskType || 'rdm';
 
         if (!this.isTaskTypeAllowedForExperiment(nextTaskType, this.experimentType)) {
-            alert('SOC Dashboard is only available for Continuous experiments.');
+            alert(`Task "${nextTaskType}" is not available for ${this.experimentType} experiments.`);
             if (event?.target) event.target.value = prevTaskType;
             return;
         }
@@ -564,7 +786,7 @@ class JsonBuilder {
 
     maybeInsertStarterTimeline(taskType) {
         if (taskType === 'soc-dashboard' && this.experimentType !== 'continuous') return;
-        if (taskType !== 'flanker' && taskType !== 'sart' && taskType !== 'gabor' && taskType !== 'soc-dashboard') return;
+        if (taskType !== 'flanker' && taskType !== 'sart' && taskType !== 'gabor' && taskType !== 'stroop' && taskType !== 'simon' && taskType !== 'pvt' && taskType !== 'soc-dashboard') return;
 
         const timelineContainer = document.getElementById('timelineComponents');
         if (!timelineContainer) return;
@@ -578,6 +800,12 @@ class JsonBuilder {
             ? 'flanker-trial'
             : (taskType === 'sart')
                 ? 'sart-trial'
+                : (taskType === 'simon')
+                    ? 'simon-trial'
+                : (taskType === 'pvt')
+                    ? 'pvt-trial'
+                : (taskType === 'stroop')
+                    ? 'stroop-trial'
                 : (taskType === 'soc-dashboard')
                     ? 'soc-dashboard'
                     : 'gabor-trial';
@@ -697,6 +925,33 @@ class JsonBuilder {
             return false;
         }
 
+        if (taskType === 'stroop') {
+            if (type === 'stroop-trial') return true;
+            if (type === 'block') {
+                const innerType = getBlockInnerType();
+                return innerType === 'stroop-trial';
+            }
+            return false;
+        }
+
+        if (taskType === 'simon') {
+            if (type === 'simon-trial') return true;
+            if (type === 'block') {
+                const innerType = getBlockInnerType();
+                return innerType === 'simon-trial';
+            }
+            return false;
+        }
+
+        if (taskType === 'pvt') {
+            if (type === 'pvt-trial') return true;
+            if (type === 'block') {
+                const innerType = getBlockInnerType();
+                return innerType === 'pvt-trial';
+            }
+            return false;
+        }
+
         if (taskType === 'soc-dashboard') {
             if (type === 'soc-dashboard') return true;
             if (type === 'soc-dashboard-icon') return true;
@@ -704,6 +959,7 @@ class JsonBuilder {
             if (type === 'soc-subtask-flanker-like') return true;
             if (type === 'soc-subtask-nback-like') return true;
             if (type === 'soc-subtask-wcst-like') return true;
+            if (type === 'soc-subtask-pvt-like') return true;
             return false;
         }
 
@@ -777,6 +1033,51 @@ class JsonBuilder {
      * Update UI based on experiment type
      */
     updateExperimentTypeUI() {
+        const captureParameterFormState = () => {
+            const root = document.getElementById('parameterForms');
+            if (!root) return {};
+            const state = {};
+
+            root.querySelectorAll('input[id], select[id], textarea[id]').forEach((el) => {
+                const id = el.id;
+                if (!id) return;
+                const tag = (el.tagName || '').toLowerCase();
+                const type = (el.type || '').toLowerCase();
+
+                if (tag === 'input' && (type === 'checkbox' || type === 'radio')) {
+                    state[id] = { kind: 'checked', value: !!el.checked };
+                } else {
+                    state[id] = { kind: 'value', value: (el.value ?? '').toString() };
+                }
+            });
+
+            return state;
+        };
+
+        const restoreParameterFormState = (state) => {
+            const root = document.getElementById('parameterForms');
+            if (!root || !state || typeof state !== 'object') return;
+
+            for (const [id, entry] of Object.entries(state)) {
+                if (!id) continue;
+                const el = document.getElementById(id);
+                if (!el || !root.contains(el)) continue;
+                if (!entry || typeof entry !== 'object') continue;
+
+                const tag = (el.tagName || '').toLowerCase();
+                const type = (el.type || '').toLowerCase();
+                const kind = entry.kind;
+
+                if (tag === 'input' && (type === 'checkbox' || type === 'radio') && kind === 'checked') {
+                    el.checked = !!entry.value;
+                } else if (kind === 'value') {
+                    el.value = entry.value;
+                }
+            }
+        };
+
+        const prevState = captureParameterFormState();
+
         // Enforce task-type availability whenever we rerender task-scoped panels.
         this.enforceTaskTypeAvailability();
 
@@ -789,14 +1090,29 @@ class JsonBuilder {
             this.showContinuousParameters();
         }
 
+        // Preserve any author-edited values (e.g., instruction templates with placeholders)
+        // across experiment-type switches.
+        restoreParameterFormState(prevState);
+
         // Ensure conditional sections match current state after re-render
         this.updateConditionalUI();
     }
 
     isTaskTypeAllowedForExperiment(taskType, experimentType) {
-        const t = (taskType ?? '').toString();
-        const e = (experimentType ?? '').toString();
-        if (t === 'soc-dashboard') return e === 'continuous';
+        const t = (taskType ?? '').toString().trim();
+        const e = (experimentType ?? '').toString().trim();
+
+        // Keep PVT available in both modes.
+        if (t === 'pvt') return true;
+
+        if (e === 'continuous') {
+            // Only show/allow continuous-capable tasks in continuous experiments.
+            // RDM has a special continuous compilation path; SOC Dashboard is also continuous-only.
+            return (t === 'rdm' || t === 'soc-dashboard' || t === 'custom');
+        }
+
+        // Trial-based: SOC Dashboard should not be selectable.
+        if (t === 'soc-dashboard') return false;
         return true;
     }
 
@@ -806,14 +1122,28 @@ class JsonBuilder {
 
         let changed = false;
 
-        // SOC Dashboard: continuous-only
-        const socOpt = Array.from(taskTypeEl.options || []).find(o => o.value === 'soc-dashboard');
-        if (socOpt) {
-            const allowed = this.isTaskTypeAllowedForExperiment('soc-dashboard', this.experimentType);
-            socOpt.disabled = !allowed;
+        // Show/hide task types based on experiment type.
+        const options = Array.from(taskTypeEl.options || []);
+        for (const opt of options) {
+            const value = (opt?.value ?? '').toString();
+            const allowed = this.isTaskTypeAllowedForExperiment(value, this.experimentType);
+            // Prefer hiding instead of disabling so each mode has a clean dropdown.
+            opt.hidden = !allowed;
+            // Preserve author-intended disabled state for "Coming Soon" items.
+            // But ensure allowed tasks are not disabled just because HTML had it.
+            if (allowed && value === 'soc-dashboard') {
+                opt.disabled = false;
+            }
+        }
 
-            if (!allowed && taskTypeEl.value === 'soc-dashboard') {
-                taskTypeEl.value = 'rdm';
+        // If current selection is now disallowed/hidden, switch to a safe default.
+        const currentAllowed = this.isTaskTypeAllowedForExperiment(taskTypeEl.value, this.experimentType);
+        if (!currentAllowed) {
+            const fallback = options.find(o => !o.hidden && !o.disabled && (o.value === 'rdm'))
+                || options.find(o => !o.hidden && !o.disabled)
+                || null;
+            if (fallback) {
+                taskTypeEl.value = fallback.value;
                 changed = true;
             }
         }
@@ -950,6 +1280,165 @@ class JsonBuilder {
                     <label class="parameter-label">ITI (ms):</label>
                     <input type="number" class="form-control parameter-input" id="sartItiMs" value="0" min="0" max="10000">
                     <div class="parameter-help">Default inter-trial interval</div>
+                </div>
+            </div>
+            `
+            : (taskType === 'simon')
+            ? `
+            <div class="parameter-group" id="simonExperimentParameters">
+                <div class="group-title d-flex justify-content-between align-items-center">
+                    <div>
+                        <span>Simon Experiment Settings</span>
+                        <small class="text-muted d-block">Default values for Simon components</small>
+                    </div>
+                    <button class="btn btn-sm btn-info" id="previewTaskDefaultsBtn" onclick="window.componentPreview?.showPreview(window.jsonBuilderInstance?.getCurrentSimonDefaults())">
+                        <i class="fas fa-eye"></i> Preview Defaults
+                    </button>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Stimulus A (maps to LEFT response):</label>
+                    <div class="d-flex gap-2 align-items-center">
+                        <input type="text" class="form-control parameter-input" id="simonStimulusName_1" value="BLUE" style="max-width: 200px;" />
+                        <input type="color" class="form-control parameter-input" id="simonStimulusColor_1" value="#0066ff" style="width: 72px;" />
+                    </div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Stimulus B (maps to RIGHT response):</label>
+                    <div class="d-flex gap-2 align-items-center">
+                        <input type="text" class="form-control parameter-input" id="simonStimulusName_2" value="ORANGE" style="max-width: 200px;" />
+                        <input type="color" class="form-control parameter-input" id="simonStimulusColor_2" value="#ff7a00" style="width: 72px;" />
+                    </div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Default Response Device:</label>
+                    <select class="form-control parameter-input" id="simonDefaultResponseDevice">
+                        <option value="keyboard" selected>Keyboard</option>
+                        <option value="mouse">Mouse</option>
+                    </select>
+                    <div class="parameter-help">Mouse mode uses clickable left/right circles.</div>
+                </div>
+
+                <div class="parameter-row" id="simonKeyboardOnlyNote" style="display:none;">
+                    <label class="parameter-label text-muted">Keyboard Mappings:</label>
+                    <div class="parameter-help text-muted">Key mappings are ignored when response device is Mouse.</div>
+                </div>
+
+                <div id="simonKeyboardKeysGroup">
+                    <div class="parameter-row">
+                        <label class="parameter-label">Left Key:</label>
+                        <input type="text" class="form-control parameter-input" id="simonLeftKey" value="f">
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Right Key:</label>
+                        <input type="text" class="form-control parameter-input" id="simonRightKey" value="j">
+                    </div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Circle Diameter (px):</label>
+                    <input type="number" class="form-control parameter-input" id="simonCircleDiameterPx" value="140" min="40" max="400">
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Stimulus Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="simonStimulusDurationMs" value="0" min="0" max="10000">
+                    <div class="parameter-help">0 = show until response or trial duration</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Trial Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="simonTrialDurationMs" value="1500" min="0" max="30000">
+                    <div class="parameter-help">0 = no timeout</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">ITI (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="simonItiMs" value="500" min="0" max="10000">
+                </div>
+            </div>
+            `
+            : (taskType === 'pvt')
+            ? `
+            <div class="parameter-group" id="pvtExperimentParameters">
+                <div class="group-title d-flex justify-content-between align-items-center">
+                    <div>
+                        <span>PVT Experiment Settings</span>
+                        <small class="text-muted d-block">Default values for PVT components</small>
+                    </div>
+                    <button class="btn btn-sm btn-info" id="previewTaskDefaultsBtn" onclick="window.componentPreview?.showPreview(window.jsonBuilderInstance?.getCurrentPvtDefaults())">
+                        <i class="fas fa-eye"></i> Preview Defaults
+                    </button>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Default Response Device:</label>
+                    <select class="form-control parameter-input" id="pvtDefaultResponseDevice">
+                        <option value="keyboard" selected>Keyboard</option>
+                        <option value="mouse">Mouse</option>
+                        <option value="both">Both</option>
+                    </select>
+                    <div class="parameter-help">Mouse mode registers clicks on the timer screen. Both allows keyboard + click.</div>
+                </div>
+
+                <div class="parameter-row" id="pvtKeyboardOnlyNote" style="display:none;">
+                    <label class="parameter-label text-muted">Keyboard Mapping:</label>
+                    <div class="parameter-help text-muted">Key mapping is ignored when response device is Mouse.</div>
+                </div>
+
+                <div id="pvtKeyboardKeysGroup">
+                    <div class="parameter-row">
+                        <label class="parameter-label">Response Key:</label>
+                        <input type="text" class="form-control parameter-input" id="pvtResponseKey" value="space">
+                        <div class="parameter-help">Key used to respond when the timer is running</div>
+                    </div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Foreperiod (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="pvtForeperiodMs" value="4000" min="0" max="60000">
+                    <div class="parameter-help">Delay before timer starts (blocks can randomize this)</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Trial Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="pvtTrialDurationMs" value="10000" min="0" max="60000">
+                    <div class="parameter-help">0 = no timeout (timer can run indefinitely)</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">ITI (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="pvtItiMs" value="0" min="0" max="30000">
+                    <div class="parameter-help">Post-trial gap after response/timeout</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Feedback Mode:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="pvtFeedbackEnabled">
+                            <label class="form-check-label" for="pvtFeedbackEnabled">Show feedback message on false starts (responses before the timer starts)</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="parameter-row" id="pvtFeedbackMessageGroup" style="display:none;">
+                    <label class="parameter-label">Feedback Message:</label>
+                    <textarea class="form-control parameter-input" id="pvtFeedbackMessage" rows="2" placeholder="e.g., Too soon! / Please wait for the timer."></textarea>
+                    <div class="parameter-help">Displayed only after false starts (researcher-defined)</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">False Start Handling:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="pvtAddTrialPerFalseStart">
+                            <label class="form-check-label" for="pvtAddTrialPerFalseStart">Add one extra trial per false start</label>
+                        </div>
+                        <div class="parameter-help">When enabled, false starts do not count toward the intended PVT block length (Interpreter extends the block to preserve the target number of valid trials).</div>
+                    </div>
                 </div>
             </div>
             `
@@ -1142,6 +1631,88 @@ class JsonBuilder {
                 <div class="parameter-row">
                     <label class="parameter-label">Mask Duration (ms):</label>
                     <input type="number" class="form-control parameter-input" id="gaborMaskDurationMs" value="67" min="0" max="10000">
+                </div>
+            </div>
+            `
+            : (taskType === 'stroop')
+            ? `
+            <div class="parameter-group" id="stroopExperimentParameters">
+                <div class="group-title d-flex justify-content-between align-items-center">
+                    <div>
+                        <span>Stroop Experiment Settings</span>
+                        <small class="text-muted d-block">Default values for Stroop components</small>
+                    </div>
+                    <button class="btn btn-sm btn-info" id="previewTaskDefaultsBtn" onclick="window.componentPreview?.showPreview(window.jsonBuilderInstance?.getCurrentStroopDefaults())">
+                        <i class="fas fa-eye"></i> Preview Defaults
+                    </button>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Stimulus Set Size:</label>
+                    <input type="number" class="form-control parameter-input" id="stroopStimulusSetSize" value="4" min="2" max="7">
+                    <div class="parameter-help">Number of color-name stimuli (2–7)</div>
+                </div>
+
+                <div id="stroopStimuliRows"></div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Default Response Mode:</label>
+                    <select class="form-control parameter-input" id="stroopDefaultResponseMode">
+                        <option value="color_naming" selected>Precise color naming (choose ink color)</option>
+                        <option value="congruency">Congruency judgment (match vs mismatch)</option>
+                    </select>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Default Response Device:</label>
+                    <select class="form-control parameter-input" id="stroopDefaultResponseDevice">
+                        <option value="keyboard" selected>Keyboard</option>
+                        <option value="mouse">Mouse</option>
+                    </select>
+                    <div class="parameter-help">Mouse mode shows on-screen buttons; keyboard uses keys below.</div>
+                </div>
+
+                <div class="parameter-row" id="stroopKeyboardOnlyNote" style="display:none;">
+                    <label class="parameter-label text-muted">Keyboard Mappings:</label>
+                    <div class="parameter-help text-muted">Key mappings are ignored when response device is Mouse.</div>
+                </div>
+
+                <div id="stroopColorNamingKeysGroup">
+                    <div class="parameter-row">
+                        <label class="parameter-label">Choice Keys:</label>
+                        <input type="text" class="form-control parameter-input" id="stroopChoiceKeys" value="1,2,3,4">
+                        <div class="parameter-help">Comma-separated keys mapped to Stimulus 1..N (e.g., 1,2,3,4)</div>
+                    </div>
+                </div>
+
+                <div id="stroopCongruencyKeysGroup" style="display:none;">
+                    <div class="parameter-row">
+                        <label class="parameter-label">Congruent Key:</label>
+                        <input type="text" class="form-control parameter-input" id="stroopCongruentKey" value="f">
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Incongruent Key:</label>
+                        <input type="text" class="form-control parameter-input" id="stroopIncongruentKey" value="j">
+                    </div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Font Size (px):</label>
+                    <input type="number" class="form-control parameter-input" id="stroopStimulusFontSizePx" value="64" min="10" max="200">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Stimulus Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="stroopStimulusDurationMs" value="0" min="0" max="10000">
+                    <div class="parameter-help">0 = show until response or trial duration</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Trial Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="stroopTrialDurationMs" value="2000" min="0" max="30000">
+                    <div class="parameter-help">0 = no timeout</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">ITI (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="stroopItiMs" value="500" min="0" max="10000">
                 </div>
             </div>
             `
@@ -1504,6 +2075,15 @@ class JsonBuilder {
         // Task-specific conditional UI (Gabor response keys)
         this.bindGaborSettingsUI();
 
+        // Task-specific conditional UI (Stroop stimulus set + response mappings)
+        this.bindStroopSettingsUI();
+
+        // Task-specific conditional UI (Simon response device + keys)
+        this.bindSimonSettingsUI();
+
+        // Task-specific conditional UI (PVT response device + key)
+        this.bindPvtSettingsUI();
+
         // Rewards toggle (experiment-wide)
         this.bindRewardsToggleUI();
         
@@ -1642,6 +2222,88 @@ class JsonBuilder {
                     <label class="parameter-label">ITI (ms):</label>
                     <input type="number" class="form-control parameter-input" id="sartItiMs" value="0" min="0" max="10000">
                     <div class="parameter-help">Default inter-trial interval</div>
+                </div>
+            </div>
+            `
+            : (taskType === 'pvt')
+            ? `
+            <div class="parameter-group" id="pvtExperimentParameters">
+                <div class="group-title d-flex justify-content-between align-items-center">
+                    <div>
+                        <span>PVT Experiment Settings</span>
+                        <small class="text-muted d-block">Default values for PVT components</small>
+                    </div>
+                    <button class="btn btn-sm btn-info" id="previewTaskDefaultsBtn" onclick="window.componentPreview?.showPreview(window.jsonBuilderInstance?.getCurrentPvtDefaults())">
+                        <i class="fas fa-eye"></i> Preview Defaults
+                    </button>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Response Device:</label>
+                    <select class="form-control parameter-input" id="pvtDefaultResponseDevice">
+                        <option value="keyboard" selected>Keyboard</option>
+                        <option value="mouse">Mouse</option>
+                        <option value="both">Both</option>
+                    </select>
+                    <div class="parameter-help">Mouse mode registers clicks on the timer screen. Both allows keyboard + click.</div>
+                </div>
+
+                <div class="parameter-row" id="pvtKeyboardOnlyNote" style="display:none;">
+                    <label class="parameter-label text-muted">Keyboard Mapping:</label>
+                    <div class="parameter-help text-muted">Key mapping is ignored when response device is Mouse.</div>
+                </div>
+
+                <div id="pvtKeyboardKeysGroup">
+                    <div class="parameter-row">
+                        <label class="parameter-label">Response Key:</label>
+                        <input type="text" class="form-control parameter-input" id="pvtResponseKey" value="space">
+                        <div class="parameter-help">Key used to respond when the timer is running</div>
+                    </div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Foreperiod (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="pvtForeperiodMs" value="4000" min="0" max="60000">
+                    <div class="parameter-help">Delay before timer starts (blocks can randomize this)</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Trial Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="pvtTrialDurationMs" value="10000" min="0" max="60000">
+                    <div class="parameter-help">0 = no timeout (timer can run indefinitely)</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">ITI (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="pvtItiMs" value="0" min="0" max="30000">
+                    <div class="parameter-help">Post-trial gap after response/timeout</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Feedback Mode:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="pvtFeedbackEnabled">
+                            <label class="form-check-label" for="pvtFeedbackEnabled">Show feedback message on false starts (responses before the timer starts)</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="parameter-row" id="pvtFeedbackMessageGroup" style="display:none;">
+                    <label class="parameter-label">Feedback Message:</label>
+                    <textarea class="form-control parameter-input" id="pvtFeedbackMessage" rows="2" placeholder="e.g., Too soon! / Please wait for the timer."></textarea>
+                    <div class="parameter-help">Displayed only after false starts (researcher-defined)</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">False Start Handling:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="pvtAddTrialPerFalseStart">
+                            <label class="form-check-label" for="pvtAddTrialPerFalseStart">Add one extra trial per false start</label>
+                        </div>
+                        <div class="parameter-help">When enabled, false starts do not count toward the intended PVT block length (Interpreter extends the block to preserve the target number of valid trials).</div>
+                    </div>
                 </div>
             </div>
             `
@@ -2173,6 +2835,12 @@ class JsonBuilder {
         // Task-specific conditional UI (Gabor response keys)
         this.bindGaborSettingsUI();
 
+        // Task-specific conditional UI (Stroop stimulus set + response mappings)
+        this.bindStroopSettingsUI();
+
+        // Task-specific conditional UI (PVT response device + key + feedback)
+        this.bindPvtSettingsUI();
+
         // Rewards toggle (experiment-wide)
         this.bindRewardsToggleUI();
         
@@ -2248,26 +2916,53 @@ class JsonBuilder {
         };
 
         const createBlockComponentDef = (currentTaskType) => {
+            const blockDisplayName = (currentTaskType === 'rdm')
+                ? 'RDM Block'
+                : (currentTaskType === 'flanker')
+                    ? 'Flanker Block'
+                    : (currentTaskType === 'sart')
+                        ? 'SART Block'
+                        : (currentTaskType === 'simon')
+                            ? 'Simon Block'
+                        : (currentTaskType === 'gabor')
+                            ? 'Gabor Block'
+                            : (currentTaskType === 'stroop')
+                                ? 'Stroop Block'
+                                : 'Block';
+
             const baseOptions = (currentTaskType === 'flanker')
                 ? ['flanker-trial']
                 : (currentTaskType === 'sart')
                     ? ['sart-trial']
+                    : (currentTaskType === 'simon')
+                        ? ['simon-trial']
                     : (currentTaskType === 'gabor')
                         ? ['gabor-trial', 'gabor-quest']
+                        : (currentTaskType === 'stroop')
+                            ? ['stroop-trial']
                         : ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups'];
 
             const defaultType = baseOptions[0] || 'rdm-trial';
 
+            const defaultBlockLength = this.getExperimentWideBlockLengthDefault();
+
             const commonParams = {
                 block_component_type: { type: 'select', default: defaultType, options: baseOptions },
-                block_length: { type: 'number', default: 100, min: 1, max: 50000 },
+                block_length: { type: 'number', default: defaultBlockLength, min: 1, max: 50000 },
                 sampling_mode: { type: 'select', default: 'per-trial', options: ['per-trial', 'per-block'] },
                 seed: { type: 'string', default: '' },
                 detection_response_task_enabled: { type: 'boolean', default: false }
             };
 
+            const flankerStimulusTypeDefault = (() => {
+                const el = document.getElementById('flankerStimulusType');
+                const v = (el && typeof el.value === 'string') ? el.value : null;
+                const s = (v ?? 'arrows').toString().trim();
+                return s || 'arrows';
+            })();
+
             const flankerOnlyParams = {
-                flanker_stimulus_type: { type: 'select', default: 'arrows', options: ['arrows', 'letters', 'symbols', 'custom'] },
+                flanker_stimulus_type: { type: 'select', default: flankerStimulusTypeDefault, options: ['arrows', 'letters', 'symbols', 'custom'] },
                 flanker_target_stimulus_options: { type: 'string', default: 'H' },
                 flanker_distractor_stimulus_options: { type: 'string', default: 'S' },
                 flanker_neutral_stimulus_options: { type: 'string', default: '–' },
@@ -2347,6 +3042,61 @@ class JsonBuilder {
                 gabor_mask_duration_max: { type: 'number', default: 67, min: 0, max: 10000 }
             };
 
+            const stroopOnlyParams = {
+                // Library sampling
+                stroop_word_options: { type: 'string', default: 'RED,GREEN,BLUE,YELLOW' },
+                stroop_ink_color_options: { type: 'string', default: 'RED,GREEN,BLUE,YELLOW' },
+                stroop_congruency_options: { type: 'string', default: 'auto,congruent,incongruent' },
+
+                // Response overrides
+                stroop_response_mode: { type: 'select', default: 'inherit', options: ['inherit', 'color_naming', 'congruency'] },
+                stroop_response_device: { type: 'select', default: 'inherit', options: ['inherit', 'keyboard', 'mouse'] },
+                stroop_choice_keys: { type: 'string', default: '' },
+                stroop_congruent_key: { type: 'string', default: '' },
+                stroop_incongruent_key: { type: 'string', default: '' },
+
+                // Timing windows
+                stroop_stimulus_duration_min: { type: 'number', default: 0, min: 0, max: 10000 },
+                stroop_stimulus_duration_max: { type: 'number', default: 0, min: 0, max: 10000 },
+                stroop_trial_duration_min: { type: 'number', default: 2000, min: 0, max: 60000 },
+                stroop_trial_duration_max: { type: 'number', default: 2000, min: 0, max: 60000 },
+                stroop_iti_min: { type: 'number', default: 500, min: 0, max: 10000 },
+                stroop_iti_max: { type: 'number', default: 500, min: 0, max: 10000 }
+            };
+
+            const simonOnlyParams = {
+                // Sampling
+                simon_color_options: { type: 'string', default: 'BLUE,ORANGE' },
+                simon_side_options: { type: 'string', default: 'left,right' },
+
+                // Response overrides
+                simon_response_device: { type: 'select', default: 'inherit', options: ['inherit', 'keyboard', 'mouse'] },
+                simon_left_key: { type: 'string', default: '' },
+                simon_right_key: { type: 'string', default: '' },
+
+                // Timing windows
+                simon_stimulus_duration_min: { type: 'number', default: 0, min: 0, max: 10000 },
+                simon_stimulus_duration_max: { type: 'number', default: 0, min: 0, max: 10000 },
+                simon_trial_duration_min: { type: 'number', default: 1500, min: 0, max: 60000 },
+                simon_trial_duration_max: { type: 'number', default: 1500, min: 0, max: 60000 },
+                simon_iti_min: { type: 'number', default: 500, min: 0, max: 10000 },
+                simon_iti_max: { type: 'number', default: 500, min: 0, max: 10000 }
+            };
+
+            const pvtOnlyParams = {
+                // Response overrides
+                pvt_response_device: { type: 'select', default: 'inherit', options: ['inherit', 'keyboard', 'mouse', 'both'] },
+                pvt_response_key: { type: 'string', default: '' },
+
+                // Timing windows
+                pvt_foreperiod_min: { type: 'number', default: 2000, min: 0, max: 60000 },
+                pvt_foreperiod_max: { type: 'number', default: 10000, min: 0, max: 60000 },
+                pvt_trial_duration_min: { type: 'number', default: 10000, min: 0, max: 60000 },
+                pvt_trial_duration_max: { type: 'number', default: 10000, min: 0, max: 60000 },
+                pvt_iti_min: { type: 'number', default: 0, min: 0, max: 30000 },
+                pvt_iti_max: { type: 'number', default: 0, min: 0, max: 30000 }
+            };
+
             // RDM-only params remain in RDM mode; other tasks should not inherit the RDM UI surface.
             const rdmOnlyParams = {
                 // Dot color (used for simple trial/practice/adaptive; dot-groups uses per-group colors)
@@ -2413,13 +3163,19 @@ class JsonBuilder {
                 ? flankerOnlyParams
                 : (currentTaskType === 'sart')
                     ? sartOnlyParams
+                    : (currentTaskType === 'simon')
+                        ? simonOnlyParams
+                    : (currentTaskType === 'pvt')
+                        ? pvtOnlyParams
                     : (currentTaskType === 'gabor')
                         ? gaborOnlyParams
+                        : (currentTaskType === 'stroop')
+                            ? stroopOnlyParams
                         : rdmOnlyParams;
 
             return {
                 id: 'block',
-                name: 'Block',
+                name: blockDisplayName,
                 icon: 'fas fa-layer-group',
                 description: 'Compactly represent many generated trials using parameter windows (ranges)',
                 category: 'advanced',
@@ -2589,6 +3345,12 @@ class JsonBuilder {
                     icon: 'fas fa-shapes',
                     description: 'Builder-only: subtask window composed into the SOC session at export',
                     category: 'task'
+                }),
+                createComponentDefFromSchema('soc-subtask-pvt-like', {
+                    name: 'SOC Subtask: PVT-like',
+                    icon: 'fas fa-bell',
+                    description: 'Builder-only: scrolling logs with alert countdown + red flash; composed into the SOC session at export',
+                    category: 'task'
                 })
             );
 
@@ -2670,8 +3432,8 @@ class JsonBuilder {
             return baseComponents;
         }
 
-        // For Flanker/SART/Gabor, show only task-appropriate components.
-        if (taskType === 'flanker' || taskType === 'sart' || taskType === 'gabor') {
+        // For Flanker/SART/Simon/PVT/Gabor/Stroop, show only task-appropriate components.
+        if (taskType === 'flanker' || taskType === 'sart' || taskType === 'simon' || taskType === 'pvt' || taskType === 'gabor' || taskType === 'stroop') {
             if (taskType === 'flanker') {
                 baseComponents.push({
                     id: 'flanker-trial',
@@ -2716,6 +3478,48 @@ class JsonBuilder {
                 });
             }
 
+            if (taskType === 'simon') {
+                baseComponents.push({
+                    id: 'simon-trial',
+                    name: `Simon ${unitName}`,
+                    icon: 'fas fa-circle-dot',
+                    description: 'Simon trial/frame (two circles; respond by mapped color side; interpreter implements stimulus + scoring)',
+                    category: 'task',
+                    parameters: {
+                        stimulus_side: { type: 'select', default: 'left', options: ['left', 'right'] },
+                        stimulus_color_name: { type: 'string', default: 'BLUE' },
+
+                        response_device: { type: 'select', default: 'inherit', options: ['inherit', 'keyboard', 'mouse'] },
+                        left_key: { type: 'string', default: 'f' },
+                        right_key: { type: 'string', default: 'j' },
+
+                        circle_diameter_px: { type: 'number', default: 140, min: 40, max: 400 },
+
+                        stimulus_duration_ms: { type: 'number', default: 0, min: 0, max: 10000 },
+                        trial_duration_ms: { type: 'number', default: 1500, min: 0, max: 30000 },
+                        iti_ms: { type: 'number', default: 500, min: 0, max: 10000 }
+                    }
+                });
+            }
+
+            if (taskType === 'pvt') {
+                baseComponents.push({
+                    id: 'pvt-trial',
+                    name: `PVT ${unitName}`,
+                    icon: 'fas fa-stopwatch',
+                    description: 'Psychomotor Vigilance Task trial (variable foreperiod; running 4-digit timer; keyboard/click response)',
+                    category: 'task',
+                    parameters: {
+                        response_device: { type: 'select', default: 'inherit', options: ['inherit', 'keyboard', 'mouse', 'both'] },
+                        response_key: { type: 'string', default: 'space' },
+
+                        foreperiod_ms: { type: 'number', default: 4000, min: 0, max: 60000 },
+                        trial_duration_ms: { type: 'number', default: 10000, min: 0, max: 60000 },
+                        iti_ms: { type: 'number', default: 0, min: 0, max: 30000 }
+                    }
+                });
+            }
+
             if (taskType === 'gabor') {
                 baseComponents.push({
                     id: 'gabor-trial',
@@ -2752,6 +3556,34 @@ class JsonBuilder {
                         patch_border_opacity: { type: 'number', default: 0.22, min: 0, max: 1, step: 0.01 },
 
                         detection_response_task_enabled: { type: 'boolean', default: false }
+                    }
+                });
+            }
+
+            if (taskType === 'stroop') {
+                baseComponents.push({
+                    id: 'stroop-trial',
+                    name: `Stroop ${unitName}`,
+                    icon: 'fas fa-font',
+                    description: 'Stroop trial/frame (word shown in ink color; interpreter implements stimulus + scoring)',
+                    category: 'task',
+                    parameters: {
+                        word: { type: 'string', default: 'RED' },
+                        ink_color_name: { type: 'string', default: 'BLUE' },
+                        congruency: { type: 'select', default: 'auto', options: ['auto', 'congruent', 'incongruent'] },
+
+                        response_mode: { type: 'select', default: 'inherit', options: ['inherit', 'color_naming', 'congruency'] },
+                        response_device: { type: 'select', default: 'inherit', options: ['inherit', 'keyboard', 'mouse'] },
+
+                        // Key mappings (can be overridden per-trial; defaults can be applied from the Stroop defaults panel).
+                        choice_keys: { type: 'array', default: ['1', '2', '3', '4'] },
+                        congruent_key: { type: 'string', default: 'f' },
+                        incongruent_key: { type: 'string', default: 'j' },
+
+                        stimulus_font_size_px: { type: 'number', default: 64, min: 12, max: 200 },
+                        stimulus_duration_ms: { type: 'number', default: 0, min: 0, max: 10000 },
+                        trial_duration_ms: { type: 'number', default: 2000, min: 0, max: 30000 },
+                        iti_ms: { type: 'number', default: 500, min: 0, max: 10000 }
                     }
                 });
             }
@@ -2918,78 +3750,6 @@ class JsonBuilder {
                     }
                 },
                 {
-                    id: 'block',
-                    name: 'Block',
-                    icon: 'fas fa-layer-group',
-                    description: 'Compactly represent many generated trials using parameter windows (ranges)',
-                    category: 'advanced',
-                    parameters: {
-                        block_component_type: { type: 'select', default: 'rdm-trial', options: ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups'] },
-                        block_length: { type: 'number', default: 100, min: 1, max: 50000 },
-                        sampling_mode: { type: 'select', default: 'per-trial', options: ['per-trial', 'per-block'] },
-                        seed: { type: 'string', default: '' },
-
-                        // Dot color (used for simple trial/practice/adaptive; dot-groups uses per-group colors)
-                        dot_color: { type: 'COLOR', default: '#FFFFFF' },
-
-                        // Continuous mode transitions (applied when experiment_type = continuous)
-                        transition_duration: { type: 'number', default: 500, min: 0, max: 20000 },
-                        transition_type: { type: 'select', default: 'both', options: ['both', 'color', 'speed'] },
-
-                        // Per-block response overrides
-                        response_device: { type: 'select', default: 'inherit', options: ['inherit', 'keyboard', 'mouse', 'touch', 'voice', 'custom'] },
-                        response_keys: { type: 'string', default: '' },
-                        require_response_mode: { type: 'select', default: 'inherit', options: ['inherit', 'true', 'false'] },
-                        mouse_segments: { type: 'number', default: 2, min: 1, max: 12 },
-                        mouse_start_angle_deg: { type: 'number', default: 0, min: 0, max: 359 },
-                        mouse_selection_mode: { type: 'select', default: 'click', options: ['click', 'hover'] },
-
-                        // rdm-trial windows
-                        coherence_min: { type: 'number', default: 0.2, min: 0, max: 1, step: 0.01 },
-                        coherence_max: { type: 'number', default: 0.8, min: 0, max: 1, step: 0.01 },
-                        direction_options: { type: 'string', default: '0,180' },
-                        speed_min: { type: 'number', default: 4, min: 0, max: 50 },
-                        speed_max: { type: 'number', default: 10, min: 0, max: 50 },
-
-                        // rdm-practice windows
-                        practice_coherence_min: { type: 'number', default: 0.5, min: 0, max: 1, step: 0.01 },
-                        practice_coherence_max: { type: 'number', default: 0.9, min: 0, max: 1, step: 0.01 },
-                        practice_direction_options: { type: 'string', default: '0,180' },
-                        practice_feedback_duration_min: { type: 'number', default: 750, min: 0, max: 5000 },
-                        practice_feedback_duration_max: { type: 'number', default: 1500, min: 0, max: 5000 },
-
-                        // rdm-adaptive windows
-                        adaptive_initial_coherence_min: { type: 'number', default: 0.05, min: 0, max: 1, step: 0.01 },
-                        adaptive_initial_coherence_max: { type: 'number', default: 0.2, min: 0, max: 1, step: 0.01 },
-                        adaptive_algorithm: { type: 'select', default: 'quest', options: ['quest', 'staircase', 'simple'] },
-                        adaptive_step_size_min: { type: 'number', default: 0.02, min: 0.001, max: 0.5, step: 0.001 },
-                        adaptive_step_size_max: { type: 'number', default: 0.08, min: 0.001, max: 0.5, step: 0.001 },
-                        adaptive_target_performance: { type: 'number', default: 0.82, min: 0.5, max: 1, step: 0.01 },
-
-                        // rdm-dot-groups windows
-                        group_1_percentage_min: { type: 'number', default: 40, min: 0, max: 100 },
-                        group_1_percentage_max: { type: 'number', default: 60, min: 0, max: 100 },
-                        group_1_color: { type: 'COLOR', default: '#FF0066' },
-                        group_1_coherence_min: { type: 'number', default: 0.1, min: 0, max: 1, step: 0.01 },
-                        group_1_coherence_max: { type: 'number', default: 0.5, min: 0, max: 1, step: 0.01 },
-                        group_1_direction_options: { type: 'string', default: '0,180' },
-                        group_1_speed_min: { type: 'number', default: 4, min: 0, max: 50 },
-                        group_1_speed_max: { type: 'number', default: 10, min: 0, max: 50 },
-                        group_2_coherence_min: { type: 'number', default: 0.5, min: 0, max: 1, step: 0.01 },
-                        group_2_coherence_max: { type: 'number', default: 0.9, min: 0, max: 1, step: 0.01 },
-                        group_2_color: { type: 'COLOR', default: '#0066FF' },
-                        group_2_direction_options: { type: 'string', default: '0,180' },
-                        group_2_speed_min: { type: 'number', default: 4, min: 0, max: 50 },
-                        group_2_speed_max: { type: 'number', default: 10, min: 0, max: 50 },
-
-                        // Dot-groups cue border / target
-                        response_target_group: { type: 'select', default: 'none', options: ['none', 'group_1', 'group_2'] },
-                        cue_border_mode: { type: 'select', default: 'off', options: ['off', 'target-group-color', 'custom'] },
-                        cue_border_color: { type: 'COLOR', default: '#FFFFFF' },
-                        cue_border_width: { type: 'number', default: 4, min: 0, max: 20 }
-                    }
-                },
-                {
                     id: 'rdm-adaptive',
                     name: 'RDM Adaptive',
                     icon: 'fas fa-chart-line',
@@ -3005,6 +3765,9 @@ class JsonBuilder {
                     }
                 }
             );
+
+            // Add one canonical, task-scoped Block definition.
+            baseComponents.push(createBlockComponentDef('rdm'));
         }
 
         // Add generic stimulus components (RDM mode)
@@ -3239,6 +4002,18 @@ class JsonBuilder {
                 Object.assign(componentData, this.getFlankerDefaultsForNewComponent());
             }
 
+            if (componentDef.id === 'stroop-trial') {
+                Object.assign(componentData, this.getStroopDefaultsForNewComponent());
+            }
+
+            if (componentDef.id === 'simon-trial') {
+                Object.assign(componentData, this.getSimonDefaultsForNewComponent());
+            }
+
+            if (componentDef.id === 'pvt-trial') {
+                Object.assign(componentData, this.getPvtDefaultsForNewComponent());
+            }
+
             if (componentDef.id === 'gabor-trial') {
                 Object.assign(componentData, this.getGaborDefaultsForNewComponent());
             }
@@ -3251,6 +4026,15 @@ class JsonBuilder {
                 const currentTaskType = document.getElementById('taskType')?.value || 'rdm';
                 if (currentTaskType === 'gabor') {
                     Object.assign(componentData, this.getGaborDefaultsForNewBlock());
+                }
+                if (currentTaskType === 'stroop') {
+                    Object.assign(componentData, this.getStroopDefaultsForNewBlock());
+                }
+                if (currentTaskType === 'simon') {
+                    Object.assign(componentData, this.getSimonDefaultsForNewBlock());
+                }
+                if (currentTaskType === 'pvt') {
+                    Object.assign(componentData, this.getPvtDefaultsForNewBlock());
                 }
             }
 
@@ -3590,6 +4374,88 @@ class JsonBuilder {
             };
         }
 
+        if (taskType === 'stroop') {
+            const stimuli = this.getCurrentStroopStimuliFromUI();
+            const n = Array.isArray(stimuli) ? stimuli.length : 0;
+
+            const responseMode = (document.getElementById('stroopDefaultResponseMode')?.value || 'color_naming').toString();
+            const responseDevice = (document.getElementById('stroopDefaultResponseDevice')?.value || 'keyboard').toString();
+
+            const choiceKeys = this.parseStroopChoiceKeysFromUI(Math.max(2, n));
+            const congruentKey = (document.getElementById('stroopCongruentKey')?.value || 'f').toString();
+            const incongruentKey = (document.getElementById('stroopIncongruentKey')?.value || 'j').toString();
+
+            const fontSizePx = Number.parseInt(document.getElementById('stroopStimulusFontSizePx')?.value || '64', 10);
+            const stimMs = Number.parseInt(document.getElementById('stroopStimulusDurationMs')?.value || '0', 10);
+            const trialMs = Number.parseInt(document.getElementById('stroopTrialDurationMs')?.value || '2000', 10);
+            const itiMs = Number.parseInt(document.getElementById('stroopItiMs')?.value || '500', 10);
+
+            config.stroop_settings = {
+                stimuli: Array.isArray(stimuli) ? stimuli : [],
+                response_mode: responseMode,
+                response_device: responseDevice,
+
+                choice_keys: choiceKeys,
+                congruent_key: congruentKey,
+                incongruent_key: incongruentKey,
+
+                stimulus_font_size_px: Number.isFinite(fontSizePx) ? fontSizePx : 64,
+                stimulus_duration_ms: Number.isFinite(stimMs) ? stimMs : 0,
+                trial_duration_ms: Number.isFinite(trialMs) ? trialMs : 2000,
+                iti_ms: Number.isFinite(itiMs) ? itiMs : 500
+            };
+        }
+
+        if (taskType === 'simon') {
+            const stimuli = this.getCurrentSimonStimuliFromUI();
+
+            const responseDevice = (document.getElementById('simonDefaultResponseDevice')?.value || 'keyboard').toString();
+            const leftKey = (document.getElementById('simonLeftKey')?.value || 'f').toString();
+            const rightKey = (document.getElementById('simonRightKey')?.value || 'j').toString();
+
+            const circleDiameterPx = Number.parseInt(document.getElementById('simonCircleDiameterPx')?.value || '140', 10);
+
+            const stimMs = Number.parseInt(document.getElementById('simonStimulusDurationMs')?.value || '0', 10);
+            const trialMs = Number.parseInt(document.getElementById('simonTrialDurationMs')?.value || '1500', 10);
+            const itiMs = Number.parseInt(document.getElementById('simonItiMs')?.value || '500', 10);
+
+            config.simon_settings = {
+                stimuli: Array.isArray(stimuli) ? stimuli : [],
+                response_device: responseDevice,
+                left_key: leftKey,
+                right_key: rightKey,
+                circle_diameter_px: Number.isFinite(circleDiameterPx) ? circleDiameterPx : 140,
+                stimulus_duration_ms: Number.isFinite(stimMs) ? stimMs : 0,
+                trial_duration_ms: Number.isFinite(trialMs) ? trialMs : 1500,
+                iti_ms: Number.isFinite(itiMs) ? itiMs : 500
+            };
+        }
+
+        if (taskType === 'pvt') {
+            const responseDevice = (document.getElementById('pvtDefaultResponseDevice')?.value || 'keyboard').toString();
+            const responseKey = (document.getElementById('pvtResponseKey')?.value || 'space').toString();
+
+            const addTrialPerFalseStart = !!document.getElementById('pvtAddTrialPerFalseStart')?.checked;
+
+            const feedbackEnabled = !!document.getElementById('pvtFeedbackEnabled')?.checked;
+            const feedbackMessage = (document.getElementById('pvtFeedbackMessage')?.value || '').toString();
+
+            const foreperiodMs = Number.parseInt(document.getElementById('pvtForeperiodMs')?.value || '4000', 10);
+            const trialMs = Number.parseInt(document.getElementById('pvtTrialDurationMs')?.value || '10000', 10);
+            const itiMs = Number.parseInt(document.getElementById('pvtItiMs')?.value || '0', 10);
+
+            config.pvt_settings = {
+                response_device: responseDevice,
+                response_key: responseKey,
+                foreperiod_ms: Number.isFinite(foreperiodMs) ? foreperiodMs : 4000,
+                trial_duration_ms: Number.isFinite(trialMs) ? trialMs : 10000,
+                iti_ms: Number.isFinite(itiMs) ? itiMs : 0,
+                feedback_enabled: feedbackEnabled,
+                feedback_message: feedbackMessage,
+                add_trial_per_false_start: addTrialPerFalseStart
+            };
+        }
+
         if (taskType === 'soc-dashboard') {
             const title = (document.getElementById('socTitle')?.value || 'SOC Dashboard').toString();
             const wallpaperUrl = (document.getElementById('socWallpaperUrl')?.value || '').toString().trim();
@@ -3682,6 +4548,340 @@ class JsonBuilder {
             trial_duration_ms: 1150,
             iti_ms: parseInt(document.getElementById('sartItiMs')?.value || '0', 10),
             detection_response_task_enabled: false
+        };
+    }
+
+    getCurrentStroopStimuliFromUI() {
+        const sizeEl = document.getElementById('stroopStimulusSetSize');
+        const rawN = Number.parseInt(sizeEl?.value || '4', 10);
+        const n = Number.isFinite(rawN) ? Math.max(2, Math.min(7, rawN)) : 4;
+
+        const fallback = [
+            { name: 'RED', color: '#ff0000' },
+            { name: 'GREEN', color: '#00aa00' },
+            { name: 'BLUE', color: '#0066ff' },
+            { name: 'YELLOW', color: '#ffd200' },
+            { name: 'PURPLE', color: '#7a3cff' },
+            { name: 'ORANGE', color: '#ff7a00' },
+            { name: 'PINK', color: '#ff3c8f' }
+        ];
+
+        const stimuli = [];
+        for (let i = 1; i <= n; i += 1) {
+            const nameRaw = document.getElementById(`stroopStimulusName_${i}`)?.value;
+            const colorRaw = document.getElementById(`stroopStimulusColor_${i}`)?.value;
+
+            const name = (nameRaw ?? fallback[i - 1]?.name ?? `COLOR_${i}`).toString().trim();
+            const color = (colorRaw ?? fallback[i - 1]?.color ?? '#ffffff').toString().trim();
+            stimuli.push({ name, color });
+        }
+
+        return stimuli;
+    }
+
+    getCurrentSimonStimuliFromUI() {
+        const fallback = [
+            { name: 'BLUE', color: '#0066ff' },
+            { name: 'ORANGE', color: '#ff7a00' }
+        ];
+
+        const n1 = (document.getElementById('simonStimulusName_1')?.value ?? fallback[0].name).toString().trim() || fallback[0].name;
+        const c1 = (document.getElementById('simonStimulusColor_1')?.value ?? fallback[0].color).toString().trim() || fallback[0].color;
+        const n2 = (document.getElementById('simonStimulusName_2')?.value ?? fallback[1].name).toString().trim() || fallback[1].name;
+        const c2 = (document.getElementById('simonStimulusColor_2')?.value ?? fallback[1].color).toString().trim() || fallback[1].color;
+
+        return [
+            { name: n1, color: c1 },
+            { name: n2, color: c2 }
+        ];
+    }
+
+    parseStroopChoiceKeysFromUI(stimulusCount) {
+        const raw = document.getElementById('stroopChoiceKeys')?.value;
+        const keys = (raw ?? '')
+            .toString()
+            .split(',')
+            .map(s => s.trim())
+            .filter(Boolean);
+
+        if (keys.length >= stimulusCount) return keys.slice(0, stimulusCount);
+
+        // Fill up with 1..N if missing
+        const out = keys.slice();
+        for (let i = out.length + 1; i <= stimulusCount; i += 1) {
+            out.push(`${i}`);
+        }
+        return out;
+    }
+
+    /**
+     * Build a preview payload for the current Stroop defaults.
+     */
+    getCurrentStroopDefaults() {
+        const stimuli = this.getCurrentStroopStimuliFromUI();
+        const n = stimuli.length;
+
+        const responseMode = (document.getElementById('stroopDefaultResponseMode')?.value || 'color_naming').toString();
+        const responseDevice = (document.getElementById('stroopDefaultResponseDevice')?.value || 'keyboard').toString();
+
+        const choiceKeys = this.parseStroopChoiceKeysFromUI(n);
+        const congruentKey = (document.getElementById('stroopCongruentKey')?.value || 'f').toString();
+        const incongruentKey = (document.getElementById('stroopIncongruentKey')?.value || 'j').toString();
+
+        const fontSizePx = Number.parseInt(document.getElementById('stroopStimulusFontSizePx')?.value || '64', 10);
+        const stimMs = Number.parseInt(document.getElementById('stroopStimulusDurationMs')?.value || '0', 10);
+        const trialMs = Number.parseInt(document.getElementById('stroopTrialDurationMs')?.value || '2000', 10);
+        const itiMs = Number.parseInt(document.getElementById('stroopItiMs')?.value || '500', 10);
+
+        return {
+            type: 'stroop-trial',
+            name: 'Stroop Defaults',
+
+            word: (stimuli[0]?.name || 'RED').toString(),
+            ink_color_name: (stimuli[1]?.name || stimuli[0]?.name || 'BLUE').toString(),
+            congruency: 'auto',
+
+            response_mode: responseMode,
+            response_device: responseDevice,
+            choice_keys: choiceKeys,
+            congruent_key: congruentKey,
+            incongruent_key: incongruentKey,
+
+            stimulus_font_size_px: Number.isFinite(fontSizePx) ? fontSizePx : 64,
+            stimulus_duration_ms: Number.isFinite(stimMs) ? stimMs : 0,
+            trial_duration_ms: Number.isFinite(trialMs) ? trialMs : 2000,
+            iti_ms: Number.isFinite(itiMs) ? itiMs : 500,
+
+            // Non-standard field: helps preview components that want defaults context.
+            stroop_settings: {
+                stimuli,
+                response_mode: responseMode,
+                response_device: responseDevice,
+                choice_keys: choiceKeys,
+                congruent_key: congruentKey,
+                incongruent_key: incongruentKey
+            },
+
+            detection_response_task_enabled: false
+        };
+    }
+
+    /**
+     * Build a preview payload for the current Simon defaults.
+     */
+    getCurrentSimonDefaults() {
+        const stimuli = this.getCurrentSimonStimuliFromUI();
+
+        const responseDevice = (document.getElementById('simonDefaultResponseDevice')?.value || 'keyboard').toString();
+        const leftKey = (document.getElementById('simonLeftKey')?.value || 'f').toString();
+        const rightKey = (document.getElementById('simonRightKey')?.value || 'j').toString();
+
+        const circleDiameterPx = Number.parseInt(document.getElementById('simonCircleDiameterPx')?.value || '140', 10);
+
+        const stimMs = Number.parseInt(document.getElementById('simonStimulusDurationMs')?.value || '0', 10);
+        const trialMs = Number.parseInt(document.getElementById('simonTrialDurationMs')?.value || '1500', 10);
+        const itiMs = Number.parseInt(document.getElementById('simonItiMs')?.value || '500', 10);
+
+        return {
+            type: 'simon-trial',
+            name: 'Simon Defaults',
+
+            stimulus_side: 'left',
+            stimulus_color_name: (stimuli[0]?.name || 'BLUE').toString(),
+
+            response_device: responseDevice,
+            left_key: leftKey,
+            right_key: rightKey,
+            circle_diameter_px: Number.isFinite(circleDiameterPx) ? circleDiameterPx : 140,
+
+            stimulus_duration_ms: Number.isFinite(stimMs) ? stimMs : 0,
+            trial_duration_ms: Number.isFinite(trialMs) ? trialMs : 1500,
+            iti_ms: Number.isFinite(itiMs) ? itiMs : 500,
+
+            // Non-standard field: helps preview components that want defaults context.
+            simon_settings: {
+                stimuli,
+                response_device: responseDevice,
+                left_key: leftKey,
+                right_key: rightKey,
+                circle_diameter_px: Number.isFinite(circleDiameterPx) ? circleDiameterPx : 140
+            },
+
+            detection_response_task_enabled: false
+        };
+    }
+
+    /**
+     * Build a preview payload for the current PVT defaults.
+     */
+    getCurrentPvtDefaults() {
+        const responseDevice = (document.getElementById('pvtDefaultResponseDevice')?.value || 'keyboard').toString();
+        const responseKey = (document.getElementById('pvtResponseKey')?.value || 'space').toString();
+
+        const addTrialPerFalseStart = !!document.getElementById('pvtAddTrialPerFalseStart')?.checked;
+
+        const feedbackEnabled = !!document.getElementById('pvtFeedbackEnabled')?.checked;
+        const feedbackMessage = (document.getElementById('pvtFeedbackMessage')?.value || '').toString();
+
+        const foreperiodMs = Number.parseInt(document.getElementById('pvtForeperiodMs')?.value || '4000', 10);
+        const trialMs = Number.parseInt(document.getElementById('pvtTrialDurationMs')?.value || '10000', 10);
+        const itiMs = Number.parseInt(document.getElementById('pvtItiMs')?.value || '0', 10);
+
+        return {
+            type: 'pvt-trial',
+            name: 'PVT Defaults',
+
+            response_device: responseDevice,
+            response_key: responseKey,
+
+            foreperiod_ms: Number.isFinite(foreperiodMs) ? foreperiodMs : 4000,
+            trial_duration_ms: Number.isFinite(trialMs) ? trialMs : 10000,
+            iti_ms: Number.isFinite(itiMs) ? itiMs : 0,
+
+            // Preview-only fields (mirrors pvt_settings export)
+            feedback_enabled: feedbackEnabled,
+            feedback_message: feedbackMessage,
+            add_trial_per_false_start: addTrialPerFalseStart,
+
+            detection_response_task_enabled: false
+        };
+    }
+
+    getPvtDefaultsForNewComponent() {
+        return {
+            response_device: 'inherit',
+            response_key: (document.getElementById('pvtResponseKey')?.value || 'space').toString(),
+            foreperiod_ms: Number.parseInt(document.getElementById('pvtForeperiodMs')?.value || '4000', 10),
+            trial_duration_ms: Number.parseInt(document.getElementById('pvtTrialDurationMs')?.value || '10000', 10),
+            iti_ms: Number.parseInt(document.getElementById('pvtItiMs')?.value || '0', 10)
+        };
+    }
+
+    getPvtDefaultsForNewBlock() {
+        const foreperiod = Number.parseInt(document.getElementById('pvtForeperiodMs')?.value || '4000', 10);
+        const trialMs = Number.parseInt(document.getElementById('pvtTrialDurationMs')?.value || '10000', 10);
+        const itiMs = Number.parseInt(document.getElementById('pvtItiMs')?.value || '0', 10);
+
+        // Default to a wide foreperiod window for variability.
+        const minFp = 2000;
+        const maxFp = 10000;
+
+        return {
+            block_component_type: 'pvt-trial',
+
+            pvt_response_device: 'inherit',
+            pvt_response_key: (document.getElementById('pvtResponseKey')?.value || 'space').toString(),
+
+            pvt_foreperiod_min: Number.isFinite(minFp) ? minFp : (Number.isFinite(foreperiod) ? foreperiod : 4000),
+            pvt_foreperiod_max: Number.isFinite(maxFp) ? maxFp : (Number.isFinite(foreperiod) ? foreperiod : 4000),
+
+            pvt_trial_duration_min: Number.isFinite(trialMs) ? trialMs : 10000,
+            pvt_trial_duration_max: Number.isFinite(trialMs) ? trialMs : 10000,
+            pvt_iti_min: Number.isFinite(itiMs) ? itiMs : 0,
+            pvt_iti_max: Number.isFinite(itiMs) ? itiMs : 0
+        };
+    }
+
+    getSimonDefaultsForNewComponent() {
+        const stimuli = this.getCurrentSimonStimuliFromUI();
+
+        return {
+            stimulus_side: 'left',
+            stimulus_color_name: (stimuli[0]?.name || 'BLUE').toString(),
+            response_device: 'inherit',
+            left_key: (document.getElementById('simonLeftKey')?.value || 'f').toString(),
+            right_key: (document.getElementById('simonRightKey')?.value || 'j').toString(),
+            circle_diameter_px: Number.parseInt(document.getElementById('simonCircleDiameterPx')?.value || '140', 10),
+            stimulus_duration_ms: Number.parseInt(document.getElementById('simonStimulusDurationMs')?.value || '0', 10),
+            trial_duration_ms: Number.parseInt(document.getElementById('simonTrialDurationMs')?.value || '1500', 10),
+            iti_ms: Number.parseInt(document.getElementById('simonItiMs')?.value || '500', 10)
+        };
+    }
+
+    getSimonDefaultsForNewBlock() {
+        const stimuli = this.getCurrentSimonStimuliFromUI();
+        const names = (Array.isArray(stimuli) ? stimuli : [])
+            .map(s => (s?.name ?? '').toString().trim())
+            .filter(Boolean);
+        const nameList = names.join(',');
+
+        const stimMs = Number.parseInt(document.getElementById('simonStimulusDurationMs')?.value || '0', 10);
+        const trialMs = Number.parseInt(document.getElementById('simonTrialDurationMs')?.value || '1500', 10);
+        const itiMs = Number.parseInt(document.getElementById('simonItiMs')?.value || '500', 10);
+
+        return {
+            block_component_type: 'simon-trial',
+
+            simon_color_options: nameList || 'BLUE,ORANGE',
+            simon_side_options: 'left,right',
+
+            simon_response_device: 'inherit',
+            simon_left_key: (document.getElementById('simonLeftKey')?.value || 'f').toString(),
+            simon_right_key: (document.getElementById('simonRightKey')?.value || 'j').toString(),
+
+            simon_stimulus_duration_min: Number.isFinite(stimMs) ? stimMs : 0,
+            simon_stimulus_duration_max: Number.isFinite(stimMs) ? stimMs : 0,
+            simon_trial_duration_min: Number.isFinite(trialMs) ? trialMs : 1500,
+            simon_trial_duration_max: Number.isFinite(trialMs) ? trialMs : 1500,
+            simon_iti_min: Number.isFinite(itiMs) ? itiMs : 500,
+            simon_iti_max: Number.isFinite(itiMs) ? itiMs : 500
+        };
+    }
+
+    getStroopDefaultsForNewComponent() {
+        const stimuli = this.getCurrentStroopStimuliFromUI();
+        const n = stimuli.length;
+        const choiceKeys = this.parseStroopChoiceKeysFromUI(n);
+
+        return {
+            // Provide reasonable starting values; researcher can override per-trial.
+            word: (stimuli[0]?.name || 'RED').toString(),
+            ink_color_name: (stimuli[1]?.name || stimuli[0]?.name || 'BLUE').toString(),
+            congruency: 'auto',
+
+            response_mode: 'inherit',
+            response_device: 'inherit',
+
+            choice_keys: choiceKeys,
+            congruent_key: (document.getElementById('stroopCongruentKey')?.value || 'f').toString(),
+            incongruent_key: (document.getElementById('stroopIncongruentKey')?.value || 'j').toString(),
+
+            stimulus_font_size_px: Number.parseInt(document.getElementById('stroopStimulusFontSizePx')?.value || '64', 10),
+            stimulus_duration_ms: Number.parseInt(document.getElementById('stroopStimulusDurationMs')?.value || '0', 10),
+            trial_duration_ms: Number.parseInt(document.getElementById('stroopTrialDurationMs')?.value || '2000', 10),
+            iti_ms: Number.parseInt(document.getElementById('stroopItiMs')?.value || '500', 10)
+        };
+    }
+
+    getStroopDefaultsForNewBlock() {
+        const stimuli = this.getCurrentStroopStimuliFromUI();
+        const n = stimuli.length;
+        const names = stimuli.map(s => (s?.name ?? '').toString().trim()).filter(Boolean);
+        const nameList = names.join(',');
+        const choiceKeys = this.parseStroopChoiceKeysFromUI(n).join(',');
+
+        const stimMs = Number.parseInt(document.getElementById('stroopStimulusDurationMs')?.value || '0', 10);
+        const trialMs = Number.parseInt(document.getElementById('stroopTrialDurationMs')?.value || '2000', 10);
+        const itiMs = Number.parseInt(document.getElementById('stroopItiMs')?.value || '500', 10);
+
+        return {
+            block_component_type: 'stroop-trial',
+
+            stroop_word_options: nameList,
+            stroop_congruency_options: 'auto,congruent,incongruent',
+
+            stroop_response_mode: 'inherit',
+            stroop_response_device: 'inherit',
+            stroop_choice_keys: choiceKeys,
+            stroop_congruent_key: (document.getElementById('stroopCongruentKey')?.value || 'f').toString(),
+            stroop_incongruent_key: (document.getElementById('stroopIncongruentKey')?.value || 'j').toString(),
+
+            stroop_stimulus_duration_min: Number.isFinite(stimMs) ? stimMs : 0,
+            stroop_stimulus_duration_max: Number.isFinite(stimMs) ? stimMs : 0,
+            stroop_trial_duration_min: Number.isFinite(trialMs) ? trialMs : 2000,
+            stroop_trial_duration_max: Number.isFinite(trialMs) ? trialMs : 2000,
+            stroop_iti_min: Number.isFinite(itiMs) ? itiMs : 500,
+            stroop_iti_max: Number.isFinite(itiMs) ? itiMs : 500
         };
     }
 
@@ -3867,6 +5067,55 @@ class JsonBuilder {
         return { duration_ms: Number.isFinite(durationMs) ? durationMs : 0, type };
     }
 
+    getExperimentWideLengthCapForBlocks() {
+        // Trial-based: cap is num_trials.
+        if (this.experimentType === 'trial-based') {
+            const raw = document.getElementById('numTrials')?.value;
+            const n = Number.parseInt(raw ?? '', 10);
+            return (Number.isFinite(n) && n > 0) ? n : null;
+        }
+
+        // Continuous: cap is total frames = duration (sec) * frame_rate.
+        if (this.experimentType === 'continuous') {
+            const durRaw = document.getElementById('duration')?.value;
+            const frRaw = document.getElementById('frameRate')?.value;
+            const durationSec = Number.parseFloat(durRaw ?? '');
+            const frameRate = Number.parseFloat(frRaw ?? '60');
+            if (!Number.isFinite(durationSec) || durationSec <= 0) return null;
+            if (!Number.isFinite(frameRate) || frameRate <= 0) return null;
+            return Math.max(1, Math.round(durationSec * frameRate));
+        }
+
+        return null;
+    }
+
+    getExperimentWideBlockLengthDefault() {
+        return this.getExperimentWideLengthCapForBlocks() ?? 100;
+    }
+
+    findBlockLengthViolations(config) {
+        const cap = this.getExperimentWideLengthCapForBlocks();
+        if (!cap) return [];
+
+        const timeline = Array.isArray(config?.timeline) ? config.timeline : [];
+        const violations = [];
+
+        for (const c of timeline) {
+            if (!c || typeof c !== 'object') continue;
+            if (c.type !== 'block') continue;
+
+            const len = Number.parseInt(c.length ?? '', 10);
+            if (!Number.isFinite(len)) continue;
+            if (len <= cap) continue;
+
+            const rawType = (c.component_type ?? 'unknown').toString();
+            const safeType = rawType.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || 'unknown';
+            violations.push(`Block (${safeType}) length ${len} exceeds experiment length ${cap}.`);
+        }
+
+        return violations;
+    }
+
     /**
      * Get timeline components from DOM
      */
@@ -3934,7 +5183,8 @@ class JsonBuilder {
             return t === 'soc-subtask-sart-like'
                 || t === 'soc-subtask-flanker-like'
                 || t === 'soc-subtask-nback-like'
-                || t === 'soc-subtask-wcst-like';
+                || t === 'soc-subtask-wcst-like'
+                || t === 'soc-subtask-pvt-like';
         }
 
         function mapSocSubtaskKind(t) {
@@ -3943,6 +5193,7 @@ class JsonBuilder {
                 case 'soc-subtask-flanker-like': return 'flanker-like';
                 case 'soc-subtask-nback-like': return 'nback-like';
                 case 'soc-subtask-wcst-like': return 'wcst-like';
+                case 'soc-subtask-pvt-like': return 'pvt-like';
                 default: return 'unknown';
             }
         }
@@ -4303,7 +5554,14 @@ class JsonBuilder {
                 values.congruency = Array.from(new Set(congruency));
             }
 
-            const stimType = (blockComponent.flanker_stimulus_type ?? 'arrows').toString().trim();
+            const experimentStimType = (() => {
+                const el = document.getElementById('flankerStimulusType');
+                const v = (el && typeof el.value === 'string') ? el.value : null;
+                const s = (v ?? 'arrows').toString().trim();
+                return s || 'arrows';
+            })();
+
+            const stimType = (blockComponent.flanker_stimulus_type ?? experimentStimType).toString().trim();
             const stimTypeNorm = stimType.toLowerCase();
             const isArrows = (stimTypeNorm === '' || stimTypeNorm === 'arrows');
             if (stimType) {
@@ -4525,6 +5783,95 @@ class JsonBuilder {
                     : {};
                 values.aperture_parameters = { ...existing, ...ap };
             }
+        } else if (componentType === 'stroop-trial') {
+            const parseStringList = (raw) => {
+                if (raw === undefined || raw === null) return [];
+                return raw
+                    .toString()
+                    .split(',')
+                    .map(s => s.trim())
+                    .filter(Boolean);
+            };
+
+            const words = parseStringList(blockComponent.stroop_word_options);
+            if (words.length > 0) values.word = Array.from(new Set(words));
+
+            // Ink colors are *named* entries from the experiment-wide stimulus palette.
+            // Prefer the same stimulus list as words (palette-driven), but support legacy
+            // stroop_ink_color_options if it exists in older configs.
+            const legacyInks = parseStringList(blockComponent.stroop_ink_color_options);
+            const inks = (legacyInks.length > 0) ? legacyInks : words;
+            if (inks.length > 0) values.ink_color_name = Array.from(new Set(inks));
+
+            const congr = parseStringList(blockComponent.stroop_congruency_options);
+            if (congr.length > 0) values.congruency = Array.from(new Set(congr));
+
+            const mode = (blockComponent.stroop_response_mode ?? 'inherit').toString().trim();
+            if (mode && mode !== 'inherit') values.response_mode = mode;
+
+            const dev = (blockComponent.stroop_response_device ?? 'inherit').toString().trim();
+            if (dev && dev !== 'inherit') values.response_device = dev;
+
+            // Only export response mappings when the block explicitly overrides to keyboard.
+            // If the block inherits (or uses mouse), let experiment-wide stroop_settings drive mappings.
+            if (dev === 'keyboard') {
+                if (mode === 'congruency') {
+                    const ck = (blockComponent.stroop_congruent_key ?? '').toString().trim();
+                    const ik = (blockComponent.stroop_incongruent_key ?? '').toString().trim();
+                    if (ck) values.congruent_key = ck;
+                    if (ik) values.incongruent_key = ik;
+                } else {
+                    const choiceKeys = parseStringList(blockComponent.stroop_choice_keys);
+                    if (choiceKeys.length > 0) values.choice_keys = choiceKeys;
+                }
+            }
+
+            addWindow('stimulus_duration_ms', blockComponent.stroop_stimulus_duration_min, blockComponent.stroop_stimulus_duration_max);
+            addWindow('trial_duration_ms', blockComponent.stroop_trial_duration_min, blockComponent.stroop_trial_duration_max);
+            addWindow('iti_ms', blockComponent.stroop_iti_min, blockComponent.stroop_iti_max);
+        } else if (componentType === 'simon-trial') {
+            const parseStringList = (raw) => {
+                if (raw === undefined || raw === null) return [];
+                return raw
+                    .toString()
+                    .split(',')
+                    .map(s => s.trim())
+                    .filter(Boolean);
+            };
+
+            const colors = parseStringList(blockComponent.simon_color_options);
+            if (colors.length > 0) values.stimulus_color_name = Array.from(new Set(colors));
+
+            const sides = parseStringList(blockComponent.simon_side_options);
+            if (sides.length > 0) values.stimulus_side = Array.from(new Set(sides));
+
+            const dev = (blockComponent.simon_response_device ?? 'inherit').toString().trim();
+            if (dev && dev !== 'inherit') values.response_device = dev;
+
+            // Only export response mappings when the block explicitly overrides to keyboard.
+            if (dev === 'keyboard') {
+                const lk = (blockComponent.simon_left_key ?? '').toString().trim();
+                const rk = (blockComponent.simon_right_key ?? '').toString().trim();
+                if (lk) values.left_key = lk;
+                if (rk) values.right_key = rk;
+            }
+
+            addWindow('stimulus_duration_ms', blockComponent.simon_stimulus_duration_min, blockComponent.simon_stimulus_duration_max);
+            addWindow('trial_duration_ms', blockComponent.simon_trial_duration_min, blockComponent.simon_trial_duration_max);
+            addWindow('iti_ms', blockComponent.simon_iti_min, blockComponent.simon_iti_max);
+        } else if (componentType === 'pvt-trial') {
+            const dev = (blockComponent.pvt_response_device ?? 'inherit').toString().trim();
+            if (dev && dev !== 'inherit') values.response_device = dev;
+
+            const usesKeyboard = (dev === 'keyboard' || dev === 'both');
+            if (usesKeyboard) {
+                const key = (blockComponent.pvt_response_key ?? '').toString().trim();
+                if (key) values.response_key = key;
+            }
+
+            addWindow('foreperiod_ms', blockComponent.pvt_foreperiod_min, blockComponent.pvt_foreperiod_max);
+            addWindow('trial_duration_ms', blockComponent.pvt_trial_duration_min, blockComponent.pvt_trial_duration_max);
+            addWindow('iti_ms', blockComponent.pvt_iti_min, blockComponent.pvt_iti_max);
         }
 
         const out = {
@@ -4986,11 +6333,20 @@ class JsonBuilder {
         try {
             const config = this.generateJSON();
             const validation = this.schemaValidator.validate(config);
+
+            const blockLengthErrors = this.findBlockLengthViolations(config);
             
-            if (validation.valid) {
+            if (validation.valid && blockLengthErrors.length === 0) {
                 this.showValidationResult('success', 'Configuration is valid!');
             } else {
-                this.showValidationResult('error', `Validation errors: ${validation.errors.join(', ')}`);
+                const allErrors = [];
+                if (!validation.valid) {
+                    allErrors.push(...(validation.errors || []));
+                }
+                if (blockLengthErrors.length > 0) {
+                    allErrors.push(...blockLengthErrors);
+                }
+                this.showValidationResult('error', `Validation errors: ${allErrors.join(' | ')}`);
             }
         } catch (error) {
             this.showValidationResult('error', `Validation failed: ${error.message}`);
@@ -5039,6 +6395,13 @@ class JsonBuilder {
      */
     async exportJSON() {
         let config = this.generateJSON();
+
+        // Safety: blocks cannot be longer than the experiment-wide length.
+        const blockLengthErrors = this.findBlockLengthViolations(config);
+        if (blockLengthErrors.length > 0) {
+            this.showValidationResult('error', `Cannot export: ${blockLengthErrors.join(' | ')}`);
+            return;
+        }
 
         const naming = this.getExportFilename(config);
         if (!naming) return;

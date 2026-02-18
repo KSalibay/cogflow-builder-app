@@ -102,6 +102,12 @@ class ComponentPreview {
             this.showGaborPreview(componentData);
         } else if (componentType === 'sart-trial') {
             this.showSartPreview(componentData);
+        } else if (componentType === 'stroop-trial') {
+            this.showStroopPreview(componentData);
+        } else if (componentType === 'simon-trial') {
+            this.showSimonPreview(componentData);
+        } else if (componentType === 'pvt-trial') {
+            this.showPvtPreview(componentData);
         } else if (componentType === 'survey-response') {
             this.showSurveyPreview(componentData);
         } else if (componentType === 'soc-dashboard') {
@@ -109,7 +115,8 @@ class ComponentPreview {
         } else if (componentType === 'soc-subtask-sart-like' ||
                    componentType === 'soc-subtask-flanker-like' ||
                    componentType === 'soc-subtask-nback-like' ||
-                   componentType === 'soc-subtask-wcst-like') {
+                   componentType === 'soc-subtask-wcst-like' ||
+                   componentType === 'soc-subtask-pvt-like') {
             const wrapped = this.wrapSocSubtaskAsSession(componentData);
             this.showSocDashboardPreview(wrapped);
         } else if (componentType === 'block') {
@@ -123,6 +130,441 @@ class ComponentPreview {
             console.warn('Unknown component type for preview:', componentType);
             this.showGenericPreview(componentData);
         }
+    }
+
+    showSimonPreview(componentData) {
+        const previewModal = this.getPreviewModal();
+        if (!previewModal) return;
+        const { modalEl, modal } = previewModal;
+
+        const modalBody = modalEl.querySelector('.modal-body');
+        if (!modalBody) return;
+
+        const escape = (s) => {
+            return (s ?? '')
+                .toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        };
+
+        const isHex = (s) => typeof s === 'string' && /^#([0-9a-fA-F]{6})$/.test(s.trim());
+
+        const fallbackStimuli = (() => {
+            try {
+                const list = window.jsonBuilderInstance?.getCurrentSimonStimuliFromUI?.();
+                return Array.isArray(list) ? list : [];
+            } catch {
+                return [];
+            }
+        })();
+
+        const stimuli = Array.isArray(componentData?.simon_settings?.stimuli)
+            ? componentData.simon_settings.stimuli
+            : fallbackStimuli;
+
+        const nameToHex = new Map(
+            (Array.isArray(stimuli) ? stimuli : [])
+                .filter(s => s && typeof s === 'object')
+                .map(s => [String(s.name ?? '').trim().toLowerCase(), String(s.color ?? '').trim()])
+                .filter(([k, v]) => !!k && !!v)
+        );
+
+        const resolveHexForName = (name) => {
+            const raw = (name ?? '').toString().trim();
+            if (isHex(raw)) return raw;
+            const hit = nameToHex.get(raw.toLowerCase());
+            return hit || '#ffffff';
+        };
+
+        const resolveInherit = (v, fallback) => {
+            const s = (v ?? '').toString().trim();
+            if (s === '' || s === 'inherit') return fallback;
+            return s;
+        };
+
+        // For Block previews (and Trial previews that omit simon_settings), fall back to current UI defaults.
+        const uiDefaults = (() => {
+            try {
+                return window.jsonBuilderInstance?.getCurrentSimonDefaults?.() || null;
+            } catch {
+                return null;
+            }
+        })();
+
+        const defaults = (componentData?.simon_settings && typeof componentData.simon_settings === 'object')
+            ? componentData.simon_settings
+            : (uiDefaults?.simon_settings && typeof uiDefaults.simon_settings === 'object')
+                ? uiDefaults.simon_settings
+                : {};
+
+        const side = (componentData?.stimulus_side ?? 'left').toString().trim().toLowerCase() === 'right' ? 'right' : 'left';
+        const colorName = (componentData?.stimulus_color_name ?? stimuli?.[0]?.name ?? 'BLUE').toString();
+        const colorHex = resolveHexForName(colorName);
+
+        const responseDevice = resolveInherit(componentData?.response_device, defaults?.response_device || uiDefaults?.response_device || 'keyboard');
+        const leftKey = resolveInherit(componentData?.left_key, defaults?.left_key || uiDefaults?.left_key || 'f');
+        const rightKey = resolveInherit(componentData?.right_key, defaults?.right_key || uiDefaults?.right_key || 'j');
+        const circleDiameterPx = Number.isFinite(Number(componentData?.circle_diameter_px))
+            ? Number(componentData.circle_diameter_px)
+            : (Number.isFinite(Number(defaults?.circle_diameter_px)) ? Number(defaults.circle_diameter_px) : 140);
+
+        const noteText = (componentData?._previewContextNote ?? '').toString();
+        const hasBlockSource = !!componentData?._blockPreviewSource;
+
+        const mappingSwatches = (() => {
+            const list = Array.isArray(stimuli) ? stimuli : [];
+            const take = list.slice(0, 2);
+            const items = take.map((s, idx) => {
+                const n = (s?.name ?? `Stimulus ${idx + 1}`).toString();
+                const h = resolveHexForName(n);
+                const sideLabel = idx === 0 ? 'LEFT response' : 'RIGHT response';
+                return `
+                    <div class="d-inline-flex align-items-center me-3 mb-2" style="gap:8px;">
+                        <span style="display:inline-block; width:14px; height:14px; border-radius:4px; background:${escape(h)}; border:1px solid rgba(255,255,255,0.22);"></span>
+                        <span><b>${escape(n)}</b> → ${escape(sideLabel)}</span>
+                    </div>
+                `;
+            }).join('');
+            return items || '<div class="text-warning">No stimulus library available.</div>';
+        })();
+
+        const keyboardHintHtml = (responseDevice === 'keyboard')
+            ? `<div class="small text-muted"><b>Keyboard:</b> <span class="badge bg-secondary">${escape(leftKey)}</span> = LEFT, <span class="badge bg-secondary">${escape(rightKey)}</span> = RIGHT</div>`
+            : `<div class="small text-muted"><b>Mouse:</b> click LEFT or RIGHT circle</div>`;
+
+        const circleStyle = `width:${circleDiameterPx}px; height:${circleDiameterPx}px; border-radius:999px; border:2px solid rgba(255,255,255,0.35);`;
+
+        const body = `
+            <div class="p-3">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h5 class="mb-1">Simon Preview</h5>
+                        <div class="small text-muted">Lightweight renderer</div>
+                        ${noteText ? `<div class="small text-muted">${escape(noteText)}</div>` : ''}
+                    </div>
+                    <div class="text-end small text-muted">
+                        <div><strong>Stimulus:</strong> ${escape(colorName)}</div>
+                        <div><strong>Side:</strong> ${escape(side)}</div>
+                        <div><strong>Response:</strong> ${escape(responseDevice)}</div>
+                    </div>
+                </div>
+
+                <div class="border rounded mt-3 p-4 d-flex justify-content-center align-items-center" style="background:#111; color:#fff; min-height: 240px;">
+                    <div style="display:flex; gap:64px; align-items:center; justify-content:center;">
+                        <div style="${circleStyle} background:${side === 'left' ? escape(colorHex) : 'rgba(255,255,255,0.08)'};"></div>
+                        <div style="${circleStyle} background:${side === 'right' ? escape(colorHex) : 'rgba(255,255,255,0.08)'};"></div>
+                    </div>
+                </div>
+
+                <div class="mt-3">${keyboardHintHtml}</div>
+                <div class="mt-2 small text-muted">${mappingSwatches}</div>
+
+                <div class="mt-3 small text-muted d-flex justify-content-between align-items-center">
+                    <div>${escape((componentData?.detection_response_task_enabled ? 'DRT enabled' : ''))}</div>
+                    ${hasBlockSource ? `<button type="button" class="btn btn-sm btn-outline-secondary" id="simonResampleBtn"><i class="fas fa-dice"></i> Resample</button>` : ''}
+                </div>
+            </div>
+        `;
+
+        modalBody.innerHTML = body;
+
+        if (hasBlockSource) {
+            const btn = modalBody.querySelector('#simonResampleBtn');
+            if (btn) {
+                btn.onclick = () => {
+                    const sampled = this.sampleComponentFromBlock(componentData._blockPreviewSource);
+                    const baseType = componentData._blockPreviewSource.block_component_type || componentData._blockPreviewSource.component_type || 'simon-trial';
+                    const length = componentData._blockPreviewSource.block_length ?? componentData._blockPreviewSource.length ?? 0;
+                    const sampling = componentData._blockPreviewSource.sampling_mode || 'per-trial';
+                    sampled._previewContextNote = `Block sample → ${baseType} (length ${length}, ${sampling})`;
+                    sampled._blockPreviewSource = componentData._blockPreviewSource;
+                    this.showSimonPreview(sampled);
+                };
+            }
+        }
+
+        modal.show();
+    }
+
+    showPvtPreview(componentData) {
+        const previewModal = this.getPreviewModal();
+        if (!previewModal) return;
+        const { modalEl, modal } = previewModal;
+
+        const modalBody = modalEl.querySelector('.modal-body');
+        if (!modalBody) return;
+
+        const escape = (s) => {
+            return (s ?? '')
+                .toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        };
+
+        const resolveInherit = (v, fallback) => {
+            const s = (v ?? '').toString().trim();
+            if (s === '' || s === 'inherit') return fallback;
+            return s;
+        };
+
+        const uiDefaults = (() => {
+            try {
+                return window.jsonBuilderInstance?.getCurrentPvtDefaults?.() || null;
+            } catch {
+                return null;
+            }
+        })();
+
+        const defaults = {
+            response_device: (uiDefaults?.response_device ?? 'keyboard').toString(),
+            response_key: (uiDefaults?.response_key ?? 'space').toString(),
+            foreperiod_ms: Number.isFinite(Number(uiDefaults?.foreperiod_ms)) ? Number(uiDefaults.foreperiod_ms) : 4000,
+            trial_duration_ms: Number.isFinite(Number(uiDefaults?.trial_duration_ms)) ? Number(uiDefaults.trial_duration_ms) : 10000,
+            iti_ms: Number.isFinite(Number(uiDefaults?.iti_ms)) ? Number(uiDefaults.iti_ms) : 0,
+            feedback_enabled: (uiDefaults?.feedback_enabled === true),
+            feedback_message: (uiDefaults?.feedback_message ?? '').toString()
+        };
+
+        const responseDevice = resolveInherit(componentData?.response_device, defaults.response_device);
+        const responseKey = resolveInherit(componentData?.response_key, defaults.response_key);
+
+        const foreperiodMs = Number.isFinite(Number(componentData?.foreperiod_ms))
+            ? Number(componentData.foreperiod_ms)
+            : defaults.foreperiod_ms;
+
+        const trialMs = Number.isFinite(Number(componentData?.trial_duration_ms))
+            ? Number(componentData.trial_duration_ms)
+            : defaults.trial_duration_ms;
+
+        const itiMs = Number.isFinite(Number(componentData?.iti_ms))
+            ? Number(componentData.iti_ms)
+            : defaults.iti_ms;
+
+        const feedbackEnabled = (typeof componentData?.feedback_enabled === 'boolean')
+            ? componentData.feedback_enabled
+            : defaults.feedback_enabled;
+        const feedbackMessage = (typeof componentData?.feedback_message === 'string')
+            ? componentData.feedback_message
+            : defaults.feedback_message;
+
+        const noteText = (componentData?._previewContextNote ?? '').toString();
+        const hasBlockSource = !!componentData?._blockPreviewSource;
+
+        const responseHint = (responseDevice === 'mouse')
+            ? '<div class="small text-muted"><b>Mouse:</b> click the timer screen</div>'
+            : (responseDevice === 'both')
+                ? `<div class="small text-muted"><b>Both:</b> press <span class="badge bg-secondary">${escape(responseKey)}</span> or click</div>`
+                : `<div class="small text-muted"><b>Keyboard:</b> press <span class="badge bg-secondary">${escape(responseKey)}</span></div>`;
+
+        const body = `
+            <div class="p-3">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h5 class="mb-1">PVT Preview</h5>
+                        <div class="small text-muted">Lightweight renderer</div>
+                        ${noteText ? `<div class="small text-muted">${escape(noteText)}</div>` : ''}
+                    </div>
+                    <div class="text-end small text-muted">
+                        <div><strong>Foreperiod:</strong> ${escape(foreperiodMs)} ms</div>
+                        <div><strong>Timeout:</strong> ${escape(trialMs)} ms</div>
+                        <div><strong>ITI:</strong> ${escape(itiMs)} ms</div>
+                    </div>
+                </div>
+
+                <div class="border rounded mt-3 p-4 d-flex justify-content-center align-items-center" style="background:#111; color:#fff; min-height: 260px;">
+                    <div class="text-center" style="width:100%; max-width:720px;">
+                        <div id="pvtStatus" class="small" style="opacity:0.75; min-height: 18px;">Ready</div>
+                        <div id="pvtStage" tabindex="0" role="button" aria-label="PVT timer stage" style="outline:none; user-select:none; cursor:pointer; padding: 18px 8px; border-radius: 12px;">
+                            <div id="pvtTimer" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 96px; letter-spacing: 0.08em;">
+                                0000
+                            </div>
+                            <div class="mt-2">${responseHint}</div>
+                            <div class="mt-2 small text-muted" style="max-width:680px; margin:0 auto;">
+                                Click/press to respond. This preview simulates foreperiod + timer.
+                            </div>
+                        </div>
+
+                        <div class="mt-3 d-flex justify-content-center gap-2">
+                            <button type="button" class="btn btn-sm btn-success" id="pvtSimStartBtn"><i class="fas fa-play"></i> Simulate Trial</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="pvtSimResetBtn"><i class="fas fa-rotate"></i> Reset</button>
+                        </div>
+
+                        <div id="pvtFeedbackBox" class="alert alert-info mt-3" style="display:none; text-align:left;"></div>
+                    </div>
+                </div>
+
+                <div class="mt-3 small text-muted d-flex justify-content-between align-items-center">
+                    <div>
+                        ${feedbackEnabled ? `<span class="badge bg-info text-dark">Feedback: ON (false-start only)</span>` : `<span class="badge bg-secondary">Feedback: OFF</span>`}
+                    </div>
+                    <div class="d-flex gap-2">
+                        ${hasBlockSource ? `<button type="button" class="btn btn-sm btn-outline-secondary" id="pvtResampleBtn"><i class="fas fa-dice"></i> Resample</button>` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        modalBody.innerHTML = body;
+
+        if (hasBlockSource) {
+            const btn = modalBody.querySelector('#pvtResampleBtn');
+            if (btn) {
+                btn.onclick = () => {
+                    const sampled = this.sampleComponentFromBlock(componentData._blockPreviewSource);
+                    const baseType = componentData._blockPreviewSource.block_component_type || componentData._blockPreviewSource.component_type || 'pvt-trial';
+                    const length = componentData._blockPreviewSource.block_length ?? componentData._blockPreviewSource.length ?? 0;
+                    const sampling = componentData._blockPreviewSource.sampling_mode || 'per-trial';
+                    sampled._previewContextNote = `Block sample → ${baseType} (length ${length}, ${sampling})`;
+                    sampled._blockPreviewSource = componentData._blockPreviewSource;
+                    this.showPvtPreview(sampled);
+                };
+            }
+        }
+
+        // Interactive simulation
+        const statusEl = modalBody.querySelector('#pvtStatus');
+        const stageEl = modalBody.querySelector('#pvtStage');
+        const timerEl = modalBody.querySelector('#pvtTimer');
+        const startBtn = modalBody.querySelector('#pvtSimStartBtn');
+        const resetBtn = modalBody.querySelector('#pvtSimResetBtn');
+        const feedbackBox = modalBody.querySelector('#pvtFeedbackBox');
+
+        let phase = 'idle'; // idle | foreperiod | running | ended
+        let foreTimeout = null;
+        let deadlineTimeout = null;
+        let rafId = null;
+        let targetOnset = null;
+
+        const clearTimers = () => {
+            if (foreTimeout !== null) { clearTimeout(foreTimeout); foreTimeout = null; }
+            if (deadlineTimeout !== null) { clearTimeout(deadlineTimeout); deadlineTimeout = null; }
+            if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+        };
+
+        const fmt4 = (n) => {
+            const x = Math.max(0, Math.min(9999, Math.floor(Number(n) || 0)));
+            return x.toString().padStart(4, '0');
+        };
+
+        const setStatus = (s) => {
+            if (statusEl) statusEl.textContent = s || '';
+        };
+
+        const setTimer = (ms) => {
+            if (timerEl) timerEl.textContent = fmt4(ms);
+        };
+
+        const hideFeedback = () => {
+            if (!feedbackBox) return;
+            feedbackBox.style.display = 'none';
+            feedbackBox.textContent = '';
+        };
+
+        const showFeedback = (msg) => {
+            if (!feedbackBox) return;
+            const m = (msg ?? '').toString();
+            if (!m) return;
+            feedbackBox.textContent = m;
+            feedbackBox.style.display = '';
+            // Match interpreter-ish behavior: auto-hide after a short time.
+            setTimeout(() => {
+                // Only hide if nothing else replaced it.
+                if (feedbackBox.textContent === m) hideFeedback();
+            }, 750);
+        };
+
+        const resetSim = () => {
+            clearTimers();
+            phase = 'idle';
+            targetOnset = null;
+            setStatus('Ready');
+            setTimer(0);
+            hideFeedback();
+            try { stageEl?.focus?.(); } catch { /* ignore */ }
+        };
+
+        const startSim = () => {
+            resetSim();
+            phase = 'foreperiod';
+            setStatus('Get ready…');
+
+            foreTimeout = setTimeout(() => {
+                if (phase !== 'foreperiod') return;
+                phase = 'running';
+                targetOnset = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+                setStatus('Respond now');
+
+                const loop = () => {
+                    if (phase !== 'running') return;
+                    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+                    setTimer(now - targetOnset);
+                    rafId = requestAnimationFrame(loop);
+                };
+                rafId = requestAnimationFrame(loop);
+
+                if (Number.isFinite(Number(trialMs)) && Number(trialMs) > 0) {
+                    deadlineTimeout = setTimeout(() => {
+                        if (phase !== 'running') return;
+                        phase = 'ended';
+                        clearTimers();
+                        setStatus('Timed out');
+                    }, Number(trialMs));
+                }
+            }, Math.max(0, Number(foreperiodMs) || 0));
+        };
+
+        const respond = (source) => {
+            if (phase === 'ended') return;
+
+            if (phase === 'foreperiod' || phase === 'idle') {
+                phase = 'ended';
+                clearTimers();
+                setStatus(`False start (${source})`);
+                if (feedbackEnabled && feedbackMessage) showFeedback(feedbackMessage);
+                return;
+            }
+
+            if (phase === 'running') {
+                const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+                const rt = Math.max(0, now - targetOnset);
+                phase = 'ended';
+                clearTimers();
+                setTimer(rt);
+                setStatus(`Response (${source})`);
+            }
+        };
+
+        if (startBtn) startBtn.onclick = () => startSim();
+        if (resetBtn) resetBtn.onclick = () => resetSim();
+
+        if (stageEl) {
+            stageEl.onclick = () => {
+                if (responseDevice === 'keyboard') return;
+                respond('click');
+            };
+            stageEl.onkeydown = (ev) => {
+                const key = (ev?.key ?? '').toString();
+                const keyLower = key.toLowerCase();
+                const targetKey = (responseKey ?? '').toString().trim().toLowerCase();
+                const isSpace = (key === ' ' || keyLower === 'space');
+                const matches = (targetKey === ' ' || targetKey === 'space') ? isSpace : (keyLower === targetKey);
+                if (!matches) return;
+                if (responseDevice === 'mouse') return;
+                try { ev.preventDefault(); } catch { /* ignore */ }
+                respond('key');
+            };
+
+            // focus so keyboard preview works immediately
+            try { stageEl.focus(); } catch { /* ignore */ }
+        }
+
+        modal.show();
     }
 
     resolveMaybeAssetUrl(raw) {
@@ -385,6 +827,7 @@ class ComponentPreview {
                 case 'soc-subtask-flanker-like': return 'flanker-like';
                 case 'soc-subtask-nback-like': return 'nback-like';
                 case 'soc-subtask-wcst-like': return 'wcst-like';
+                case 'soc-subtask-pvt-like': return 'pvt-like';
                 default: return 'unknown';
             }
         };
@@ -674,6 +1117,208 @@ class ComponentPreview {
                         this.showSartPreview(sampled);
                     };
                 }
+            }
+        }
+
+        modal.show();
+    }
+
+    showStroopPreview(componentData) {
+        const previewModal = this.getPreviewModal();
+        if (!previewModal) return;
+        const { modalEl, modal } = previewModal;
+
+        const modalBody = modalEl.querySelector('.modal-body');
+        if (!modalBody) return;
+
+        const escape = (s) => {
+            return (s ?? '')
+                .toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        };
+
+        const isHex = (s) => typeof s === 'string' && /^#([0-9a-fA-F]{6})$/.test(s.trim());
+
+        const fallbackStimuli = (() => {
+            try {
+                const list = window.jsonBuilderInstance?.getCurrentStroopStimuliFromUI?.();
+                return Array.isArray(list) ? list : [];
+            } catch {
+                return [];
+            }
+        })();
+
+        const stimuli = Array.isArray(componentData?.stroop_settings?.stimuli)
+            ? componentData.stroop_settings.stimuli
+            : fallbackStimuli;
+
+        const nameToHex = new Map(
+            (Array.isArray(stimuli) ? stimuli : [])
+                .filter(s => s && typeof s === 'object')
+                .map(s => [String(s.name ?? '').trim().toLowerCase(), String(s.color ?? '').trim()])
+                .filter(([k, v]) => !!k && !!v)
+        );
+
+        const resolveHexForName = (name) => {
+            const raw = (name ?? '').toString().trim();
+            if (isHex(raw)) return raw;
+            const hit = nameToHex.get(raw.toLowerCase());
+            return hit || '#ffffff';
+        };
+
+        const word = (componentData?.word ?? stimuli?.[0]?.name ?? 'RED').toString();
+        const inkName = (componentData?.ink_color_name ?? stimuli?.[1]?.name ?? stimuli?.[0]?.name ?? 'BLUE').toString();
+        const inkHex = resolveHexForName(inkName);
+
+        const computedCongruency = (word.trim().toLowerCase() === inkName.trim().toLowerCase()) ? 'congruent' : 'incongruent';
+        const congruency = (componentData?.congruency ?? 'auto').toString();
+        const congruencyLabel = (congruency === 'auto') ? `auto → ${computedCongruency}` : congruency;
+
+        const resolveInherit = (v, fallback) => {
+            const s = (v ?? '').toString().trim();
+            if (s === '' || s === 'inherit') return fallback;
+            return s;
+        };
+
+        // For Block previews (and Trial previews that omit stroop_settings), fall back to the
+        // current experiment-wide Stroop defaults in the Builder UI.
+        const uiDefaults = (() => {
+            try {
+                return window.jsonBuilderInstance?.getCurrentStroopDefaults?.() || null;
+            } catch {
+                return null;
+            }
+        })();
+
+        const defaults = (componentData?.stroop_settings && typeof componentData.stroop_settings === 'object')
+            ? componentData.stroop_settings
+            : (uiDefaults?.stroop_settings && typeof uiDefaults.stroop_settings === 'object')
+                ? uiDefaults.stroop_settings
+                : {};
+
+        const responseModeRaw = resolveInherit(componentData?.response_mode, defaults?.response_mode || uiDefaults?.response_mode || 'color_naming');
+        const responseDevice = resolveInherit(componentData?.response_device, defaults?.response_device || uiDefaults?.response_device || 'keyboard');
+        // Mouse mode always behaves like color naming (click the color); don't show keyboard-only congruency mapping.
+        const responseMode = (responseDevice === 'mouse') ? 'color_naming' : responseModeRaw;
+
+        const congruentKey = resolveInherit(componentData?.congruent_key, defaults?.congruent_key || 'f');
+        const incongruentKey = resolveInherit(componentData?.incongruent_key, defaults?.incongruent_key || 'j');
+
+        const choiceKeys = (() => {
+            const raw = componentData?.choice_keys ?? defaults?.choice_keys;
+            if (Array.isArray(raw)) return raw.map(s => (s ?? '').toString());
+            if (typeof raw === 'string') {
+                return raw.split(',').map(s => s.trim()).filter(Boolean);
+            }
+            return [];
+        })();
+
+        const mappingHtml = (() => {
+            if (responseDevice === 'mouse') {
+                const names = (Array.isArray(stimuli) ? stimuli : [])
+                    .map(s => (s?.name ?? '').toString())
+                    .map(s => s.trim())
+                    .filter(Boolean);
+
+                const swatches = names.map(n => {
+                    const hex = resolveHexForName(n);
+                    return `
+                        <div class="d-inline-flex align-items-center me-2 mb-2" style="gap:6px;">
+                            <span style="display:inline-block; width:14px; height:14px; border-radius:4px; background:${escape(hex)}; border:1px solid rgba(255,255,255,0.22);"></span>
+                            <span>${escape(n)}</span>
+                        </div>
+                    `;
+                }).join('');
+
+                return `
+                    <div class="small text-muted">
+                        <div class="mb-1"><b>Mouse mapping:</b> click the correct ink color</div>
+                        <div>${swatches || '<div class="text-warning">No stimulus library available.</div>'}</div>
+                    </div>
+                `;
+            }
+
+            if (responseMode === 'congruency') {
+                return `
+                    <div class="small text-muted">
+                        <div><b>Keyboard:</b> <span class="badge bg-secondary">${escape(congruentKey)}</span> = Congruent</div>
+                        <div><b>Keyboard:</b> <span class="badge bg-secondary">${escape(incongruentKey)}</span> = Incongruent</div>
+                    </div>
+                `;
+            }
+
+            const names = (Array.isArray(stimuli) ? stimuli : []).map(s => (s?.name ?? '').toString()).filter(Boolean);
+            const rows = names.map((n, i) => {
+                const k = choiceKeys[i] ?? `${i + 1}`;
+                return `<div><span class="badge bg-secondary">${escape(k)}</span> = ${escape(n)}</div>`;
+            }).join('');
+
+            return `
+                <div class="small text-muted">
+                    <div class="mb-1"><b>Color naming mapping:</b></div>
+                    ${rows || '<div class="text-warning">No stimulus library available to build mapping.</div>'}
+                </div>
+            `;
+        })();
+
+        const noteText = (componentData?._previewContextNote ?? '').toString();
+        const deviceNote = (responseDevice === 'mouse')
+            ? '<div class="small text-muted mt-2">Mouse mode: participant clicks the correct color.</div>'
+            : '';
+
+        const hasBlockSource = !!componentData?._blockPreviewSource;
+
+        const fontSizePx = Number.isFinite(Number(componentData?.stimulus_font_size_px)) ? Number(componentData.stimulus_font_size_px) : 64;
+
+        const body = `
+            <div class="p-3">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h5 class="mb-1">Stroop Preview</h5>
+                        <div class="small text-muted">Lightweight renderer</div>
+                        ${noteText ? `<div class="small text-muted">${escape(noteText)}</div>` : ''}
+                    </div>
+                    <div class="text-end small text-muted">
+                        <div><strong>Word:</strong> ${escape(word)}</div>
+                        <div><strong>Ink:</strong> ${escape(inkName)} <span style="display:inline-block; width:12px; height:12px; border-radius:3px; background:${escape(inkHex)}; border:1px solid rgba(255,255,255,0.18);"></span></div>
+                        <div><strong>Congruency:</strong> ${escape(congruencyLabel)}</div>
+                        <div><strong>Response:</strong> ${escape(responseMode)} (${escape(responseDevice)})</div>
+                    </div>
+                </div>
+
+                <div class="border rounded mt-3 p-4 d-flex justify-content-center align-items-center" style="background:#111; color:#fff; min-height: 220px;">
+                    <div style="font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; font-weight: 800; letter-spacing: 0.02em; font-size:${fontSizePx}px; line-height:1; color:${escape(inkHex)}; text-transform:uppercase;">
+                        ${escape(word)}
+                    </div>
+                </div>
+
+                <div class="mt-3">${mappingHtml}${deviceNote}</div>
+
+                <div class="mt-3 small text-muted d-flex justify-content-between align-items-center">
+                    <div>${escape((componentData?.detection_response_task_enabled ? 'DRT enabled' : ''))}</div>
+                    ${hasBlockSource ? `<button type="button" class="btn btn-sm btn-outline-secondary" id="stroopResampleBtn"><i class="fas fa-dice"></i> Resample</button>` : ''}
+                </div>
+            </div>
+        `;
+
+        modalBody.innerHTML = body;
+
+        if (hasBlockSource) {
+            const btn = modalBody.querySelector('#stroopResampleBtn');
+            if (btn) {
+                btn.onclick = () => {
+                    const sampled = this.sampleComponentFromBlock(componentData._blockPreviewSource);
+                    const baseType = componentData._blockPreviewSource.block_component_type || componentData._blockPreviewSource.component_type || 'stroop-trial';
+                    const length = componentData._blockPreviewSource.block_length ?? componentData._blockPreviewSource.length ?? 0;
+                    const sampling = componentData._blockPreviewSource.sampling_mode || 'per-trial';
+                    sampled._previewContextNote = `Block sample → ${baseType} (length ${length}, ${sampling})`;
+                    sampled._blockPreviewSource = componentData._blockPreviewSource;
+                    this.showStroopPreview(sampled);
+                };
             }
         }
 
@@ -1106,6 +1751,21 @@ class ComponentPreview {
             return;
         }
 
+        if (baseType === 'stroop-trial') {
+            this.showStroopPreview(sampled);
+            return;
+        }
+
+        if (baseType === 'simon-trial') {
+            this.showSimonPreview(sampled);
+            return;
+        }
+
+        if (baseType === 'pvt-trial') {
+            this.showPvtPreview(sampled);
+            return;
+        }
+
         this.showRDMPreview(sampled);
     }
 
@@ -1337,6 +1997,75 @@ class ComponentPreview {
             if (trialMs !== null) sampled.trial_duration_ms = trialMs;
 
             const iti = randInt(blockData.sart_iti_min, blockData.sart_iti_max);
+            if (iti !== null) sampled.iti_ms = iti;
+        } else if (componentType === 'simon-trial') {
+            const colors = parseStringList(src.simon_color_options);
+            sampled.stimulus_color_name = pickFromList(colors, 'BLUE');
+
+            const sides = parseStringList(src.simon_side_options);
+            sampled.stimulus_side = pickFromList(sides, 'left');
+
+            sampled.response_device = (src.simon_response_device || 'inherit').toString();
+            sampled.left_key = (src.simon_left_key || 'f').toString();
+            sampled.right_key = (src.simon_right_key || 'j').toString();
+
+            const stimMs = randInt(src.simon_stimulus_duration_min, src.simon_stimulus_duration_max);
+            if (stimMs !== null) sampled.stimulus_duration_ms = stimMs;
+
+            const trialMs = randInt(src.simon_trial_duration_min, src.simon_trial_duration_max);
+            if (trialMs !== null) sampled.trial_duration_ms = trialMs;
+
+            const iti = randInt(src.simon_iti_min, src.simon_iti_max);
+            if (iti !== null) sampled.iti_ms = iti;
+        } else if (componentType === 'pvt-trial') {
+            sampled.response_device = (src.pvt_response_device || 'inherit').toString();
+            sampled.response_key = (src.pvt_response_key || 'space').toString();
+
+            const fp = randInt(src.pvt_foreperiod_min, src.pvt_foreperiod_max);
+            if (fp !== null) sampled.foreperiod_ms = fp;
+
+            const trialMs = randInt(src.pvt_trial_duration_min, src.pvt_trial_duration_max);
+            if (trialMs !== null) sampled.trial_duration_ms = trialMs;
+
+            const iti = randInt(src.pvt_iti_min, src.pvt_iti_max);
+            if (iti !== null) sampled.iti_ms = iti;
+        } else if (componentType === 'stroop-trial') {
+            const words = parseStringList(src.stroop_word_options);
+            const inksExplicit = parseStringList(src.stroop_ink_color_options);
+            const inks = (inksExplicit.length > 0) ? inksExplicit : words;
+
+            const congruencyOptions = parseStringList(src.stroop_congruency_options);
+            const congruency = pickFromList(congruencyOptions, 'auto');
+
+            const pickedWord = pickFromList(words, 'RED');
+            let pickedInk = pickFromList(inks, pickedWord);
+
+            if (congruency === 'congruent') {
+                pickedInk = pickedWord;
+            } else if (congruency === 'incongruent') {
+                if (inks.length > 1) {
+                    const different = inks.filter(n => n.trim().toLowerCase() !== pickedWord.trim().toLowerCase());
+                    pickedInk = pickFromList(different, pickedInk);
+                }
+            }
+
+            sampled.word = pickedWord;
+            sampled.ink_color_name = pickedInk;
+            sampled.congruency = congruency;
+
+            sampled.response_mode = (src.stroop_response_mode || 'inherit').toString();
+            sampled.response_device = (src.stroop_response_device || 'inherit').toString();
+            sampled.choice_keys = parseStringList(src.stroop_choice_keys);
+            sampled.congruent_key = (src.stroop_congruent_key || 'f').toString();
+            sampled.incongruent_key = (src.stroop_incongruent_key || 'j').toString();
+
+            const stimMs = randInt(src.stroop_stimulus_duration_min, src.stroop_stimulus_duration_max);
+            if (stimMs !== null) sampled.stimulus_duration_ms = stimMs;
+
+            const trialMs = randInt(src.stroop_trial_duration_min, src.stroop_trial_duration_max);
+            if (trialMs !== null) sampled.trial_duration_ms = trialMs;
+
+            const iti = randInt(src.stroop_iti_min, src.stroop_iti_max);
             if (iti !== null) sampled.iti_ms = iti;
         } else if (componentType === 'gabor-trial' || componentType === 'gabor-quest') {
             const locs = parseStringList(blockData.gabor_target_location_options);

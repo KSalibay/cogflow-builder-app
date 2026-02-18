@@ -752,6 +752,135 @@ class JSPsychSchemas {
                 }
             },
 
+            'soc-subtask-pvt-like': {
+                name: 'soc-subtask-pvt-like',
+                description: 'SOC subtask window (PVT-like vigilance). Scrolling console logs with occasional countdown alerts and a red flash. Composed into the nearest SOC Dashboard session at export time.',
+                parameters: {
+                    title: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Incident alerts',
+                        description: 'Subtask window title'
+                    },
+                    start_at_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        min: 0,
+                        max: 3600000,
+                        description: 'Scheduled start time (ms) from SOC session start. If used with duration_ms, the window appears/disappears automatically.'
+                    },
+                    duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        min: 0,
+                        max: 3600000,
+                        description: 'Scheduled duration (ms). If 0, scheduling is disabled unless end_at_ms is provided manually in JSON.'
+                    },
+                    instructions: {
+                        type: this.parameterTypes.HTML_STRING,
+                        default: '<p>This window shows a scrolling event feed.</p>\n<p>Occasionally you will see a <b>countdown</b> followed by a <b>red flash</b>.</p>\n<p>Press <b>{{RESPONSE_CONTROL}}</b> as soon as the <b>red flash</b> appears.</p>\n<p><i>Click this popup to begin.</i></p>',
+                        description: 'Optional instructions shown in a popup before this subtask begins (closing the popup marks the subtask start time)'
+                    },
+                    instructions_title: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Incident alert monitor',
+                        description: 'Popup title for the subtask instructions overlay'
+                    },
+                    response_device: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'keyboard',
+                        options: ['keyboard', 'mouse'],
+                        description: 'Primary response device for this subtask'
+                    },
+                    response_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'space',
+                        description: 'Keyboard response key (ignored if response_device = mouse)'
+                    },
+
+                    visible_entries: {
+                        type: this.parameterTypes.INT,
+                        default: 10,
+                        min: 3,
+                        max: 30,
+                        description: 'Number of console/log entries visible at once (older entries scroll out of view)'
+                    },
+                    log_scroll_interval_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 400,
+                        min: 50,
+                        max: 5000,
+                        description: 'Milliseconds between new console/log entries (auto-scroll rate)'
+                    },
+
+                    alert_min_interval_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 2000,
+                        min: 250,
+                        max: 600000,
+                        description: 'Minimum time between alerts (ms)'
+                    },
+                    alert_max_interval_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 6000,
+                        min: 250,
+                        max: 600000,
+                        description: 'Maximum time between alerts (ms)'
+                    },
+                    countdown_seconds: {
+                        type: this.parameterTypes.INT,
+                        default: 3,
+                        min: 0,
+                        max: 10,
+                        description: 'Countdown length (seconds) shown before the red flash'
+                    },
+                    flash_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 120,
+                        min: 20,
+                        max: 2000,
+                        description: 'Red flash duration (ms)'
+                    },
+                    response_window_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 1500,
+                        min: 100,
+                        max: 20000,
+                        description: 'Response deadline from red-flash onset (ms)'
+                    },
+                    show_countdown: {
+                        type: this.parameterTypes.BOOL,
+                        default: true,
+                        description: 'Show countdown overlay'
+                    },
+                    show_red_flash: {
+                        type: this.parameterTypes.BOOL,
+                        default: true,
+                        description: 'Show red flash overlay at alert onset'
+                    },
+
+                    min_run_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        min: 0,
+                        max: 3600000,
+                        description: 'Minimum subtask runtime in ms (0 = no minimum)'
+                    },
+                    max_run_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        min: 0,
+                        max: 3600000,
+                        description: 'Maximum subtask runtime in ms (0 = no maximum). If max < min, values are swapped at runtime.'
+                    },
+
+                    detection_response_task_enabled: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        description: 'Enable/disable DRT overlay for this component (handled by interpreter)'
+                    }
+                }
+            },
+
             // Builder-only helper component: composed into soc-dashboard trials on export.
             'soc-dashboard-icon': {
                 name: 'soc-dashboard-icon',
@@ -908,6 +1037,173 @@ class JSPsychSchemas {
                     iti_ms: {
                         type: this.parameterTypes.INT,
                         default: 0,
+                        description: 'Inter-trial interval (ms)'
+                    }
+                }
+            },
+
+            'simon-trial': {
+                name: 'simon-trial',
+                description: 'Simon trial (colored circle appears left/right; respond by mapped color-side; scoring implemented by interpreter)',
+                parameters: {
+                    stimulus_side: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'left',
+                        options: ['left', 'right'],
+                        description: 'Which side the colored stimulus circle appears on'
+                    },
+                    stimulus_color_name: {
+                        type: this.parameterTypes.STRING,
+                        default: 'BLUE',
+                        description: 'Name of the stimulus color (looked up in simon_settings.stimuli by name)'
+                    },
+                    response_device: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'inherit',
+                        options: ['inherit', 'keyboard', 'mouse'],
+                        description: 'Override experiment-wide response_device (inherit uses simon_settings.response_device)'
+                    },
+                    left_key: {
+                        type: this.parameterTypes.KEY,
+                        default: 'f',
+                        description: 'Keyboard key for LEFT response (when response_device=keyboard)'
+                    },
+                    right_key: {
+                        type: this.parameterTypes.KEY,
+                        default: 'j',
+                        description: 'Keyboard key for RIGHT response (when response_device=keyboard)'
+                    },
+                    circle_diameter_px: {
+                        type: this.parameterTypes.INT,
+                        default: 140,
+                        min: 40,
+                        max: 400,
+                        description: 'Diameter of each circle (px)'
+                    },
+                    stimulus_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        description: 'Stimulus display duration (ms). 0 = until response/trial end.'
+                    },
+                    trial_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 1500,
+                        description: 'Total trial duration (ms). 0 = no timeout.'
+                    },
+                    iti_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 500,
+                        description: 'Inter-trial interval (ms)'
+                    }
+                }
+            },
+
+            'pvt-trial': {
+                name: 'pvt-trial',
+                description: 'Psychomotor Vigilance Task trial (foreperiod, running 4-digit timer, keyboard/click response; logic implemented by interpreter)',
+                parameters: {
+                    response_device: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'inherit',
+                        options: ['inherit', 'keyboard', 'mouse', 'both'],
+                        description: 'Override experiment-wide response_device (inherit uses pvt_settings.response_device)'
+                    },
+                    response_key: {
+                        type: this.parameterTypes.KEY,
+                        default: 'space',
+                        description: 'Keyboard key used to respond (ignored if response_device=mouse)'
+                    },
+                    foreperiod_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 4000,
+                        min: 0,
+                        max: 60000,
+                        description: 'Delay before the timer starts (ms)'
+                    },
+                    trial_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 10000,
+                        min: 0,
+                        max: 60000,
+                        description: 'Timeout after timer starts (ms). 0 = no timeout.'
+                    },
+                    iti_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        min: 0,
+                        max: 30000,
+                        description: 'Inter-trial interval after response/timeout (ms)'
+                    }
+                }
+            },
+
+            'stroop-trial': {
+                name: 'stroop-trial',
+                description: 'Stroop trial (word shown in ink color; response/scoring implemented by interpreter)',
+                parameters: {
+                    word: {
+                        type: this.parameterTypes.STRING,
+                        default: 'RED',
+                        description: 'The word to display (usually a color name)'
+                    },
+                    ink_color_name: {
+                        type: this.parameterTypes.STRING,
+                        default: 'BLUE',
+                        description: 'Name of the ink color (looked up in stroop_settings.stimuli by name)'
+                    },
+                    congruency: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'auto',
+                        options: ['auto', 'congruent', 'incongruent'],
+                        description: 'Optional tag used by block generation / logging; auto = derived from word vs ink'
+                    },
+                    response_mode: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'inherit',
+                        options: ['inherit', 'color_naming', 'congruency'],
+                        description: 'Override experiment-wide response_mode (inherit uses stroop_settings.response_mode)'
+                    },
+                    response_device: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'inherit',
+                        options: ['inherit', 'keyboard', 'mouse'],
+                        description: 'Override experiment-wide response_device (inherit uses stroop_settings.response_device)'
+                    },
+                    choice_keys: {
+                        type: this.parameterTypes.KEYS,
+                        default: ['1', '2', '3', '4'],
+                        description: 'Keyboard keys mapped to stroop_settings.stimuli order (color_naming mode)'
+                    },
+                    congruent_key: {
+                        type: this.parameterTypes.KEY,
+                        default: 'f',
+                        description: 'Key for congruent (congruency mode)'
+                    },
+                    incongruent_key: {
+                        type: this.parameterTypes.KEY,
+                        default: 'j',
+                        description: 'Key for incongruent (congruency mode)'
+                    },
+                    stimulus_font_size_px: {
+                        type: this.parameterTypes.INT,
+                        default: 72,
+                        min: 12,
+                        max: 200,
+                        description: 'Font size of the stimulus word in pixels'
+                    },
+                    stimulus_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 1500,
+                        description: 'Stimulus display duration (ms)'
+                    },
+                    trial_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 2000,
+                        description: 'Total trial duration (ms)'
+                    },
+                    iti_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 500,
                         description: 'Inter-trial interval (ms)'
                     }
                 }
@@ -1202,7 +1498,7 @@ class JSPsychSchemas {
                     block_component_type: {
                         type: this.parameterTypes.SELECT,
                         default: 'rdm-trial',
-                        options: ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups', 'flanker-trial', 'sart-trial', 'gabor-trial', 'gabor-quest'],
+                        options: ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups', 'flanker-trial', 'sart-trial', 'simon-trial', 'pvt-trial', 'stroop-trial', 'gabor-trial', 'gabor-quest'],
                         required: true,
                         description: 'What component type this block generates'
                     },
@@ -1649,6 +1945,208 @@ class JSPsychSchemas {
                         default: 800,
                         blockTarget: 'sart-trial',
                         description: 'SART: ITI max (ms)'
+                    },
+
+                    // Simon block windows/values
+                    simon_color_options: {
+                        type: this.parameterTypes.STRING,
+                        default: 'BLUE,ORANGE',
+                        blockTarget: 'simon-trial',
+                        description: 'Simon: comma-separated stimulus color names to sample from (should match simon_settings.stimuli names)'
+                    },
+                    simon_side_options: {
+                        type: this.parameterTypes.STRING,
+                        default: 'left,right',
+                        blockTarget: 'simon-trial',
+                        description: 'Simon: comma-separated sides to sample from. Allowed: left, right.'
+                    },
+                    simon_response_device: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'inherit',
+                        options: ['inherit', 'keyboard', 'mouse'],
+                        blockTarget: 'simon-trial',
+                        description: 'Simon: response device override for generated trials'
+                    },
+                    simon_left_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'f',
+                        blockTarget: 'simon-trial',
+                        description: 'Simon: key for LEFT response (keyboard mode)'
+                    },
+                    simon_right_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'j',
+                        blockTarget: 'simon-trial',
+                        description: 'Simon: key for RIGHT response (keyboard mode)'
+                    },
+                    simon_stimulus_duration_min: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        blockTarget: 'simon-trial',
+                        description: 'Simon: stimulus duration min (ms). 0 = until response/trial end.'
+                    },
+                    simon_stimulus_duration_max: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        blockTarget: 'simon-trial',
+                        description: 'Simon: stimulus duration max (ms). 0 = until response/trial end.'
+                    },
+                    simon_trial_duration_min: {
+                        type: this.parameterTypes.INT,
+                        default: 1500,
+                        blockTarget: 'simon-trial',
+                        description: 'Simon: total trial duration min (ms)'
+                    },
+                    simon_trial_duration_max: {
+                        type: this.parameterTypes.INT,
+                        default: 1500,
+                        blockTarget: 'simon-trial',
+                        description: 'Simon: total trial duration max (ms)'
+                    },
+                    simon_iti_min: {
+                        type: this.parameterTypes.INT,
+                        default: 500,
+                        blockTarget: 'simon-trial',
+                        description: 'Simon: ITI min (ms)'
+                    },
+                    simon_iti_max: {
+                        type: this.parameterTypes.INT,
+                        default: 500,
+                        blockTarget: 'simon-trial',
+                        description: 'Simon: ITI max (ms)'
+                    },
+
+                    // PVT block windows/values
+                    pvt_response_device: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'inherit',
+                        options: ['inherit', 'keyboard', 'mouse', 'both'],
+                        blockTarget: 'pvt-trial',
+                        description: 'PVT: response device override for generated trials'
+                    },
+                    pvt_response_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'space',
+                        blockTarget: 'pvt-trial',
+                        description: 'PVT: response key (keyboard mode)'
+                    },
+                    pvt_foreperiod_min: {
+                        type: this.parameterTypes.INT,
+                        default: 2000,
+                        blockTarget: 'pvt-trial',
+                        description: 'PVT: foreperiod min (ms)'
+                    },
+                    pvt_foreperiod_max: {
+                        type: this.parameterTypes.INT,
+                        default: 10000,
+                        blockTarget: 'pvt-trial',
+                        description: 'PVT: foreperiod max (ms)'
+                    },
+                    pvt_trial_duration_min: {
+                        type: this.parameterTypes.INT,
+                        default: 10000,
+                        blockTarget: 'pvt-trial',
+                        description: 'PVT: trial duration min (ms)'
+                    },
+                    pvt_trial_duration_max: {
+                        type: this.parameterTypes.INT,
+                        default: 10000,
+                        blockTarget: 'pvt-trial',
+                        description: 'PVT: trial duration max (ms)'
+                    },
+                    pvt_iti_min: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        blockTarget: 'pvt-trial',
+                        description: 'PVT: ITI min (ms)'
+                    },
+                    pvt_iti_max: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        blockTarget: 'pvt-trial',
+                        description: 'PVT: ITI max (ms)'
+                    },
+
+                    // Stroop block windows/values
+                    stroop_word_options: {
+                        type: this.parameterTypes.STRING,
+                        default: 'RED,BLUE',
+                        blockTarget: 'stroop-trial',
+                        description: 'Stroop: comma-separated stimulus names to sample from (should match your experiment-wide stimulus library names). Used for both word and ink-color sampling.'
+                    },
+                    stroop_congruency_options: {
+                        type: this.parameterTypes.STRING,
+                        default: 'auto,congruent,incongruent',
+                        blockTarget: 'stroop-trial',
+                        description: 'Stroop: comma-separated congruency modes to sample from. Allowed: auto, congruent, incongruent.'
+                    },
+                    stroop_response_mode: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'inherit',
+                        options: ['inherit', 'color_naming', 'congruency'],
+                        blockTarget: 'stroop-trial',
+                        description: 'Stroop: response mode override for generated trials (inherit uses experiment stroop_settings)'
+                    },
+                    stroop_response_device: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'inherit',
+                        options: ['inherit', 'keyboard', 'mouse'],
+                        blockTarget: 'stroop-trial',
+                        description: 'Stroop: response device override for generated trials'
+                    },
+                    stroop_choice_keys: {
+                        type: this.parameterTypes.STRING,
+                        default: '1,2',
+                        blockTarget: 'stroop-trial',
+                        description: 'Stroop color-naming: comma-separated key labels mapped to each stimulus in order (e.g., 1,2,3,4)'
+                    },
+                    stroop_congruent_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'f',
+                        blockTarget: 'stroop-trial',
+                        description: 'Stroop congruency: key for CONGRUENT (keyboard mode)'
+                    },
+                    stroop_incongruent_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'j',
+                        blockTarget: 'stroop-trial',
+                        description: 'Stroop congruency: key for INCONGRUENT (keyboard mode)'
+                    },
+                    stroop_stimulus_duration_min: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        blockTarget: 'stroop-trial',
+                        description: 'Stroop: stimulus duration min (ms). 0 = until response/trial end.'
+                    },
+                    stroop_stimulus_duration_max: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        blockTarget: 'stroop-trial',
+                        description: 'Stroop: stimulus duration max (ms). 0 = until response/trial end.'
+                    },
+                    stroop_trial_duration_min: {
+                        type: this.parameterTypes.INT,
+                        default: 2000,
+                        blockTarget: 'stroop-trial',
+                        description: 'Stroop: total trial duration min (ms)'
+                    },
+                    stroop_trial_duration_max: {
+                        type: this.parameterTypes.INT,
+                        default: 2000,
+                        blockTarget: 'stroop-trial',
+                        description: 'Stroop: total trial duration max (ms)'
+                    },
+                    stroop_iti_min: {
+                        type: this.parameterTypes.INT,
+                        default: 500,
+                        blockTarget: 'stroop-trial',
+                        description: 'Stroop: ITI min (ms)'
+                    },
+                    stroop_iti_max: {
+                        type: this.parameterTypes.INT,
+                        default: 500,
+                        blockTarget: 'stroop-trial',
+                        description: 'Stroop: ITI max (ms)'
                     },
 
                     // Gabor block windows/values
