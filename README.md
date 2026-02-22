@@ -271,6 +271,16 @@ The timeline is authored in the UI and serialized from DOM `dataset.componentDat
 - `pvt-trial`
 - `block` (component_type can be `pvt-trial`)
 
+### N-back components (`task_type: "nback"`)
+
+- `nback-trial-sequence`
+  - Trial-based: generates an $n$-back sequence and is expanded into `nback-block` trials by the Interpreter.
+  - Continuous: compiled into a continuous N-back stream (Interpreter plugin `nback-continuous`).
+- `nback-block`
+  - Trial-based N-back trial item (usually generated from a sequence/block).
+- `block` (component_type can be `nback-block`)
+  - Acts as an N-back generator with a `block_length` and `parameter_values` (advanced authoring).
+
 ### SOC Dashboard components (`task_type: "soc-dashboard"`)
 
 - `soc-dashboard` (SOC desktop “session container”)
