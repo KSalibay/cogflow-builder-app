@@ -1,7 +1,7 @@
 
 # Schema Reference
 
-This document outlines the schema/validation entry points used by the PsychJSON Builder.
+This document outlines the schema/validation entry points used by the CogFlow Builder.
 
 Note: some older sections in this file may reference legacy/aspirational schema names. The authoritative references for current behavior are:
 

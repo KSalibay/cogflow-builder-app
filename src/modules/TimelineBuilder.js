@@ -563,7 +563,10 @@ class TimelineBuilder {
                 ? 'mouse'
                 : (paramName === 'mouse_response_mode')
                     ? 'mouse'
-                : (paramName === 'response_keys' || paramName === 'go_key')
+                : (paramName === 'show_buttons' || paramName === 'nback_show_buttons')
+                    ? 'mouse'
+                : (paramName === 'response_keys' || paramName === 'go_key' || paramName === 'match_key' || paramName === 'nonmatch_key'
+                    || paramName === 'nback_go_key' || paramName === 'nback_match_key' || paramName === 'nback_nonmatch_key')
                     ? 'keyboard'
                     : (paramName === 'choice_keys')
                         ? 'keyboard'
@@ -665,6 +668,43 @@ class TimelineBuilder {
                             <div class="border rounded p-2" style="background:#fff;">
                                 <img id="${previewId}" alt="image preview" style="max-width: 100%; max-height: 320px; display:none;" />
                                 <div class="text-muted" data-psy-image-empty="1" style="display:none;">No image selected.</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            case this.jsonBuilder.schemaValidator.parameterTypes.AUDIO: {
+                const safeVal = (displayValue === undefined || displayValue === null) ? '' : String(displayValue);
+                const helpId = `${inputId}__help`;
+                const fileId = `${inputId}__file`;
+                const previewId = `${inputId}__preview`;
+                const clearId = `${inputId}__clear`;
+
+                return `
+                    <div class="d-flex flex-column gap-2">
+                        <div class="input-group">
+                            <span class="input-group-text">URL</span>
+                            <input type="text" class="form-control ${disabledClass}" id="${inputId}" value="${this.escapeHtmlAttr(safeVal)}" ${disabledAttr} aria-describedby="${helpId}">
+                        </div>
+
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <input type="file" class="form-control form-control-sm ${disabledClass}" id="${fileId}" accept="audio/*" ${disabledAttr}
+                                   data-psy-audio-file="1" data-psy-audio-param="${this.escapeHtmlAttr(String(paramName))}" style="max-width: 360px;">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="${clearId}" ${disabledAttr}
+                                    data-psy-audio-clear="1" data-psy-audio-param="${this.escapeHtmlAttr(String(paramName))}">
+                                Clear local file
+                            </button>
+                            <small class="text-muted" id="${helpId}">
+                                Tip: choose a local file to preview; it is stored as <code>asset://...</code> until exported.
+                            </small>
+                        </div>
+
+                        <div>
+                            <div class="small text-muted mb-1">Preview</div>
+                            <div class="border rounded p-2" style="background:#fff;">
+                                <audio id="${previewId}" controls style="width: 100%; display:none;"></audio>
+                                <div class="text-muted" data-psy-audio-empty="1" style="display:none;">No audio selected.</div>
                             </div>
                         </div>
                     </div>
@@ -814,6 +854,100 @@ class TimelineBuilder {
         if (responseDeviceEl) {
             responseDeviceEl.addEventListener('change', updateResponseVisibility);
             updateResponseVisibility();
+        }
+
+        // N-back Block generator: response override conditional fields
+        const nbackResponseDeviceEl = formContainer.querySelector('#param_nback_response_device');
+        const updateNbackResponseVisibility = () => {
+            if (!nbackResponseDeviceEl) return;
+            const deviceRaw = (nbackResponseDeviceEl.value || 'inherit').toString().trim().toLowerCase();
+            const effectiveDevice = (deviceRaw === 'inherit')
+                ? ((this.jsonBuilder.getCurrentNbackDefaults?.()?.nback_response_device || 'keyboard').toString().trim().toLowerCase())
+                : deviceRaw;
+
+            // Mouse-only fields
+            formContainer.querySelectorAll('[data-response-group="mouse"]').forEach(el => {
+                const show = (effectiveDevice === 'mouse') && (deviceRaw !== 'inherit');
+                el.style.display = show ? '' : 'none';
+                el.querySelectorAll('input, select, textarea').forEach(i => {
+                    i.disabled = !show;
+                });
+            });
+
+            // Keyboard-only fields
+            formContainer.querySelectorAll('[data-response-group="keyboard"]').forEach(el => {
+                const show = (effectiveDevice === 'keyboard') && (deviceRaw !== 'inherit');
+                el.style.display = show ? '' : 'none';
+                el.querySelectorAll('input, select, textarea').forEach(i => {
+                    i.disabled = !show;
+                });
+            });
+        };
+
+        if (nbackResponseDeviceEl) {
+            nbackResponseDeviceEl.addEventListener('change', updateNbackResponseVisibility);
+            updateNbackResponseVisibility();
+        }
+
+        // N-back: template HTML only relevant when render_mode/custom_html
+        const renderModeEl = formContainer.querySelector('#param_render_mode');
+        const updateRenderModeVisibility = () => {
+            if (!renderModeEl) return;
+            const mode = (renderModeEl.value || 'token').toString().trim().toLowerCase();
+            const templateGroup = formContainer.querySelector('[data-param-name="stimulus_template_html"]');
+            if (!templateGroup) return;
+            const show = (mode === 'custom_html');
+            templateGroup.style.display = show ? '' : 'none';
+            templateGroup.querySelectorAll('input, select, textarea').forEach(i => {
+                i.disabled = !show;
+            });
+        };
+
+        if (renderModeEl) {
+            renderModeEl.addEventListener('change', updateRenderModeVisibility);
+            updateRenderModeVisibility();
+        }
+
+        const nbackRenderModeEl = formContainer.querySelector('#param_nback_render_mode');
+        const updateNbackRenderModeVisibility = () => {
+            if (!nbackRenderModeEl) return;
+            const mode = (nbackRenderModeEl.value || 'token').toString().trim().toLowerCase();
+            const templateGroup = formContainer.querySelector('[data-param-name="nback_stimulus_template_html"]');
+            if (!templateGroup) return;
+            const show = (mode === 'custom_html');
+            templateGroup.style.display = show ? '' : 'none';
+            templateGroup.querySelectorAll('input, select, textarea').forEach(i => {
+                i.disabled = !show;
+            });
+        };
+
+        if (nbackRenderModeEl) {
+            nbackRenderModeEl.addEventListener('change', updateNbackRenderModeVisibility);
+            updateNbackRenderModeVisibility();
+        }
+
+        // Block length clamping: blocks cannot exceed experiment length.
+        const blockLenEl = formContainer.querySelector('#param_block_length');
+        if (blockLenEl && component && component.type === 'block') {
+            const cap = this.jsonBuilder.getExperimentWideLengthCapForBlocks?.();
+            if (Number.isFinite(cap) && cap > 0) {
+                try {
+                    blockLenEl.max = String(cap);
+                } catch {
+                    // ignore
+                }
+
+                const clamp = () => {
+                    const v = Number.parseInt(blockLenEl.value || '', 10);
+                    if (!Number.isFinite(v)) return;
+                    if (v > cap) blockLenEl.value = String(cap);
+                    if (v < 1) blockLenEl.value = '1';
+                };
+
+                blockLenEl.addEventListener('input', clamp);
+                blockLenEl.addEventListener('change', clamp);
+                clamp();
+            }
         }
 
         // SOC N-back-like: show only the key fields relevant to the selected response paradigm.
@@ -1001,6 +1135,8 @@ class TimelineBuilder {
                         ? ['pvt-trial']
                     : (currentTaskType === 'stroop')
                         ? ['stroop-trial']
+                    : (currentTaskType === 'nback')
+                        ? ['nback-block']
                     : (currentTaskType === 'gabor')
                         ? ['gabor-trial', 'gabor-quest']
                     : ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups'];
@@ -1295,6 +1431,102 @@ class TimelineBuilder {
         } catch (e) {
             console.warn('Image parameter setup failed:', e);
         }
+
+        // AUDIO parameters: local file picker + preview + cache binding
+        try {
+            this.setupAudioParameterInputs(formContainer);
+        } catch (e) {
+            console.warn('Audio parameter setup failed:', e);
+        }
+    }
+
+    setupAudioParameterInputs(formContainer) {
+        if (!formContainer) return;
+
+        const componentEl = this.jsonBuilder.currentEditingComponent;
+        const componentId = this.ensureBuilderComponentId(componentEl);
+
+        const updatePreview = (paramName) => {
+            const inputId = `param_${paramName}`;
+            const urlEl = formContainer.querySelector(`#${CSS.escape(inputId)}`);
+            const previewEl = formContainer.querySelector(`#${CSS.escape(inputId)}__preview`);
+            const emptyEl = previewEl?.parentElement?.querySelector('[data-psy-audio-empty="1"]');
+
+            const raw = urlEl ? (urlEl.value || '') : '';
+            let src = raw;
+
+            const parsed = this.parseAssetRef(raw);
+            if (parsed && window.PsychJsonAssetCache && typeof window.PsychJsonAssetCache.get === 'function') {
+                const entry = window.PsychJsonAssetCache.get(parsed.componentId, parsed.field);
+                if (entry && entry.objectUrl) {
+                    src = entry.objectUrl;
+                } else {
+                    src = '';
+                }
+            }
+
+            if (previewEl) {
+                if (src) {
+                    previewEl.src = src;
+                    previewEl.style.display = '';
+                    if (emptyEl) emptyEl.style.display = 'none';
+                } else {
+                    previewEl.removeAttribute('src');
+                    previewEl.style.display = 'none';
+                    if (emptyEl) emptyEl.style.display = '';
+                }
+            }
+        };
+
+        const fileInputs = formContainer.querySelectorAll('input[type="file"][data-psy-audio-file="1"]');
+        fileInputs.forEach((fileEl) => {
+            const paramName = fileEl.getAttribute('data-psy-audio-param') || '';
+            if (!paramName) return;
+
+            fileEl.addEventListener('change', () => {
+                try {
+                    if (!componentId) return;
+                    const file = fileEl.files && fileEl.files[0] ? fileEl.files[0] : null;
+
+                    const urlInput = formContainer.querySelector(`#${CSS.escape(`param_${paramName}`)}`);
+                    if (!urlInput) return;
+
+                    if (file && window.PsychJsonAssetCache && typeof window.PsychJsonAssetCache.put === 'function') {
+                        window.PsychJsonAssetCache.put(componentId, paramName, file);
+                        urlInput.value = `asset://${componentId}/${paramName}`;
+                    }
+
+                    updatePreview(paramName);
+                } catch (e) {
+                    console.warn('Failed to bind audio file:', e);
+                }
+            });
+
+            updatePreview(paramName);
+        });
+
+        const clearButtons = formContainer.querySelectorAll('button[data-psy-audio-clear="1"]');
+        clearButtons.forEach((btn) => {
+            const paramName = btn.getAttribute('data-psy-audio-param') || '';
+            if (!paramName) return;
+            btn.addEventListener('click', () => {
+                try {
+                    const urlInput = formContainer.querySelector(`#${CSS.escape(`param_${paramName}`)}`);
+                    const fileInput = formContainer.querySelector(`#${CSS.escape(`param_${paramName}`)}__file`);
+                    if (fileInput) fileInput.value = '';
+
+                    const parsed = this.parseAssetRef(urlInput ? urlInput.value : '');
+                    if (parsed && window.PsychJsonAssetCache && typeof window.PsychJsonAssetCache.deleteEntry === 'function') {
+                        window.PsychJsonAssetCache.deleteEntry(parsed.componentId, parsed.field);
+                    }
+
+                    if (urlInput) urlInput.value = '';
+                    updatePreview(paramName);
+                } catch (e) {
+                    console.warn('Failed to clear audio asset:', e);
+                }
+            });
+        });
     }
 
     ensureBuilderComponentId(componentEl) {
@@ -1492,6 +1724,15 @@ class TimelineBuilder {
             // Skip helper inputs for IMAGE parameters (file picker, etc.)
             try {
                 if (input.matches && input.matches('[data-psy-image-file="1"]')) {
+                    return;
+                }
+            } catch {
+                // ignore
+            }
+
+            // Skip helper inputs for AUDIO parameters (file picker, etc.)
+            try {
+                if (input.matches && input.matches('[data-psy-audio-file="1"]')) {
                     return;
                 }
             } catch {

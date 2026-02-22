@@ -1,8 +1,24 @@
-# PsychJSON Builder
+<p align="center">
+  <img src="img/logo_dark.png" alt="CogFlow" width="280" />
+</p>
+
+# CogFlow Builder
 
 Static (non-bundled) web app for building JSON configurations for experimental psychology tasks. The current focus is Random Dot Motion (RDM) experiments, including compact “Block” representations for large trial counts.
 
 This app is plain HTML/CSS/JS loaded via classic `<script>` tags (globals; no `import`/`export`).
+
+## Repositories
+
+- Builder repo: https://github.com/KSalibay/json-builder-app
+- Interpreter repo: https://github.com/KSalibay/json-interpreter-app
+
+## Recent highlights (Feb 2026)
+
+- N-back task added end-to-end in the Builder (authoring + export), supporting both **trial-based** and **continuous** modes.
+- Fixation cross support added as an ITI visual marker via `show_fixation_cross_between_trials` (propagates through export and is rendered by the Interpreter).
+- UX overhaul (“CogFlow” rebrand): palette-driven theming (CSS variables), IBM Plex Sans typography, collapsible parameter groups for long defaults, and an app-shell layout to avoid whole-page scrolling.
+- Accessibility Mode toggle added (Atkinson Hyperlegible + higher contrast tokens), persisted locally.
 
 ## Run locally
 
@@ -57,6 +73,16 @@ For the folder you provided, the default is:
 - The first time, a sign-in popup appears.
 - On success, the uploaded file opens in a new tab.
 
+### Local assets (images + audio)
+
+Some component parameters (e.g., `stimulus_image_url`, `stimulus_audio_url`) support choosing a local file in the parameter editor.
+
+- While editing, the Builder stores the file in an in-memory cache and writes an `asset://<componentId>/<field>` placeholder into the JSON.
+- When exporting **to SharePoint**, the Builder:
+  - Uploads any cached `asset://...` files to the same folder as the JSON (via Microsoft Graph)
+  - Rewrites all `asset://...` references in the exported JSON to the uploaded file URLs (including `asset://...` occurrences embedded inside custom HTML strings)
+- When exporting as a local download, `asset://...` references are kept as-is (you’ll need to host the referenced files yourself or export to SharePoint).
+
 ## What the builder outputs
 
 The JSON produced by the builder is intentionally lightweight and matches what [src/JsonBuilder.js](src/JsonBuilder.js) generates.
@@ -94,11 +120,12 @@ Notes:
 - **Data collection** currently includes `reaction-time`, `accuracy`, `correctness` (online correctness computation toggle), and `eye-tracking`.
 - **Response modalities** (keyboard/mouse/touch/voice) are configured via the Default Response UI and exported under `response_parameters`.
 
-### Supported tasks (8)
+### Supported tasks (9)
 
-The Builder currently supports eight task types via the **Task Type** dropdown:
+The Builder currently supports nine task types via the **Task Type** dropdown:
 
 - `task_type: "rdm"` — Random Dot Motion (RDM)
+- `task_type: "nback"` — N-back task (**trial-based** and **continuous**)
 - `task_type: "gabor"` — Gabor Patch task
 - `task_type: "flanker"` — Flanker task
 - `task_type: "sart"` — Sustained Attention to Response Task (SART)

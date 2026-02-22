@@ -14,7 +14,7 @@
     // Graph uses path segments (NOT the sharing URL).
     const defaultUploadFolderPath = 'Documents/Research/Projects _ Open/DP26_internal_external_attention/CRDM';
 
-    window.PSYCHJSON_GRAPH_CONFIG = {
+    const GRAPH_CONFIG = {
         // Required: set this to your App Registration (client) ID
         clientId: '',
 
@@ -32,4 +32,8 @@
         // Popup login is generally simplest for a button-driven flow.
         interactionType: 'popup'
     };
+
+    // Rebrand aliasing: keep the legacy global for backwards compatibility.
+    window.COGFLOW_GRAPH_CONFIG = GRAPH_CONFIG;
+    window.PSYCHJSON_GRAPH_CONFIG = GRAPH_CONFIG;
 })();

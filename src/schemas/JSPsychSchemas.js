@@ -1098,6 +1098,238 @@ class JSPsychSchemas {
                 }
             },
 
+            'nback-trial-sequence': {
+                name: 'nback-trial-sequence',
+                description: 'N-back trial sequence generator (expanded by interpreter/compiler into nback-block items)',
+                parameters: {
+                    n: {
+                        type: this.parameterTypes.INT,
+                        default: 2,
+                        min: 1,
+                        max: 9,
+                        description: 'N-back level'
+                    },
+                    length: {
+                        type: this.parameterTypes.INT,
+                        default: 30,
+                        min: 1,
+                        max: 50000,
+                        description: 'Number of trials/frames to generate'
+                    },
+                    seed: {
+                        type: this.parameterTypes.STRING,
+                        default: '',
+                        description: 'Optional seed for deterministic sequence generation (blank = interpreter default)'
+                    },
+                    stimulus_mode: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'letters',
+                        options: ['letters', 'numbers', 'shapes', 'custom'],
+                        description: 'How to interpret stimulus_pool defaults'
+                    },
+                    stimulus_pool: {
+                        type: this.parameterTypes.STRING,
+                        default: 'A,B,C,D,E,F,G,H',
+                        description: 'Comma/newline-separated stimulus tokens to sample from'
+                    },
+                    render_mode: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'token',
+                        options: ['token', 'custom_html'],
+                        description: 'Render each stimulus as a token label or via stimulus_template_html'
+                    },
+                    stimulus_template_html: {
+                        type: this.parameterTypes.HTML_STRING,
+                        default: '<div style="font-size:72px; font-weight:700; text-align:center;">{{TOKEN}}</div>',
+                        description: 'Used when render_mode=custom_html ({{TOKEN}} is replaced with the token)'
+                    },
+
+                    stimulus_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 500,
+                        min: 0,
+                        max: 60000,
+                        description: 'Stimulus display duration (ms)'
+                    },
+                    isi_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 500,
+                        min: 0,
+                        max: 60000,
+                        description: 'Inter-stimulus interval (ms)'
+                    },
+                    trial_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 1000,
+                        min: 0,
+                        max: 60000,
+                        description: 'Total trial duration (ms). 0 = no timeout.'
+                    },
+
+                    show_fixation_cross_between_trials: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        description: 'Show a fixation cross (+) when the token is hidden (during ISI/ITI between items)'
+                    },
+
+                    response_paradigm: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'go_nogo',
+                        options: ['go_nogo', '2afc'],
+                        description: 'Go/No-Go (single key) vs 2AFC (match vs non-match keys)'
+                    },
+                    response_device: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'keyboard',
+                        options: ['keyboard', 'mouse'],
+                        description: 'Primary response device'
+                    },
+                    go_key: {
+                        type: this.parameterTypes.KEY,
+                        default: 'space',
+                        description: 'Go key (and accepted as Match key when response_paradigm=2afc and match_key is blank)'
+                    },
+                    match_key: {
+                        type: this.parameterTypes.KEY,
+                        default: 'j',
+                        description: '2AFC: key for MATCH'
+                    },
+                    nonmatch_key: {
+                        type: this.parameterTypes.KEY,
+                        default: 'f',
+                        description: '2AFC: key for NO MATCH'
+                    },
+                    show_buttons: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        description: 'Mouse mode: show clickable response buttons'
+                    },
+
+                    target_probability: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.25,
+                        min: 0,
+                        max: 1,
+                        description: 'Probability a given trial is an N-back match (applies only once i >= n)'
+                    },
+                    show_feedback: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        description: 'Show brief Correct/Incorrect feedback after responses'
+                    },
+                    feedback_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 300,
+                        min: 0,
+                        max: 10000,
+                        description: 'Feedback duration (ms)'
+                    }
+                }
+            },
+
+            'nback-block': {
+                name: 'nback-block',
+                description: 'N-back item (single trial/frame). Usually generated by nback-trial-sequence.',
+                parameters: {
+                    n: {
+                        type: this.parameterTypes.INT,
+                        default: 2,
+                        min: 1,
+                        max: 9,
+                        description: 'N-back level (used for scoring when a sequence context is present)'
+                    },
+                    token: {
+                        type: this.parameterTypes.STRING,
+                        default: 'A',
+                        description: 'Stimulus token to show (e.g., A, 7, ●)'
+                    },
+                    render_mode: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'token',
+                        options: ['token', 'custom_html'],
+                        description: 'Render stimulus as token label or via stimulus_template_html'
+                    },
+                    stimulus_template_html: {
+                        type: this.parameterTypes.HTML_STRING,
+                        default: '<div style="font-size:72px; font-weight:700; text-align:center;">{{TOKEN}}</div>',
+                        description: 'Used when render_mode=custom_html ({{TOKEN}} is replaced with the token)'
+                    },
+
+                    stimulus_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 500,
+                        min: 0,
+                        max: 60000,
+                        description: 'Stimulus display duration (ms)'
+                    },
+                    isi_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 500,
+                        min: 0,
+                        max: 60000,
+                        description: 'Inter-stimulus interval (ms)'
+                    },
+                    trial_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 1000,
+                        min: 0,
+                        max: 60000,
+                        description: 'Total trial duration (ms). 0 = no timeout.'
+                    },
+
+                    show_fixation_cross_between_trials: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        description: 'Show a fixation cross (+) when the token is hidden (during ISI/ITI between items)'
+                    },
+
+                    response_paradigm: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'go_nogo',
+                        options: ['go_nogo', '2afc'],
+                        description: 'Go/No-Go (single key) vs 2AFC (match vs non-match keys)'
+                    },
+                    response_device: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'inherit',
+                        options: ['inherit', 'keyboard', 'mouse'],
+                        description: 'Primary response device'
+                    },
+                    go_key: {
+                        type: this.parameterTypes.KEY,
+                        default: 'space',
+                        description: 'Go key (and accepted as Match key when response_paradigm=2afc and match_key is blank)'
+                    },
+                    match_key: {
+                        type: this.parameterTypes.KEY,
+                        default: 'j',
+                        description: '2AFC: key for MATCH'
+                    },
+                    nonmatch_key: {
+                        type: this.parameterTypes.KEY,
+                        default: 'f',
+                        description: '2AFC: key for NO MATCH'
+                    },
+                    show_buttons: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        description: 'Mouse mode: show clickable response buttons'
+                    },
+                    show_feedback: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        description: 'Show brief Correct/Incorrect feedback after responses'
+                    },
+                    feedback_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 300,
+                        min: 0,
+                        max: 10000,
+                        description: 'Feedback duration (ms)'
+                    }
+                }
+            },
+
             'pvt-trial': {
                 name: 'pvt-trial',
                 description: 'Psychomotor Vigilance Task trial (foreperiod, running 4-digit timer, keyboard/click response; logic implemented by interpreter)',
@@ -1498,7 +1730,7 @@ class JSPsychSchemas {
                     block_component_type: {
                         type: this.parameterTypes.SELECT,
                         default: 'rdm-trial',
-                        options: ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups', 'flanker-trial', 'sart-trial', 'simon-trial', 'pvt-trial', 'stroop-trial', 'gabor-trial', 'gabor-quest'],
+                        options: ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups', 'flanker-trial', 'sart-trial', 'simon-trial', 'pvt-trial', 'stroop-trial', 'gabor-trial', 'gabor-quest', 'nback-block'],
                         required: true,
                         description: 'What component type this block generates'
                     },
@@ -1518,6 +1750,132 @@ class JSPsychSchemas {
                         type: this.parameterTypes.STRING,
                         default: '',
                         description: 'Optional random seed (blank = no seed)'
+                    },
+
+                    // N-back generator parameters (Block → nback-block)
+                    nback_n: {
+                        type: this.parameterTypes.INT,
+                        default: 2,
+                        min: 1,
+                        max: 6,
+                        blockTarget: 'nback-block',
+                        description: 'N-back depth'
+                    },
+                    nback_target_probability: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.25,
+                        min: 0,
+                        max: 1,
+                        blockTarget: 'nback-block',
+                        description: 'Probability an item is forced to match the item N-back'
+                    },
+                    nback_stimulus_mode: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'letters',
+                        options: ['letters', 'numbers', 'shapes', 'custom'],
+                        blockTarget: 'nback-block',
+                        description: 'Token set to use (custom uses the custom pool string)'
+                    },
+                    nback_stimulus_pool: {
+                        type: this.parameterTypes.STRING,
+                        default: '',
+                        blockTarget: 'nback-block',
+                        description: 'Custom pool tokens (comma/newline separated); used when stimulus_mode=custom'
+                    },
+                    nback_render_mode: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'token',
+                        options: ['token', 'custom_html'],
+                        blockTarget: 'nback-block',
+                        description: 'Whether to render raw token text or use a custom HTML template'
+                    },
+                    nback_stimulus_template_html: {
+                        type: this.parameterTypes.HTML_STRING,
+                        default: '<div style="font-size:72px; font-weight:700; letter-spacing:0.02em;">{{TOKEN}}</div>',
+                        blockTarget: 'nback-block',
+                        description: 'HTML template used when render_mode=custom_html. Variable: {{TOKEN}}'
+                    },
+                    nback_stimulus_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 500,
+                        min: 0,
+                        max: 60000,
+                        blockTarget: 'nback-block',
+                        description: 'Stimulus display duration (ms)'
+                    },
+                    nback_isi_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 700,
+                        min: 0,
+                        max: 60000,
+                        blockTarget: 'nback-block',
+                        description: 'Inter-stimulus interval duration (ms)'
+                    },
+                    nback_trial_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 1200,
+                        min: 0,
+                        max: 60000,
+                        blockTarget: 'nback-block',
+                        description: 'Total item/trial duration (ms)'
+                    },
+                    nback_show_fixation_cross_between_trials: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        blockTarget: 'nback-block',
+                        description: 'Show a fixation cross (+) when the token is hidden (during ISI/ITI between items)'
+                    },
+                    nback_response_paradigm: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'go_nogo',
+                        options: ['go_nogo', '2afc'],
+                        blockTarget: 'nback-block',
+                        description: 'go_nogo: respond on matches; 2afc: match vs non-match keys'
+                    },
+                    nback_response_device: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'inherit',
+                        options: ['inherit', 'keyboard', 'mouse'],
+                        blockTarget: 'nback-block',
+                        description: 'Response device used by generated N-back items'
+                    },
+                    nback_go_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'space',
+                        blockTarget: 'nback-block',
+                        description: 'Go key for matches (go/no-go)'
+                    },
+                    nback_match_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'j',
+                        blockTarget: 'nback-block',
+                        description: 'Match key (2AFC)'
+                    },
+                    nback_nonmatch_key: {
+                        type: this.parameterTypes.STRING,
+                        default: 'f',
+                        blockTarget: 'nback-block',
+                        description: 'Non-match key (2AFC)'
+                    },
+                    nback_show_buttons: {
+                        type: this.parameterTypes.BOOL,
+                        default: true,
+                        blockTarget: 'nback-block',
+                        description: 'Show clickable buttons when using mouse'
+                    },
+                    nback_show_feedback: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        blockTarget: 'nback-block',
+                        description: 'Show correctness feedback after response/timeout'
+                    },
+                    nback_feedback_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 250,
+                        min: 0,
+                        max: 5000,
+                        blockTarget: 'nback-block',
+                        description: 'Feedback duration (ms)'
                     },
 
                     // Dot color (used for rdm-trial / rdm-practice / rdm-adaptive; dot-groups uses per-group colors)

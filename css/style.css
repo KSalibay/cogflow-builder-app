@@ -1,9 +1,233 @@
 /* Main Application Styles */
+
+:root {
+    /* CogFlow palette */
+    --cf-ash-grey: #BAC7BE;
+    --cf-lilac-ash: #AE8CA3;
+    --cf-olive-wood: #7B6B43;
+    --cf-twilight-indigo: #3A405A;
+    --cf-space-indigo: #30334A;
+    --cf-deep-walnut: #3F3221;
+
+    /* Derived shades (for interactive accents) */
+    --cf-dusty-grape: #5F6995;
+    --cf-deep-teal: #657B6C;
+
+    /* Semantic tokens (Builder UI) */
+    /* Slight Ash Grey tint to reduce "generic Bootstrap" feel */
+    --cf-bg: #E3E9E5;
+    --cf-surface: #ffffff;
+    --cf-surface-muted: #F1F4F2;
+
+    /* Darker / more saturated Space Indigo for typography */
+    --cf-text: #232742;
+    --cf-muted: rgba(35, 39, 66, 0.68);
+    --cf-border: rgba(48, 51, 74, 0.18);
+    --cf-shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.08);
+    --cf-shadow-md: 0 10px 30px rgba(17, 24, 39, 0.12);
+
+    /* Bootstrap 5 CSS-variable overrides */
+    --bs-body-font-family: 'IBM Plex Sans', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+    --bs-body-bg: var(--cf-bg);
+    --bs-body-color: var(--cf-text);
+
+    --bs-primary: var(--cf-twilight-indigo);
+    --bs-primary-rgb: 58, 64, 90;
+    --bs-secondary: var(--cf-lilac-ash);
+    --bs-secondary-rgb: 174, 140, 163;
+    --bs-success: var(--cf-olive-wood);
+    --bs-success-rgb: 123, 107, 67;
+    --bs-dark: var(--cf-space-indigo);
+    --bs-dark-rgb: 48, 51, 74;
+
+    /* Rounded corners to feel less "default Bootstrap" */
+    --bs-border-radius: 0.75rem;
+    --bs-border-radius-sm: 0.6rem;
+    --bs-border-radius-lg: 0.9rem;
+    --bs-border-radius-xl: 1.1rem;
+
+    /* Focus ring tuned to palette */
+    --bs-focus-ring-color: rgba(174, 140, 163, 0.35);
+    --bs-link-color: var(--cf-twilight-indigo);
+    --bs-link-hover-color: #2f3551;
+}
+
+html, body {
+    height: 100%;
+}
+
+/* Accessibility mode (high contrast + Atkinson Hyperlegible) */
+html.cf-a11y {
+    --bs-body-font-family: 'Atkinson Hyperlegible', 'IBM Plex Sans', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+
+    /* Higher-contrast semantic tokens */
+    --cf-bg: #F3F6F4;
+    --cf-surface: #ffffff;
+    --cf-surface-muted: #EAF0EC;
+    --cf-text: #12182F;
+    --cf-muted: rgba(18, 24, 47, 0.78);
+    --cf-border: rgba(18, 24, 47, 0.22);
+
+    /* Stronger focus ring */
+    --bs-focus-ring-color: rgba(95, 105, 149, 0.45);
+}
+
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #f8f9fa;
+    font-family: var(--bs-body-font-family);
+    background-color: var(--bs-body-bg);
     font-size: 0.875rem; /* Reduced from default 16px to 14px */
     min-width: 1200px; /* Prevent layout collapse */
+    margin: 0;
+
+    /* App shell: prevent whole-page scroll; keep scroll inside panels */
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.navbar {
+    flex: 0 0 auto;
+}
+
+/* Slightly tighter navbar to save vertical space */
+.navbar {
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
+}
+
+/* Move brand/logo slightly right */
+.navbar .navbar-brand {
+    margin-left: 24px;
+}
+
+.cf-brand-logo {
+    height: 34px;
+    width: auto;
+    vertical-align: middle;
+    margin-right: 10px;
+    transform: translateY(-1px);
+}
+
+/* Slightly larger navbar buttons to match thicker header */
+.navbar .btn {
+    font-size: 0.85rem;
+    padding: 0.35rem 0.65rem;
+}
+
+.cf-brand-text {
+    vertical-align: middle;
+}
+
+/* Slightly softer overall surfaces */
+.card {
+    border-color: var(--cf-border);
+    box-shadow: var(--cf-shadow-sm);
+}
+
+.card-header {
+    border-bottom-color: var(--cf-border);
+}
+
+.modal-content {
+    border-color: var(--cf-border);
+    box-shadow: var(--cf-shadow-md);
+}
+
+/* Make "light" headers less stark */
+.bg-light {
+    background-color: var(--cf-surface-muted) !important;
+}
+
+/* Buttons: slightly pill-ier + tighter borders */
+.btn {
+    border-radius: var(--bs-border-radius-lg);
+}
+
+/* Typography on colored surfaces (buttons, navbar) */
+.btn-primary,
+.btn-success {
+    --bs-btn-color: var(--cf-ash-grey);
+    --bs-btn-hover-color: var(--cf-ash-grey);
+    --bs-btn-active-color: var(--cf-ash-grey);
+}
+
+.btn-primary {
+    --bs-btn-bg: var(--cf-twilight-indigo);
+    --bs-btn-border-color: var(--cf-twilight-indigo);
+    --bs-btn-hover-bg: #2f3551;
+    --bs-btn-hover-border-color: #2f3551;
+}
+
+.btn-success {
+    --bs-btn-bg: var(--cf-olive-wood);
+    --bs-btn-border-color: var(--cf-olive-wood);
+    --bs-btn-hover-bg: #6a5d3b;
+    --bs-btn-hover-border-color: #6a5d3b;
+}
+
+/* Navbar: use Ash Grey text instead of pure white */
+.navbar.bg-primary {
+    --bs-navbar-color: rgba(186, 199, 190, 0.92);
+    --bs-navbar-hover-color: rgba(186, 199, 190, 0.98);
+    --bs-navbar-brand-color: rgba(186, 199, 190, 0.98);
+    --bs-navbar-brand-hover-color: rgba(186, 199, 190, 1);
+}
+
+/* Navbar outline buttons: use Ash Grey (not pure white) */
+.navbar.bg-primary .btn-outline-light {
+    --bs-btn-color: rgba(186, 199, 190, 0.92);
+    --bs-btn-border-color: rgba(186, 199, 190, 0.60);
+    --bs-btn-hover-color: rgba(186, 199, 190, 0.98);
+    --bs-btn-hover-bg: rgba(186, 199, 190, 0.10);
+    --bs-btn-hover-border-color: rgba(186, 199, 190, 0.75);
+}
+
+.btn-outline-secondary {
+    --bs-btn-color: var(--cf-space-indigo);
+    --bs-btn-border-color: rgba(48, 51, 74, 0.35);
+    --bs-btn-hover-bg: rgba(48, 51, 74, 0.08);
+    --bs-btn-hover-border-color: rgba(48, 51, 74, 0.40);
+}
+
+/* Collapsible parameter groups (Bootstrap collapse wrapper) */
+.cf-collapse-header {
+    gap: 10px;
+}
+
+.cf-collapse-toggle {
+    color: rgba(35, 39, 66, 0.92);
+    font-weight: 650;
+    line-height: 1.2;
+}
+
+.cf-collapse-toggle:hover {
+    color: var(--cf-twilight-indigo);
+}
+
+.cf-collapse-chevron {
+    display: inline-flex;
+    margin-left: 10px;
+    opacity: 0.75;
+    transition: transform 120ms ease;
+}
+
+.cf-collapse-toggle[aria-expanded="true"] .cf-collapse-chevron {
+    transform: rotate(180deg);
+}
+
+.cf-collapse-body {
+    margin-top: 8px;
+}
+
+/* Inputs: calmer border + palette focus */
+.form-control,
+.form-select {
+    border-color: rgba(48, 51, 74, 0.22);
+}
+.form-control:focus,
+.form-select:focus {
+    border-color: rgba(174, 140, 163, 0.85);
+    box-shadow: 0 0 0 0.2rem rgba(174, 140, 163, 0.28);
 }
 
 /* Container overrides */
@@ -13,18 +237,89 @@ body {
     padding-right: 0.5rem !important;
     margin: 0 !important;
     width: 100% !important;
+
+    /* Fill remaining viewport under navbar */
+    flex: 1 1 auto;
+    overflow: hidden;
+    min-height: 0;
+}
+
+/* Footer should not cause page scroll */
+.cf-footer {
+    flex: 0 0 auto;
+    background: var(--cf-space-indigo);
+    color: rgba(186, 199, 190, 0.92);
+    border-top: 1px solid rgba(186, 199, 190, 0.18);
+}
+
+.cf-footer-inner {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
+}
+
+.cf-footer-a11y {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cf-footer-a11y .form-check {
+    margin-bottom: 0;
+}
+
+.cf-footer-a11y .form-check-label {
+    font-size: 0.75rem;
+    opacity: 0.95;
+    user-select: none;
+}
+
+.cf-footer-spacer {
+    flex: 1 1 auto;
+}
+
+.cf-footer-text {
+    font-size: 0.75rem;
+    opacity: 0.92;
+    white-space: nowrap;
+}
+
+.cf-footer-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    margin-right: 8px;
+    text-decoration: none;
+    color: rgba(186, 199, 190, 0.92);
+    opacity: 0.95;
+}
+
+.cf-footer-link:hover {
+    color: rgba(186, 199, 190, 1);
+    opacity: 1;
+}
+
+.cf-footer-link:focus-visible {
+    outline: 2px solid rgba(95, 105, 149, 0.75);
+    outline-offset: 2px;
+    border-radius: 6px;
 }
 
 /* Bootstrap Override - Three Equal Columns Layout */
 .main-panels-row {
     display: grid !important;
-    grid-template-columns: 1fr 1fr 1fr !important;
+    /* Nudge the left panel slightly wider (~10-20px on typical viewports) */
+    grid-template-columns: 1.05fr 1fr 1fr !important;
     grid-template-rows: 1fr !important;
     gap: 0.5rem !important;
     margin: 0 !important;
     padding: 0.5rem !important;
-    width: calc(100% - 1rem) !important;
-    height: calc(100vh - 3rem) !important;
+    width: 100% !important;
+    height: 100% !important;
     box-sizing: border-box !important;
     
     /* Override ALL possible Bootstrap styles */
@@ -61,6 +356,14 @@ body {
     flex: 1;
     overflow-y: auto;
     padding: 0.5rem;
+
+    /* Allow children (timeline/json) to stretch to full height */
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+
+    /* Avoid layout shift when scrollbars appear */
+    scrollbar-gutter: stable;
 }
 
 .main-panel .card-header {
@@ -95,13 +398,13 @@ body {
 /* Responsive Grid Layout */
 @media (min-width: 992px) {
     .main-panels-row {
-        grid-template-columns: 1fr 1fr 1fr !important;
+        grid-template-columns: 1.05fr 1fr 1fr !important;
     }
 }
 
 @media (min-width: 768px) and (max-width: 991.98px) {
     .main-panels-row {
-        grid-template-columns: 1fr 1fr 1fr !important;
+        grid-template-columns: 1.05fr 1fr 1fr !important;
     }
     /* Make content more compact for medium screens */
     body {
@@ -131,14 +434,14 @@ body {
     min-height: 300px; /* Reduced height */
     max-height: 60vh; /* Reduced max height */
     overflow-y: auto;
-    border: 2px dashed #dee2e6;
-    background-color: #ffffff;
+    border: 2px dashed rgba(58, 64, 90, 0.30);
+    background-color: var(--cf-surface);
 }
 
 /* Compact parameter forms */
 .parameter-group {
     margin-bottom: 1rem;
-    border: 1px solid #e9ecef;
+    border: 1px solid rgba(48, 51, 74, 0.12);
     border-radius: 0.375rem;
     padding: 0.5rem;
 }
@@ -147,7 +450,7 @@ body {
     font-weight: 600;
     font-size: 0.85rem;
     margin-bottom: 0.5rem;
-    color: #495057;
+    color: rgba(48, 51, 74, 0.92);
 }
 
 .parameter-row {
@@ -167,7 +470,7 @@ body {
 
 .parameter-help {
     font-size: 0.7rem;
-    color: #6c757d;
+    color: var(--cf-muted);
     margin-top: 0.125rem;
 }
 
@@ -197,11 +500,23 @@ body {
 
 /* JSON preview compact styling */
 .json-preview {
-    height: 60vh; /* Reduced height */
+    height: auto;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
-    background-color: #f8f9fa;
-    border: 1px solid #dee2e6;
+    background-color: var(--cf-surface-muted);
+    border: 1px solid rgba(48, 51, 74, 0.14);
     font-size: 0.75rem; /* Smaller JSON text */
+}
+
+.json-preview pre {
+    margin: 0;
+}
+
+/* Timeline should also stretch within its card-body */
+.timeline-container {
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 #jsonOutput {
@@ -917,4 +1232,63 @@ template {
     min-height: 60px;
     display: flex;
     align-items: center;
+}
+
+/* Keep gutters stable in inner scroll areas too */
+.timeline-container,
+.json-preview {
+    scrollbar-gutter: stable;
+}
+
+/* Replace Bootstrap's default "electric blue" outline-primary with palette */
+.btn-outline-primary {
+    --bs-btn-color: var(--cf-dusty-grape);
+    --bs-btn-border-color: rgba(95, 105, 149, 0.65);
+    --bs-btn-hover-color: var(--cf-ash-grey);
+    --bs-btn-hover-bg: var(--cf-dusty-grape);
+    --bs-btn-hover-border-color: var(--cf-dusty-grape);
+    --bs-btn-active-color: var(--cf-ash-grey);
+    --bs-btn-active-bg: var(--cf-dusty-grape);
+    --bs-btn-active-border-color: var(--cf-dusty-grape);
+    --bs-btn-disabled-color: rgba(95, 105, 149, 0.60);
+    --bs-btn-disabled-border-color: rgba(95, 105, 149, 0.40);
+}
+
+/* Preview buttons (btn-info) and other "info" accents */
+.btn-info {
+    --bs-btn-bg: var(--cf-deep-teal);
+    --bs-btn-border-color: var(--cf-deep-teal);
+    --bs-btn-hover-bg: #5a6f62;
+    --bs-btn-hover-border-color: #5a6f62;
+    --bs-btn-color: var(--cf-ash-grey);
+    --bs-btn-hover-color: var(--cf-ash-grey);
+    --bs-btn-active-color: var(--cf-ash-grey);
+}
+
+.btn-outline-info {
+    --bs-btn-color: var(--cf-deep-teal);
+    --bs-btn-border-color: rgba(101, 123, 108, 0.65);
+    --bs-btn-hover-color: var(--cf-ash-grey);
+    --bs-btn-hover-bg: var(--cf-deep-teal);
+    --bs-btn-hover-border-color: var(--cf-deep-teal);
+    --bs-btn-active-color: var(--cf-ash-grey);
+    --bs-btn-active-bg: var(--cf-deep-teal);
+    --bs-btn-active-border-color: var(--cf-deep-teal);
+}
+
+/* Checked inputs / switches: avoid Bootstrap blue */
+.form-check-input:checked {
+    background-color: var(--cf-dusty-grape);
+    border-color: var(--cf-dusty-grape);
+}
+
+.form-check-input:focus {
+    border-color: rgba(95, 105, 149, 0.85);
+    box-shadow: 0 0 0 0.2rem rgba(95, 105, 149, 0.28);
+}
+
+/* Footer toggle should also avoid Bootstrap blue */
+.cf-footer .form-check-input:checked {
+    background-color: var(--cf-dusty-grape);
+    border-color: var(--cf-dusty-grape);
 }

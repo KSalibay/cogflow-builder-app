@@ -1,4 +1,4 @@
-# Quick Reference: PsychJSON Builder Output
+# Quick Reference: CogFlow Builder Output
 
 This builder outputs a lightweight configuration object (see [../src/JsonBuilder.js](../src/JsonBuilder.js)).
 

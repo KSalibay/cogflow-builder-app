@@ -1,4 +1,4 @@
-# PsychJSON Builder - Inputs and Outputs
+# CogFlow Builder - Inputs and Outputs
 
 This document describes the *current* UI inputs and the JSON output produced by the builder (see [../src/JsonBuilder.js](../src/JsonBuilder.js)).
 

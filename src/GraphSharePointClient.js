@@ -1,14 +1,15 @@
 /* global msal */
 
 (function () {
-    const CONFIG_KEY = 'psychjson_graph_export_settings_v1';
+    const CONFIG_KEY = 'cogflow_graph_export_settings_v1';
+    const LEGACY_CONFIG_KEY = 'psychjson_graph_export_settings_v1';
 
     function getRuntimeConfig() {
-        const base = window.PSYCHJSON_GRAPH_CONFIG || {};
+        const base = window.COGFLOW_GRAPH_CONFIG || window.PSYCHJSON_GRAPH_CONFIG || {};
 
         let stored = {};
         try {
-            stored = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}') || {};
+            stored = JSON.parse(localStorage.getItem(CONFIG_KEY) || localStorage.getItem(LEGACY_CONFIG_KEY) || '{}') || {};
         } catch {
             stored = {};
         }
@@ -28,6 +29,7 @@
         const current = getRuntimeConfig();
         const next = { ...current, ...partial };
         localStorage.setItem(CONFIG_KEY, JSON.stringify(next));
+        localStorage.setItem(LEGACY_CONFIG_KEY, JSON.stringify(next));
         return next;
     }
 

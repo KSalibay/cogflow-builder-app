@@ -108,6 +108,10 @@ class ComponentPreview {
             this.showSimonPreview(componentData);
         } else if (componentType === 'pvt-trial') {
             this.showPvtPreview(componentData);
+        } else if (componentType === 'nback-trial-sequence') {
+            this.showNbackTrialSequencePreview(componentData);
+        } else if (componentType === 'nback-block') {
+            this.showNbackBlockPreview(componentData);
         } else if (componentType === 'survey-response') {
             this.showSurveyPreview(componentData);
         } else if (componentType === 'soc-dashboard') {
@@ -130,6 +134,226 @@ class ComponentPreview {
             console.warn('Unknown component type for preview:', componentType);
             this.showGenericPreview(componentData);
         }
+    }
+
+    showNbackBlockPreview(componentData) {
+        const previewModal = this.getPreviewModal();
+        if (!previewModal) return;
+        const { modalEl, modal } = previewModal;
+
+        const modalBody = modalEl.querySelector('.modal-body');
+        if (!modalBody) return;
+
+        const escape = (s) => {
+            return (s ?? '')
+                .toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        };
+
+        const n = Number.isFinite(Number(componentData?.n)) ? Number(componentData.n) : 2;
+        const token = (componentData?.token ?? '').toString() || 'A';
+
+        const renderMode = (componentData?.render_mode ?? 'token').toString().trim().toLowerCase();
+        const templateHtml = (componentData?.stimulus_template_html ?? '<div style="font-size:72px; font-weight:700; text-align:center;">{{TOKEN}}</div>').toString();
+
+        const responseParadigm = (componentData?.response_paradigm ?? 'go_nogo').toString().trim().toLowerCase();
+        const responseDevice = (componentData?.response_device ?? 'keyboard').toString().trim().toLowerCase();
+        const goKey = (componentData?.go_key ?? 'space').toString();
+        const matchKey = (componentData?.match_key ?? 'j').toString();
+        const nonmatchKey = (componentData?.nonmatch_key ?? 'f').toString();
+        const showButtons = !!componentData?.show_buttons;
+
+        const stimulusDuration = Number.isFinite(Number(componentData?.stimulus_duration_ms)) ? Number(componentData.stimulus_duration_ms) : 500;
+        const isiDuration = Number.isFinite(Number(componentData?.isi_duration_ms)) ? Number(componentData.isi_duration_ms) : 500;
+        const trialDuration = Number.isFinite(Number(componentData?.trial_duration_ms)) ? Number(componentData.trial_duration_ms) : (stimulusDuration + isiDuration);
+
+        const stimulusHtml = (() => {
+            if (renderMode === 'custom_html') {
+                const withToken = templateHtml.includes('{{TOKEN}}')
+                    ? templateHtml.split('{{TOKEN}}').join(escape(token))
+                    : `${templateHtml}${escape(token)}`;
+                return withToken;
+            }
+            return `<div style="font-size:72px; font-weight:700; text-align:center;">${escape(token)}</div>`;
+        })();
+
+        const responseHint = (() => {
+            if (responseDevice === 'mouse') {
+                if (showButtons) {
+                    if (responseParadigm === '2afc') {
+                        return `<div class="d-flex justify-content-center gap-2 mt-3">
+                            <button class="btn btn-outline-light" type="button" disabled>Match</button>
+                            <button class="btn btn-outline-light" type="button" disabled>No match</button>
+                        </div>`;
+                    }
+                    return `<div class="d-flex justify-content-center gap-2 mt-3">
+                        <button class="btn btn-outline-light" type="button" disabled>Go</button>
+                    </div>`;
+                }
+                return `<div class="small text-muted mt-3">Mouse response (buttons hidden)</div>`;
+            }
+
+            if (responseParadigm === '2afc') {
+                const mk = (matchKey ?? '').toString().trim() || goKey;
+                return `<div class="small text-muted mt-3"><b>Keyboard:</b> <span class="badge bg-secondary">${escape(mk)}</span> = MATCH, <span class="badge bg-secondary">${escape(nonmatchKey)}</span> = NO MATCH</div>`;
+            }
+            return `<div class="small text-muted mt-3"><b>Keyboard:</b> <span class="badge bg-secondary">${escape(goKey)}</span> = GO</div>`;
+        })();
+
+        modalBody.innerHTML = `
+            <div class="p-3" style="background:#0b1220; border-radius:12px; color:#e5e7eb;">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <div class="h5 mb-0">N-back Item Preview</div>
+                        <div class="small text-muted">n=${escape(n)} · ${escape(renderMode)} · ${escape(responseParadigm)} · ${escape(responseDevice)}</div>
+                    </div>
+                    <div class="text-end small text-muted">${escape(trialDuration)}ms total</div>
+                </div>
+
+                <div class="p-4" style="background:rgba(255,255,255,0.06); border-radius:12px;">
+                    ${stimulusHtml}
+                    ${responseHint}
+                </div>
+            </div>
+        `;
+
+        modal.show();
+    }
+
+    showNbackTrialSequencePreview(componentData) {
+        const previewModal = this.getPreviewModal();
+        if (!previewModal) return;
+        const { modalEl, modal } = previewModal;
+
+        const modalBody = modalEl.querySelector('.modal-body');
+        if (!modalBody) return;
+
+        const escape = (s) => {
+            return (s ?? '')
+                .toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        };
+
+        const n = Number.isFinite(Number(componentData?.n)) ? Math.max(1, Math.floor(Number(componentData.n))) : 2;
+        const length = Number.isFinite(Number(componentData?.length)) ? Math.max(1, Math.floor(Number(componentData.length))) : 30;
+        const targetProb = Number.isFinite(Number(componentData?.target_probability)) ? Math.min(1, Math.max(0, Number(componentData.target_probability))) : 0.25;
+
+        const stimulusMode = (componentData?.stimulus_mode ?? 'letters').toString().trim().toLowerCase();
+        const stimulusPoolRaw = (componentData?.stimulus_pool ?? '').toString();
+        const seedRaw = (componentData?.seed ?? '').toString();
+
+        const parsePool = (raw) => {
+            const parts = (raw ?? '')
+                .toString()
+                .split(/[\n,]/g)
+                .map(s => s.trim())
+                .filter(Boolean);
+            if (parts.length > 0) return parts;
+            if (stimulusMode === 'numbers') return ['1','2','3','4','5','6','7','8','9'];
+            if (stimulusMode === 'shapes') return ['●','■','▲','◆','★','⬟'];
+            if (stimulusMode === 'custom') return ['A','B','C'];
+            return ['A','B','C','D','E','F','G','H'];
+        };
+
+        const pool = parsePool(stimulusPoolRaw);
+
+        const hashSeed = (s) => {
+            let h = 2166136261;
+            const str = (s ?? 'preview').toString();
+            for (let i = 0; i < str.length; i++) {
+                h ^= str.charCodeAt(i);
+                h = Math.imul(h, 16777619);
+            }
+            return h >>> 0;
+        };
+
+        const mulberry32 = (a) => {
+            return function() {
+                let t = (a += 0x6D2B79F5);
+                t = Math.imul(t ^ (t >>> 15), t | 1);
+                t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        };
+
+        const rng = mulberry32(hashSeed(seedRaw || 'preview'));
+
+        const pickFromPool = (avoidToken) => {
+            if (!Array.isArray(pool) || pool.length === 0) return 'A';
+            if (!avoidToken || pool.length === 1) return pool[Math.floor(rng() * pool.length)];
+            let token = pool[Math.floor(rng() * pool.length)];
+            let guard = 0;
+            while (token === avoidToken && guard < 10) {
+                token = pool[Math.floor(rng() * pool.length)];
+                guard++;
+            }
+            return token;
+        };
+
+        const maxRows = Math.min(length, 20);
+        const seq = [];
+        const isTarget = [];
+        for (let i = 0; i < length; i++) {
+            if (i >= n && rng() < targetProb) {
+                seq[i] = seq[i - n];
+                isTarget[i] = true;
+            } else {
+                const avoid = (i >= n) ? seq[i - n] : null;
+                seq[i] = pickFromPool(avoid);
+                isTarget[i] = (i >= n) ? (seq[i] === seq[i - n]) : false;
+            }
+        }
+
+        const rowsHtml = seq.slice(0, maxRows).map((t, i) => {
+            const tag = isTarget[i]
+                ? '<span class="badge bg-success">match</span>'
+                : (i < n) ? '<span class="badge bg-secondary">buffer</span>' : '<span class="badge bg-dark">no</span>';
+            return `
+                <tr>
+                    <td class="text-muted">${i + 1}</td>
+                    <td style="font-weight:700; font-size:18px;">${escape(t)}</td>
+                    <td>${tag}</td>
+                </tr>
+            `;
+        }).join('');
+
+        modalBody.innerHTML = `
+            <div class="p-3">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <div class="h5 mb-0">N-back Sequence Preview</div>
+                        <div class="small text-muted">n=${escape(n)} · length=${escape(length)} · target_probability=${escape(targetProb)} · pool=${escape(pool.length)} items</div>
+                    </div>
+                    <div class="text-end small text-muted">seed=${escape(seedRaw || '(default)')}</div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th style="width:70px;">#</th>
+                                <th>Token</th>
+                                <th style="width:120px;">Match?</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rowsHtml}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="small text-muted">Preview uses a local seeded generator for display only (interpreter generation may differ until compiler support is added).</div>
+            </div>
+        `;
+
+        modal.show();
     }
 
     showSimonPreview(componentData) {
@@ -1725,11 +1949,17 @@ class ComponentPreview {
     }
 
     showBlockPreview(componentData) {
+        const rawBaseType = componentData.block_component_type || componentData.component_type;
+        const baseType = (typeof rawBaseType === 'string' && rawBaseType.trim() !== '') ? rawBaseType : 'rdm-trial';
+
+        if (baseType === 'nback-block') {
+            this.showNbackBlockGeneratorPreview(componentData);
+            return;
+        }
+
         // Render a randomly sampled parameter set from the block window so users can
         // quickly sanity-check the block configuration.
         const sampled = this.sampleComponentFromBlock(componentData);
-        const rawBaseType = componentData.block_component_type || componentData.component_type;
-        const baseType = (typeof rawBaseType === 'string' && rawBaseType.trim() !== '') ? rawBaseType : 'rdm-trial';
         const length = componentData.block_length ?? componentData.length ?? 0;
         const sampling = componentData.sampling_mode || 'per-trial';
 
@@ -1767,6 +1997,361 @@ class ComponentPreview {
         }
 
         this.showRDMPreview(sampled);
+    }
+
+    showNbackBlockGeneratorPreview(blockData) {
+        const previewModal = this.getPreviewModal();
+        if (!previewModal) return;
+        const { modalEl, modal } = previewModal;
+
+        const modalBody = modalEl.querySelector('.modal-body');
+        if (!modalBody) return;
+
+        // Normalize: some exports store block fields under parameter_values.
+        const src = (blockData && typeof blockData === 'object' && blockData.parameter_values && typeof blockData.parameter_values === 'object')
+            ? { ...blockData, ...blockData.parameter_values }
+            : (blockData || {});
+
+        const escape = (s) => {
+            return (s ?? '')
+                .toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        };
+
+        const parsePool = (raw, stimulusMode) => {
+            const parts = (raw ?? '')
+                .toString()
+                .split(/[\n,]/g)
+                .map(s => s.trim())
+                .filter(Boolean);
+            if (parts.length > 0) return parts;
+            const mode = (stimulusMode ?? 'letters').toString().trim().toLowerCase();
+            if (mode === 'numbers') return ['1','2','3','4','5','6','7','8','9'];
+            if (mode === 'shapes') return ['●','■','▲','◆','★','⬟'];
+            if (mode === 'custom') return ['A','B','C'];
+            return ['A','B','C','D','E','F','G','H'];
+        };
+
+        const toInt = (v, fallback) => {
+            const n = Number.parseInt(v, 10);
+            return Number.isFinite(n) ? n : fallback;
+        };
+
+        const toFloat = (v, fallback) => {
+            const n = Number(v);
+            return Number.isFinite(n) ? n : fallback;
+        };
+
+        const n = Math.max(1, Math.floor(toInt(src.nback_n, 2)));
+        const targetProb = Math.max(0, Math.min(1, toFloat(src.nback_target_probability, 0.25)));
+        const stimulusMode = (src.nback_stimulus_mode ?? 'letters').toString().trim().toLowerCase();
+        const pool = parsePool(src.nback_stimulus_pool, stimulusMode);
+        const rawLen = toInt(src.block_length ?? src.length, 30);
+        const length = Math.max(rawLen, n + 1);
+
+        const seedStr = (src.seed ?? '').toString().trim();
+        const sampling = (src.sampling_mode ?? 'per-trial').toString();
+
+        const renderMode = (src.nback_render_mode ?? 'token').toString().trim().toLowerCase();
+        const templateHtml = (src.nback_stimulus_template_html ?? '<div style="font-size:72px; font-weight:700; letter-spacing:0.02em;">{{TOKEN}}</div>').toString();
+
+        const stimMs = Math.max(0, toInt(src.nback_stimulus_duration_ms, 500));
+        const isiMs = Math.max(0, toInt(src.nback_isi_duration_ms, 700));
+
+        const responseParadigm = (src.nback_response_paradigm ?? 'go_nogo').toString().trim().toLowerCase();
+        const responseDeviceRaw = (src.nback_response_device ?? 'keyboard').toString().trim().toLowerCase();
+        const responseDevice = (responseDeviceRaw === 'inherit')
+            ? ((window.jsonBuilderInstance?.getCurrentNbackDefaults?.()?.nback_response_device || 'keyboard').toString().trim().toLowerCase())
+            : responseDeviceRaw;
+
+        const goKey = (src.nback_go_key ?? 'space').toString();
+        const matchKey = (src.nback_match_key ?? 'j').toString();
+        const nonmatchKey = (src.nback_nonmatch_key ?? 'f').toString();
+        const showButtons = (src.nback_show_buttons === true);
+
+        // For resampling, reuse the same seeded RNG machinery as other Block previews.
+        // This will generate a deterministic stream per seed across resamples.
+        const rng = this.getBlockRng(src);
+
+        const pickFromPool = (avoidToken) => {
+            if (!Array.isArray(pool) || pool.length === 0) return 'A';
+            if (!avoidToken || pool.length === 1) return pool[Math.floor(rng() * pool.length)];
+            let token = pool[Math.floor(rng() * pool.length)];
+            let guard = 0;
+            while (token === avoidToken && guard < 10) {
+                token = pool[Math.floor(rng() * pool.length)];
+                guard++;
+            }
+            return token;
+        };
+
+        const buildSequence = () => {
+            const seq = new Array(length);
+            const isTarget = new Array(length);
+            for (let i = 0; i < length; i++) {
+                if (i >= n && rng() < targetProb) {
+                    seq[i] = seq[i - n];
+                    isTarget[i] = true;
+                } else {
+                    const avoid = (i >= n) ? seq[i - n] : null;
+                    seq[i] = pickFromPool(avoid);
+                    isTarget[i] = (i >= n) ? (seq[i] === seq[i - n]) : false;
+                }
+            }
+            return { seq, isTarget };
+        };
+
+        const render = () => {
+            const { seq, isTarget } = buildSequence();
+            const maxRows = Math.min(length, 40);
+            const rowsHtml = seq.slice(0, maxRows).map((t, i) => {
+                const tag = isTarget[i]
+                    ? '<span class="badge bg-success">match</span>'
+                    : (i < n) ? '<span class="badge bg-secondary">buffer</span>' : '<span class="badge bg-dark">no</span>';
+                const back = (i >= n) ? seq[i - n] : '';
+                return `
+                    <tr>
+                        <td class="text-muted">${i + 1}</td>
+                        <td style="font-weight:700; font-size:18px;">${escape(t)}</td>
+                        <td class="text-muted">${escape(back)}</td>
+                        <td>${tag}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            const runLen = Math.min(6, length);
+            let runIndex = 0;
+            let isPlaying = false;
+            let timer = null;
+            let phase = 'stimulus'; // stimulus | isi
+
+            const escapeToken = (s) => {
+                return (s ?? '')
+                    .toString()
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            };
+
+            const renderStimulusHtml = (token) => {
+                if (renderMode === 'custom_html') {
+                    const safeToken = escapeToken(token);
+                    if (templateHtml.includes('{{TOKEN}}')) {
+                        return templateHtml.split('{{TOKEN}}').join(safeToken);
+                    }
+                    return `${templateHtml}${safeToken}`;
+                }
+                return `<div style="font-size:72px; font-weight:700; letter-spacing:0.02em;">${escapeToken(token)}</div>`;
+            };
+
+            const responseHintHtml = (() => {
+                if (responseDevice === 'mouse') {
+                    if (showButtons) {
+                        if (responseParadigm === '2afc') {
+                            return `<div class="d-flex justify-content-center gap-2 mt-3">
+                                <button class="btn btn-outline-light" type="button" disabled>Match</button>
+                                <button class="btn btn-outline-light" type="button" disabled>No match</button>
+                            </div>`;
+                        }
+                        return `<div class="d-flex justify-content-center gap-2 mt-3">
+                            <button class="btn btn-outline-light" type="button" disabled>Go</button>
+                        </div>`;
+                    }
+                    return `<div class="small text-muted mt-3">Mouse response (buttons hidden)</div>`;
+                }
+
+                if (responseParadigm === '2afc') {
+                    const mk = (matchKey ?? '').toString().trim() || goKey;
+                    return `<div class="small text-muted mt-3"><b>Keyboard:</b> <span class="badge bg-secondary">${escapeToken(mk)}</span> = MATCH, <span class="badge bg-secondary">${escapeToken(nonmatchKey)}</span> = NO MATCH</div>`;
+                }
+                return `<div class="small text-muted mt-3"><b>Keyboard:</b> <span class="badge bg-secondary">${escapeToken(goKey)}</span> = GO</div>`;
+            })();
+
+            modalBody.innerHTML = `
+                <div class="p-3">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                            <div class="h5 mb-0">N-back Block Preview</div>
+                            <div class="small text-muted">block_component_type=nback-block · n=${escape(n)} · length=${escape(length)} · target_probability=${escape(targetProb)} · pool=${escape(pool.length)} items</div>
+                            <div class="small text-muted">seed=${escape(seedStr || '(none)')} · sampling_mode=${escape(sampling)}</div>
+                        </div>
+                        <div class="text-end">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="nbackBlockResampleBtn"><i class="fas fa-dice"></i> Resample</button>
+                        </div>
+                    </div>
+
+                    <ul class="nav nav-tabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="nbackGenSeqTabBtn" data-bs-toggle="tab" data-bs-target="#nbackGenSeqTab" type="button" role="tab">Sequence</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="nbackGenRunTabBtn" data-bs-toggle="tab" data-bs-target="#nbackGenRunTab" type="button" role="tab">Run</button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content border border-top-0 rounded-bottom p-3" style="background:#fff;">
+                        <div class="tab-pane fade show active" id="nbackGenSeqTab" role="tabpanel" aria-labelledby="nbackGenSeqTabBtn">
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th style="width:70px;">#</th>
+                                            <th>Token</th>
+                                            <th style="width:140px;">Back (${escape(n)})</th>
+                                            <th style="width:120px;">Match?</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${rowsHtml}
+                                    </tbody>
+                                </table>
+                            </div>
+                            ${length > maxRows ? `<div class="small text-muted">Showing first ${escape(maxRows)} of ${escape(length)} items.</div>` : ''}
+                        </div>
+
+                        <div class="tab-pane fade" id="nbackGenRunTab" role="tabpanel" aria-labelledby="nbackGenRunTabBtn">
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                                <div class="small text-muted">Demo run: first ${escape(runLen)} items · ${escape(renderMode)} · ${escape(responseParadigm)} · ${escape(responseDevice)}</div>
+                                <div class="btn-group btn-group-sm" role="group" aria-label="run controls">
+                                    <button type="button" class="btn btn-outline-primary" id="nbackRunStartBtn">Start</button>
+                                    <button type="button" class="btn btn-outline-secondary" id="nbackRunStopBtn">Stop</button>
+                                    <button type="button" class="btn btn-outline-secondary" id="nbackRunPrevBtn">Prev</button>
+                                    <button type="button" class="btn btn-outline-secondary" id="nbackRunNextBtn">Next</button>
+                                </div>
+                            </div>
+
+                            <div class="p-3" style="background:#0b1220; border-radius:12px; color:#e5e7eb; min-height: 220px;">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <div class="h6 mb-0">Run Preview</div>
+                                        <div class="small text-muted" id="nbackRunStatus"></div>
+                                    </div>
+                                    <div class="small text-muted">stim=${escape(stimMs)}ms · isi=${escape(isiMs)}ms</div>
+                                </div>
+
+                                <div class="p-4" style="background:rgba(255,255,255,0.06); border-radius:12px;">
+                                    <div id="nbackRunStimulus" style="display:flex; align-items:center; justify-content:center; min-height: 90px;"></div>
+                                    <div id="nbackRunResponseHint">${responseHintHtml}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            const stop = () => {
+                if (timer !== null) {
+                    clearTimeout(timer);
+                    timer = null;
+                }
+                isPlaying = false;
+            };
+
+            const setPhase = (nextPhase) => {
+                phase = nextPhase;
+            };
+
+            const updateRunUI = () => {
+                const statusEl = modalBody.querySelector('#nbackRunStatus');
+                const stimEl = modalBody.querySelector('#nbackRunStimulus');
+                if (!statusEl || !stimEl) return;
+
+                const token = seq[runIndex];
+                const back = (runIndex >= n) ? seq[runIndex - n] : '';
+                const m = !!isTarget[runIndex];
+                const label = m ? 'match' : (runIndex < n ? 'buffer' : 'no');
+                statusEl.textContent = `item ${runIndex + 1}/${runLen} · token=${token} · back(${n})=${back || '-'} · ${label} · phase=${phase}`;
+
+                if (phase === 'stimulus') {
+                    stimEl.innerHTML = renderStimulusHtml(token);
+                } else {
+                    stimEl.innerHTML = '';
+                }
+            };
+
+            const stepOnce = () => {
+                // stimulus -> isi -> advance
+                if (phase === 'stimulus') {
+                    setPhase('isi');
+                    updateRunUI();
+                    return;
+                }
+
+                // isi: advance
+                setPhase('stimulus');
+                runIndex = Math.min(runLen - 1, runIndex + 1);
+                updateRunUI();
+            };
+
+            const tick = () => {
+                if (!isPlaying) return;
+                if (phase === 'stimulus') {
+                    setPhase('isi');
+                    updateRunUI();
+                    timer = setTimeout(tick, Math.max(0, isiMs));
+                    return;
+                }
+
+                // isi -> next stimulus
+                runIndex += 1;
+                if (runIndex >= runLen) {
+                    stop();
+                    return;
+                }
+                setPhase('stimulus');
+                updateRunUI();
+                timer = setTimeout(tick, Math.max(0, stimMs));
+            };
+
+            const start = () => {
+                stop();
+                isPlaying = true;
+                phase = 'stimulus';
+                updateRunUI();
+                timer = setTimeout(tick, Math.max(0, stimMs));
+            };
+
+            const startBtn = modalBody.querySelector('#nbackRunStartBtn');
+            const stopBtn = modalBody.querySelector('#nbackRunStopBtn');
+            const nextBtn = modalBody.querySelector('#nbackRunNextBtn');
+            const prevBtn = modalBody.querySelector('#nbackRunPrevBtn');
+            const resampleBtn = modalBody.querySelector('#nbackBlockResampleBtn');
+
+            if (startBtn) startBtn.onclick = () => start();
+            if (stopBtn) stopBtn.onclick = () => stop();
+            if (nextBtn) nextBtn.onclick = () => {
+                stop();
+                // keep current phase; advance one item
+                runIndex = Math.min(runLen - 1, runIndex + 1);
+                phase = 'stimulus';
+                updateRunUI();
+            };
+            if (prevBtn) prevBtn.onclick = () => {
+                stop();
+                runIndex = Math.max(0, runIndex - 1);
+                phase = 'stimulus';
+                updateRunUI();
+            };
+
+            if (resampleBtn) {
+                resampleBtn.onclick = () => {
+                    stop();
+                    render();
+                };
+            }
+
+            // Initialize run UI
+            updateRunUI();
+        };
+
+        render();
+        modal.show();
     }
 
     getBlockRng(blockData) {

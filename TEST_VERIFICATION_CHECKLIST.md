@@ -1,4 +1,4 @@
-# Test Verification - PsychJSON Builder
+# Test Verification - CogFlow Builder
 
 ## What to verify (current)
 

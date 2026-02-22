@@ -1,5 +1,5 @@
 /**
- * PsychJSON Builder - Main Application Class
+ * CogFlow Builder - Main Application Class
  * 
  * A modular web application for generating JSON parameter files
  * for experimental psychology tasks compatible with jsPsych and JATOS
@@ -70,6 +70,40 @@ class JsonBuilder {
             feedbackDurationRow.style.display = show ? '' : 'none';
             feedbackDurationInput.disabled = !show;
         }
+
+        // N-back defaults: only show template HTML when render_mode=custom_html
+        const nbackRenderMode = (document.getElementById('nbackDefaultRenderMode')?.value || 'token').toString();
+        const nbackTemplateRow = document.getElementById('nbackDefaultTemplateRow');
+        const nbackTemplateEl = document.getElementById('nbackDefaultTemplateHtml');
+        if (nbackTemplateRow && nbackTemplateEl) {
+            const show = (nbackRenderMode === 'custom_html');
+            nbackTemplateRow.style.display = show ? '' : 'none';
+            nbackTemplateEl.disabled = !show;
+        }
+
+        // N-back defaults: mouse hides keyboard controls; Show Buttons only relevant for mouse
+        const nbackDevice = (document.getElementById('nbackDefaultDevice')?.value || 'keyboard').toString();
+        const effectiveNbackDevice = (nbackDevice === 'inherit') ? (defaultDevice || 'keyboard') : nbackDevice;
+
+        const keyRowIds = ['nbackDefaultGoKeyRow', 'nbackDefaultMatchKeyRow', 'nbackDefaultNonmatchKeyRow'];
+        for (const id of keyRowIds) {
+            const row = document.getElementById(id);
+            if (!row) continue;
+            const show = (effectiveNbackDevice === 'keyboard');
+            row.style.display = show ? '' : 'none';
+            row.querySelectorAll('input, select, textarea').forEach((el) => {
+                el.disabled = !show;
+            });
+        }
+
+        const buttonsRow = document.getElementById('nbackDefaultShowButtonsRow');
+        if (buttonsRow) {
+            const show = (effectiveNbackDevice === 'mouse');
+            buttonsRow.style.display = show ? '' : 'none';
+            buttonsRow.querySelectorAll('input, select, textarea').forEach((el) => {
+                el.disabled = !show;
+            });
+        }
     }
 
     applyGaborResponseTaskVisibility() {
@@ -82,6 +116,85 @@ class JsonBuilder {
         }
         if (detectionGroup) {
             detectionGroup.style.display = (mode === 'detect_target') ? '' : 'none';
+        }
+    }
+
+    wrapParameterFormsInCollapsibles() {
+        const root = document.getElementById('parameterForms');
+        if (!root) return;
+
+        const groups = Array.from(root.querySelectorAll(':scope > .parameter-group'));
+        if (!groups.length) return;
+
+        const shouldCollapseGroup = (group, titleText) => {
+            const id = (group?.id || '').toString();
+            if (titleText === 'Trial Configuration' || titleText === 'Continuous Configuration') return true;
+            if (id && /ExperimentParameters$/i.test(id)) return true;
+            if (id && /ExperimentParameters/i.test(id)) return true;
+            return false;
+        };
+
+        const shouldStartOpen = (titleText) => {
+            // Keep the high-level configuration visible; collapse long defaults.
+            if (titleText === 'Trial Configuration' || titleText === 'Continuous Configuration') return true;
+            return false;
+        };
+
+        for (let i = 0; i < groups.length; i += 1) {
+            const group = groups[i];
+            if (!group || group.classList.contains('cf-collapsible')) continue;
+
+            const titleEl = group.querySelector(':scope > .group-title');
+            if (!titleEl) continue;
+
+            const titleText = (titleEl.textContent || '').trim();
+            if (!shouldCollapseGroup(group, titleText)) continue;
+
+            const openByDefault = shouldStartOpen(titleText);
+            const collapseId = `cf-param-collapse-${group.id || i}`;
+
+            // Move all content after the title into the collapse body.
+            const inner = document.createElement('div');
+            inner.className = 'cf-collapse-body';
+
+            while (titleEl.nextSibling) {
+                inner.appendChild(titleEl.nextSibling);
+            }
+
+            const collapse = document.createElement('div');
+            collapse.className = openByDefault ? 'collapse show' : 'collapse';
+            collapse.id = collapseId;
+            collapse.appendChild(inner);
+
+            // Build a header that contains a toggle (left) and preserves any preview button (right).
+            const header = document.createElement('div');
+            header.className = `${titleEl.className} cf-collapse-header`;
+
+            const previewBtn = titleEl.querySelector('button');
+            if (previewBtn) {
+                previewBtn.remove();
+            }
+
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'btn btn-link cf-collapse-toggle p-0 text-start text-decoration-none';
+            toggle.setAttribute('data-bs-toggle', 'collapse');
+            toggle.setAttribute('data-bs-target', `#${collapseId}`);
+            toggle.setAttribute('aria-controls', collapseId);
+            toggle.setAttribute('aria-expanded', openByDefault ? 'true' : 'false');
+
+            // Preserve the original title HTML (e.g., small helper text).
+            toggle.innerHTML = `
+                <span class="cf-collapse-title">${titleEl.innerHTML}</span>
+                <span class="cf-collapse-chevron"><i class="fas fa-chevron-down"></i></span>
+            `;
+
+            header.appendChild(toggle);
+            if (previewBtn) header.appendChild(previewBtn);
+
+            titleEl.replaceWith(header);
+            group.appendChild(collapse);
+            group.classList.add('cf-collapsible');
         }
     }
 
@@ -119,6 +232,18 @@ class JsonBuilder {
         }
         if (valueDetails) {
             valueDetails.style.display = valueEnabled ? '' : 'none';
+        }
+    }
+
+    bindNbackSettingsUI() {
+        const deviceEl = document.getElementById('nbackDefaultDevice');
+        const renderEl = document.getElementById('nbackDefaultRenderMode');
+
+        if (deviceEl) {
+            deviceEl.addEventListener('change', () => this.updateConditionalUI());
+        }
+        if (renderEl) {
+            renderEl.addEventListener('change', () => this.updateConditionalUI());
         }
     }
 
@@ -535,7 +660,17 @@ class JsonBuilder {
         }
         this.updateJSON();
         
-        console.log('PsychJSON Builder initialized successfully');
+        console.log('CogFlow Builder initialized successfully');
+    }
+
+    setAccessibilityMode(enabled) {
+        const on = !!enabled;
+        document.documentElement.classList.toggle('cf-a11y', on);
+        try {
+            localStorage.setItem('cogflow_builder_a11y', on ? '1' : '0');
+        } catch (e) {
+            // Ignore storage errors
+        }
     }
     /**
      * Initialize all modules
@@ -557,6 +692,17 @@ class JsonBuilder {
      * Set up event listeners for UI interactions
      */
     setupEventListeners() {
+        // Accessibility Mode toggle (footer)
+        const a11yToggle = document.getElementById('accessibilityModeToggle');
+        if (a11yToggle && a11yToggle.dataset.bound !== '1') {
+            a11yToggle.dataset.bound = '1';
+            a11yToggle.checked = document.documentElement.classList.contains('cf-a11y');
+
+            a11yToggle.addEventListener('change', () => {
+                this.setAccessibilityMode(!!a11yToggle.checked);
+            });
+        }
+
         // Experiment type radio buttons
         document.querySelectorAll('input[name="experimentType"]').forEach(radio => {
             radio.addEventListener('change', this.onExperimentTypeChange);
@@ -633,8 +779,9 @@ class JsonBuilder {
     }
 
     getSharePointFolderUrl() {
-        const key = 'psychjson_sharepoint_folder_url_v1';
-        const last = (localStorage.getItem(key) || '').toString();
+        const key = 'cogflow_sharepoint_folder_url_v1';
+        const legacyKey = 'psychjson_sharepoint_folder_url_v1';
+        const last = (localStorage.getItem(key) || localStorage.getItem(legacyKey) || '').toString();
 
         const raw = prompt(
             'Enter SharePoint folder URL (will open in a new tab):\n\nExample: https://yourtenant.sharepoint.com/sites/YourSite/Shared%20Documents/YourFolder',
@@ -656,12 +803,13 @@ class JsonBuilder {
         }
 
         localStorage.setItem(key, url);
+        localStorage.setItem(legacyKey, url);
         return url;
     }
 
     getExportFilename(config) {
         // Ask for a 7-char alphanumeric code and use it in the filename.
-        const last = (localStorage.getItem('psychjson_last_export_code') || '').toString();
+        const last = (localStorage.getItem('cogflow_last_export_code') || localStorage.getItem('psychjson_last_export_code') || '').toString();
         const rawCode = prompt('Enter export code (7 alphanumeric characters):', last);
         if (rawCode === null) return null;
 
@@ -671,6 +819,7 @@ class JsonBuilder {
             this.showValidationResult('error', 'Invalid export code. Please use exactly 7 letters/numbers (A-Z, a-z, 0-9).');
             return null;
         }
+        localStorage.setItem('cogflow_last_export_code', code);
         localStorage.setItem('psychjson_last_export_code', code);
 
         const taskType = (config.task_type || document.getElementById('taskType')?.value || 'task').toString().trim().toLowerCase();
@@ -678,10 +827,11 @@ class JsonBuilder {
 
         // Browser sandbox cannot inspect your Downloads directory.
         // We approximate "-01, -02, ..." by tracking export history in localStorage.
-        const historyKey = 'psychjson_export_history_v1';
+        const historyKey = 'cogflow_export_history_v1';
+        const legacyHistoryKey = 'psychjson_export_history_v1';
         let history = [];
         try {
-            history = JSON.parse(localStorage.getItem(historyKey) || '[]');
+            history = JSON.parse(localStorage.getItem(historyKey) || localStorage.getItem(legacyHistoryKey) || '[]');
             if (!Array.isArray(history)) history = [];
         } catch {
             history = [];
@@ -703,6 +853,7 @@ class JsonBuilder {
         history.push(filename);
         if (history.length > 200) history = history.slice(history.length - 200);
         localStorage.setItem(historyKey, JSON.stringify(history));
+        localStorage.setItem(legacyHistoryKey, JSON.stringify(history));
 
         return { filename, code, taskType };
     }
@@ -786,7 +937,7 @@ class JsonBuilder {
 
     maybeInsertStarterTimeline(taskType) {
         if (taskType === 'soc-dashboard' && this.experimentType !== 'continuous') return;
-        if (taskType !== 'flanker' && taskType !== 'sart' && taskType !== 'gabor' && taskType !== 'stroop' && taskType !== 'simon' && taskType !== 'pvt' && taskType !== 'soc-dashboard') return;
+        if (taskType !== 'flanker' && taskType !== 'sart' && taskType !== 'gabor' && taskType !== 'stroop' && taskType !== 'simon' && taskType !== 'pvt' && taskType !== 'soc-dashboard' && taskType !== 'nback') return;
 
         const timelineContainer = document.getElementById('timelineComponents');
         if (!timelineContainer) return;
@@ -806,6 +957,8 @@ class JsonBuilder {
                     ? 'pvt-trial'
                 : (taskType === 'stroop')
                     ? 'stroop-trial'
+                : (taskType === 'nback')
+                    ? 'nback-trial-sequence'
                 : (taskType === 'soc-dashboard')
                     ? 'soc-dashboard'
                     : 'gabor-trial';
@@ -948,6 +1101,16 @@ class JsonBuilder {
             if (type === 'block') {
                 const innerType = getBlockInnerType();
                 return innerType === 'pvt-trial';
+            }
+            return false;
+        }
+
+        if (taskType === 'nback') {
+            if (type === 'nback-trial-sequence') return true;
+            if (type === 'nback-block') return true;
+            if (type === 'block') {
+                const innerType = getBlockInnerType();
+                return innerType === 'nback-block';
             }
             return false;
         }
@@ -1108,7 +1271,7 @@ class JsonBuilder {
         if (e === 'continuous') {
             // Only show/allow continuous-capable tasks in continuous experiments.
             // RDM has a special continuous compilation path; SOC Dashboard is also continuous-only.
-            return (t === 'rdm' || t === 'soc-dashboard' || t === 'custom');
+            return (t === 'rdm' || t === 'soc-dashboard' || t === 'custom' || t === 'nback');
         }
 
         // Trial-based: SOC Dashboard should not be selectable.
@@ -1241,6 +1404,145 @@ class JsonBuilder {
                     <label class="parameter-label">ITI (ms):</label>
                     <input type="number" class="form-control parameter-input" id="flankerItiMs" value="500" min="0" max="10000">
                     <div class="parameter-help">Default inter-trial interval</div>
+                </div>
+            </div>
+            `
+            : (taskType === 'nback')
+            ? `
+            <div class="parameter-group" id="nbackExperimentParameters">
+                <div class="group-title d-flex justify-content-between align-items-center">
+                    <div>
+                        <span>N-back Experiment Settings</span>
+                        <small class="text-muted d-block">Default values applied to newly-added N-back blocks</small>
+                    </div>
+                    <button class="btn btn-sm btn-info" id="previewTaskDefaultsBtn" onclick="window.componentPreview?.showPreview(window.jsonBuilderInstance?.getCurrentNbackDefaults())">
+                        <i class="fas fa-eye"></i> Preview Defaults
+                    </button>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">N:</label>
+                    <input type="number" class="form-control parameter-input" id="nbackDefaultN" value="2" min="1" max="6" step="1">
+                    <div class="parameter-help">N-back depth</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Seed:</label>
+                    <input type="text" class="form-control parameter-input" id="nbackDefaultSeed" value="1234">
+                    <div class="parameter-help">Optional seed (blank = random)</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Stimulus Mode:</label>
+                    <select class="form-control parameter-input" id="nbackDefaultStimulusMode">
+                        <option value="letters" selected>Letters</option>
+                        <option value="numbers">Numbers</option>
+                        <option value="shapes">Shapes</option>
+                        <option value="custom">Custom Pool</option>
+                    </select>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Custom Stimulus Pool:</label>
+                    <textarea class="form-control parameter-input" id="nbackDefaultStimulusPool" rows="2" placeholder="A,B,C,D"></textarea>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Target Probability:</label>
+                    <input type="number" class="form-control parameter-input" id="nbackDefaultTargetProb" value="0.25" min="0" max="1" step="0.01">
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Render Mode:</label>
+                    <select class="form-control parameter-input" id="nbackDefaultRenderMode">
+                        <option value="token" selected>Token</option>
+                        <option value="custom_html">Custom HTML Template</option>
+                    </select>
+                </div>
+
+                <div class="parameter-row" id="nbackDefaultTemplateRow">
+                    <label class="parameter-label">Stimulus Template HTML:</label>
+                    <textarea class="form-control parameter-input" id="nbackDefaultTemplateHtml" rows="2"><div style="font-size:72px; font-weight:700; letter-spacing:0.02em;">{{TOKEN}}</div></textarea>
+                    <div class="parameter-help">Used when render_mode=custom_html. Variable: {{TOKEN}}</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Stimulus (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="nbackDefaultStimulusMs" value="500" min="0" max="60000" step="1">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">ISI (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="nbackDefaultIsiMs" value="700" min="0" max="60000" step="1">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Trial (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="nbackDefaultTrialMs" value="1200" min="0" max="60000" step="1">
+                </div>
+
+                <div class="parameter-row" id="nbackDefaultFixationBetweenTrialsRow">
+                    <label class="parameter-label">Fixation During ISI:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="nbackDefaultShowFixationCrossBetweenTrials">
+                            <label class="form-check-label" for="nbackDefaultShowFixationCrossBetweenTrials">Show fixation cross when the token is hidden</label>
+                        </div>
+                    </div>
+                    <div class="parameter-help">Interpreter renders a "+" marker during the ISI/ITI interval (between items).</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Response Paradigm:</label>
+                    <select class="form-control parameter-input" id="nbackDefaultParadigm">
+                        <option value="go_nogo" selected>Go/No-Go</option>
+                        <option value="2afc">2AFC (match vs non-match)</option>
+                    </select>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Response Device:</label>
+                    <select class="form-control parameter-input" id="nbackDefaultDevice">
+                        <option value="inherit">Inherit</option>
+                        <option value="keyboard" selected>Keyboard</option>
+                        <option value="mouse">Mouse</option>
+                    </select>
+                </div>
+
+                <div class="parameter-row" id="nbackDefaultGoKeyRow">
+                    <label class="parameter-label">Go Key:</label>
+                    <input type="text" class="form-control parameter-input" id="nbackDefaultGoKey" value="space">
+                </div>
+
+                <div class="parameter-row" id="nbackDefaultMatchKeyRow">
+                    <label class="parameter-label">Match Key:</label>
+                    <input type="text" class="form-control parameter-input" id="nbackDefaultMatchKey" value="j">
+                </div>
+
+                <div class="parameter-row" id="nbackDefaultNonmatchKeyRow">
+                    <label class="parameter-label">Non-match Key:</label>
+                    <input type="text" class="form-control parameter-input" id="nbackDefaultNonmatchKey" value="f">
+                </div>
+
+                <div class="parameter-row" id="nbackDefaultShowButtonsRow">
+                    <label class="parameter-label">Show Buttons:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="nbackDefaultShowButtons" checked>
+                            <label class="form-check-label" for="nbackDefaultShowButtons">Show on-screen buttons</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Feedback:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="nbackDefaultFeedback">
+                            <label class="form-check-label" for="nbackDefaultFeedback">Show correctness feedback</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Feedback Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="nbackDefaultFeedbackMs" value="250" min="0" max="5000" step="1">
                 </div>
             </div>
             `
@@ -2081,8 +2383,14 @@ class JsonBuilder {
         // Task-specific conditional UI (Simon response device + keys)
         this.bindSimonSettingsUI();
 
+        // Reduce default scrolling: collapse long experiment-default sections.
+        this.wrapParameterFormsInCollapsibles();
+
         // Task-specific conditional UI (PVT response device + key)
         this.bindPvtSettingsUI();
+
+        // Task-specific conditional UI (N-back defaults)
+        this.bindNbackSettingsUI();
 
         // Rewards toggle (experiment-wide)
         this.bindRewardsToggleUI();
@@ -2183,6 +2491,145 @@ class JsonBuilder {
                     <label class="parameter-label">ITI (ms):</label>
                     <input type="number" class="form-control parameter-input" id="flankerItiMs" value="500" min="0" max="10000">
                     <div class="parameter-help">Default inter-trial interval</div>
+                </div>
+            </div>
+            `
+            : (taskType === 'nback')
+            ? `
+            <div class="parameter-group" id="nbackExperimentParameters">
+                <div class="group-title d-flex justify-content-between align-items-center">
+                    <div>
+                        <span>N-back Experiment Settings</span>
+                        <small class="text-muted d-block">Default values applied to newly-added N-back streams/sequences</small>
+                    </div>
+                    <button class="btn btn-sm btn-info" id="previewTaskDefaultsBtn" onclick="window.componentPreview?.showPreview(window.jsonBuilderInstance?.getCurrentNbackDefaults())">
+                        <i class="fas fa-eye"></i> Preview Defaults
+                    </button>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">N:</label>
+                    <input type="number" class="form-control parameter-input" id="nbackDefaultN" value="2" min="1" max="6" step="1">
+                    <div class="parameter-help">N-back depth</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Seed:</label>
+                    <input type="text" class="form-control parameter-input" id="nbackDefaultSeed" value="1234">
+                    <div class="parameter-help">Optional seed (blank = random)</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Stimulus Mode:</label>
+                    <select class="form-control parameter-input" id="nbackDefaultStimulusMode">
+                        <option value="letters" selected>Letters</option>
+                        <option value="numbers">Numbers</option>
+                        <option value="shapes">Shapes</option>
+                        <option value="custom">Custom Pool</option>
+                    </select>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Custom Stimulus Pool:</label>
+                    <textarea class="form-control parameter-input" id="nbackDefaultStimulusPool" rows="2" placeholder="A,B,C,D"></textarea>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Target Probability:</label>
+                    <input type="number" class="form-control parameter-input" id="nbackDefaultTargetProb" value="0.25" min="0" max="1" step="0.01">
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Render Mode:</label>
+                    <select class="form-control parameter-input" id="nbackDefaultRenderMode">
+                        <option value="token" selected>Token</option>
+                        <option value="custom_html">Custom HTML Template</option>
+                    </select>
+                </div>
+
+                <div class="parameter-row" id="nbackDefaultTemplateRow">
+                    <label class="parameter-label">Stimulus Template HTML:</label>
+                    <textarea class="form-control parameter-input" id="nbackDefaultTemplateHtml" rows="2"><div style="font-size:72px; font-weight:700; letter-spacing:0.02em;">{{TOKEN}}</div></textarea>
+                    <div class="parameter-help">Used when render_mode=custom_html. Variable: {{TOKEN}}</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Stimulus (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="nbackDefaultStimulusMs" value="500" min="0" max="60000" step="1">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">ISI (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="nbackDefaultIsiMs" value="700" min="0" max="60000" step="1">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Trial (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="nbackDefaultTrialMs" value="1200" min="0" max="60000" step="1">
+                </div>
+
+                <div class="parameter-row" id="nbackDefaultFixationBetweenTrialsRow">
+                    <label class="parameter-label">Fixation During ISI:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="nbackDefaultShowFixationCrossBetweenTrials">
+                            <label class="form-check-label" for="nbackDefaultShowFixationCrossBetweenTrials">Show fixation cross when the token is hidden</label>
+                        </div>
+                    </div>
+                    <div class="parameter-help">Interpreter renders a "+" marker during the ISI/ITI interval (between items).</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Response Paradigm:</label>
+                    <select class="form-control parameter-input" id="nbackDefaultParadigm">
+                        <option value="go_nogo" selected>Go/No-Go</option>
+                        <option value="2afc">2AFC (match vs non-match)</option>
+                    </select>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Response Device:</label>
+                    <select class="form-control parameter-input" id="nbackDefaultDevice">
+                        <option value="inherit">Inherit</option>
+                        <option value="keyboard" selected>Keyboard</option>
+                        <option value="mouse">Mouse</option>
+                    </select>
+                </div>
+
+                <div class="parameter-row" id="nbackDefaultGoKeyRow">
+                    <label class="parameter-label">Go Key:</label>
+                    <input type="text" class="form-control parameter-input" id="nbackDefaultGoKey" value="space">
+                </div>
+
+                <div class="parameter-row" id="nbackDefaultMatchKeyRow">
+                    <label class="parameter-label">Match Key:</label>
+                    <input type="text" class="form-control parameter-input" id="nbackDefaultMatchKey" value="j">
+                </div>
+
+                <div class="parameter-row" id="nbackDefaultNonmatchKeyRow">
+                    <label class="parameter-label">Non-match Key:</label>
+                    <input type="text" class="form-control parameter-input" id="nbackDefaultNonmatchKey" value="f">
+                </div>
+
+                <div class="parameter-row" id="nbackDefaultShowButtonsRow">
+                    <label class="parameter-label">Show Buttons:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="nbackDefaultShowButtons" checked>
+                            <label class="form-check-label" for="nbackDefaultShowButtons">Show on-screen buttons</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Feedback:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="nbackDefaultFeedback">
+                            <label class="form-check-label" for="nbackDefaultFeedback">Show correctness feedback</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Feedback Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="nbackDefaultFeedbackMs" value="250" min="0" max="5000" step="1">
                 </div>
             </div>
             `
@@ -2822,6 +3269,9 @@ class JsonBuilder {
             el.addEventListener('change', this.updateJSON);
         });
 
+        // Reduce default scrolling: collapse long experiment-default sections.
+        this.wrapParameterFormsInCollapsibles();
+
         const defaultResponseEl = document.getElementById('defaultResponseDevice');
         if (defaultResponseEl) {
             defaultResponseEl.addEventListener('change', () => this.updateConditionalUI());
@@ -2840,6 +3290,9 @@ class JsonBuilder {
 
         // Task-specific conditional UI (PVT response device + key + feedback)
         this.bindPvtSettingsUI();
+
+        // Task-specific conditional UI (N-back defaults)
+        this.bindNbackSettingsUI();
 
         // Rewards toggle (experiment-wide)
         this.bindRewardsToggleUI();
@@ -2918,6 +3371,8 @@ class JsonBuilder {
         const createBlockComponentDef = (currentTaskType) => {
             const blockDisplayName = (currentTaskType === 'rdm')
                 ? 'RDM Block'
+                : (currentTaskType === 'nback')
+                    ? 'N-back Block'
                 : (currentTaskType === 'flanker')
                     ? 'Flanker Block'
                     : (currentTaskType === 'sart')
@@ -2932,6 +3387,8 @@ class JsonBuilder {
 
             const baseOptions = (currentTaskType === 'flanker')
                 ? ['flanker-trial']
+                : (currentTaskType === 'nback')
+                    ? ['nback-block']
                 : (currentTaskType === 'sart')
                     ? ['sart-trial']
                     : (currentTaskType === 'simon')
@@ -3432,8 +3889,8 @@ class JsonBuilder {
             return baseComponents;
         }
 
-        // For Flanker/SART/Simon/PVT/Gabor/Stroop, show only task-appropriate components.
-        if (taskType === 'flanker' || taskType === 'sart' || taskType === 'simon' || taskType === 'pvt' || taskType === 'gabor' || taskType === 'stroop') {
+        // For Flanker/SART/Simon/PVT/Gabor/Stroop/N-back, show only task-appropriate components.
+        if (taskType === 'flanker' || taskType === 'sart' || taskType === 'simon' || taskType === 'pvt' || taskType === 'gabor' || taskType === 'stroop' || taskType === 'nback') {
             if (taskType === 'flanker') {
                 baseComponents.push({
                     id: 'flanker-trial',
@@ -3588,6 +4045,18 @@ class JsonBuilder {
                 });
             }
 
+            if (taskType === 'nback') {
+                const isContinuous = (this.experimentType === 'continuous');
+                baseComponents.push(createComponentDefFromSchema('nback-trial-sequence', {
+                    name: isContinuous ? 'N-back Stream' : 'N-back Sequence',
+                    icon: 'fas fa-repeat',
+                    description: isContinuous
+                        ? 'Generate a continuous N-back stream (compiled to the continuous N-back plugin)'
+                        : 'Generate a trial-based N-back sequence (expanded to N-back trials on export)',
+                    category: 'task'
+                }));
+            }
+
             // HTML-based components
             baseComponents.push(
                 {
@@ -3621,6 +4090,7 @@ class JsonBuilder {
             );
 
             // Block (task-scoped)
+            // Block stays available for advanced authoring / parameter windows.
             baseComponents.push(createBlockComponentDef(taskType));
 
             // Add specialized components based on data collection settings
@@ -4022,6 +4492,10 @@ class JsonBuilder {
                 Object.assign(componentData, this.getSocDashboardDefaultsForNewComponent());
             }
 
+            if (componentDef.id === 'nback-trial-sequence') {
+                Object.assign(componentData, this.getNbackDefaultsForNewSequence());
+            }
+
             if (componentDef.id === 'block') {
                 const currentTaskType = document.getElementById('taskType')?.value || 'rdm';
                 if (currentTaskType === 'gabor') {
@@ -4035,6 +4509,9 @@ class JsonBuilder {
                 }
                 if (currentTaskType === 'pvt') {
                     Object.assign(componentData, this.getPvtDefaultsForNewBlock());
+                }
+                if (currentTaskType === 'nback') {
+                    Object.assign(componentData, this.getNbackDefaultsForNewBlock());
                 }
             }
 
@@ -4106,8 +4583,9 @@ class JsonBuilder {
     clearTimeline() {
         if (confirm('Are you sure you want to clear the entire timeline?')) {
             try {
-                if (window.PsychJsonAssetCache && typeof window.PsychJsonAssetCache.clearAll === 'function') {
-                    window.PsychJsonAssetCache.clearAll();
+                const assetCache = window.CogFlowAssetCache || window.PsychJsonAssetCache;
+                if (assetCache && typeof assetCache.clearAll === 'function') {
+                    assetCache.clearAll();
                 }
             } catch {
                 // ignore
@@ -4456,6 +4934,52 @@ class JsonBuilder {
             };
         }
 
+        if (taskType === 'nback') {
+            const safeInt = (raw, fallback) => {
+                const v = Number.parseInt(raw, 10);
+                return Number.isFinite(v) ? v : fallback;
+            };
+
+            const safeFloat01 = (raw, fallback) => {
+                const v = Number.parseFloat(raw);
+                if (!Number.isFinite(v)) return fallback;
+                return Math.max(0, Math.min(1, v));
+            };
+
+            const renderMode = (document.getElementById('nbackDefaultRenderMode')?.value || 'token').toString();
+            const responseDevice = (document.getElementById('nbackDefaultDevice')?.value || 'keyboard').toString();
+
+            config.nback_settings = {
+                n: safeInt(document.getElementById('nbackDefaultN')?.value, 2),
+                seed: (document.getElementById('nbackDefaultSeed')?.value || '').toString(),
+
+                stimulus_mode: (document.getElementById('nbackDefaultStimulusMode')?.value || 'letters').toString(),
+                stimulus_pool: (document.getElementById('nbackDefaultStimulusPool')?.value || '').toString(),
+                target_probability: safeFloat01(document.getElementById('nbackDefaultTargetProb')?.value, 0.25),
+
+                render_mode: renderMode,
+                ...(renderMode === 'custom_html'
+                    ? { stimulus_template_html: (document.getElementById('nbackDefaultTemplateHtml')?.value || '').toString() }
+                    : {}),
+
+                stimulus_duration_ms: safeInt(document.getElementById('nbackDefaultStimulusMs')?.value, 500),
+                isi_duration_ms: safeInt(document.getElementById('nbackDefaultIsiMs')?.value, 700),
+                trial_duration_ms: safeInt(document.getElementById('nbackDefaultTrialMs')?.value, 1200),
+
+                show_fixation_cross_between_trials: !!document.getElementById('nbackDefaultShowFixationCrossBetweenTrials')?.checked,
+
+                response_paradigm: (document.getElementById('nbackDefaultParadigm')?.value || 'go_nogo').toString(),
+                response_device: responseDevice,
+                go_key: (document.getElementById('nbackDefaultGoKey')?.value || 'space').toString(),
+                match_key: (document.getElementById('nbackDefaultMatchKey')?.value || 'j').toString(),
+                nonmatch_key: (document.getElementById('nbackDefaultNonmatchKey')?.value || 'f').toString(),
+                show_buttons: !!document.getElementById('nbackDefaultShowButtons')?.checked,
+
+                show_feedback: !!document.getElementById('nbackDefaultFeedback')?.checked,
+                feedback_duration_ms: safeInt(document.getElementById('nbackDefaultFeedbackMs')?.value, 250)
+            };
+        }
+
         if (taskType === 'soc-dashboard') {
             const title = (document.getElementById('socTitle')?.value || 'SOC Dashboard').toString();
             const wallpaperUrl = (document.getElementById('socWallpaperUrl')?.value || '').toString().trim();
@@ -4742,6 +5266,186 @@ class JsonBuilder {
             feedback_enabled: feedbackEnabled,
             feedback_message: feedbackMessage,
             add_trial_per_false_start: addTrialPerFalseStart,
+
+            detection_response_task_enabled: false
+        };
+    }
+
+    /**
+     * Build a preview payload for the current N-back defaults.
+     * We return a `block` payload so the preview matches the real authoring unit.
+     */
+    getCurrentNbackDefaults() {
+        const safeInt = (raw, fallback) => {
+            const v = Number.parseInt(raw, 10);
+            return Number.isFinite(v) ? v : fallback;
+        };
+
+        const safeFloat01 = (raw, fallback) => {
+            const v = Number.parseFloat(raw);
+            if (!Number.isFinite(v)) return fallback;
+            return Math.max(0, Math.min(1, v));
+        };
+
+        const cap = this.getExperimentWideLengthCapForBlocks();
+        const defaultLen = this.getExperimentWideBlockLengthDefault();
+
+        const renderMode = (document.getElementById('nbackDefaultRenderMode')?.value || 'token').toString();
+        const responseDevice = (document.getElementById('nbackDefaultDevice')?.value || 'keyboard').toString();
+
+        const blockLen = (() => {
+            const raw = safeInt(defaultLen, 40);
+            const len = Number.isFinite(raw) ? Math.max(1, raw) : 40;
+            if (Number.isFinite(cap) && cap > 0) return Math.min(len, cap);
+            return len;
+        })();
+
+        return {
+            type: 'block',
+            name: 'N-back Defaults',
+            block_component_type: 'nback-block',
+            block_length: blockLen,
+            seed: (document.getElementById('nbackDefaultSeed')?.value || '').toString(),
+
+            nback_n: safeInt(document.getElementById('nbackDefaultN')?.value, 2),
+            nback_stimulus_mode: (document.getElementById('nbackDefaultStimulusMode')?.value || 'letters').toString(),
+            nback_stimulus_pool: (document.getElementById('nbackDefaultStimulusPool')?.value || '').toString(),
+            nback_target_probability: safeFloat01(document.getElementById('nbackDefaultTargetProb')?.value, 0.25),
+
+            nback_render_mode: renderMode,
+            ...(renderMode === 'custom_html'
+                ? { nback_stimulus_template_html: (document.getElementById('nbackDefaultTemplateHtml')?.value || '').toString() }
+                : {}),
+
+            nback_stimulus_duration_ms: safeInt(document.getElementById('nbackDefaultStimulusMs')?.value, 500),
+            nback_isi_duration_ms: safeInt(document.getElementById('nbackDefaultIsiMs')?.value, 700),
+            nback_trial_duration_ms: safeInt(document.getElementById('nbackDefaultTrialMs')?.value, 1200),
+
+            nback_show_fixation_cross_between_trials: !!document.getElementById('nbackDefaultShowFixationCrossBetweenTrials')?.checked,
+
+            nback_response_paradigm: (document.getElementById('nbackDefaultParadigm')?.value || 'go_nogo').toString(),
+            nback_response_device: responseDevice,
+            nback_go_key: (document.getElementById('nbackDefaultGoKey')?.value || 'space').toString(),
+            nback_match_key: (document.getElementById('nbackDefaultMatchKey')?.value || 'j').toString(),
+            nback_nonmatch_key: (document.getElementById('nbackDefaultNonmatchKey')?.value || 'f').toString(),
+            nback_show_buttons: !!document.getElementById('nbackDefaultShowButtons')?.checked,
+
+            nback_show_feedback: !!document.getElementById('nbackDefaultFeedback')?.checked,
+            nback_feedback_duration_ms: safeInt(document.getElementById('nbackDefaultFeedbackMs')?.value, 250)
+        };
+    }
+
+    getNbackDefaultsForNewBlock() {
+        const safeInt = (raw, fallback) => {
+            const v = Number.parseInt(raw, 10);
+            return Number.isFinite(v) ? v : fallback;
+        };
+
+        const safeFloat01 = (raw, fallback) => {
+            const v = Number.parseFloat(raw);
+            if (!Number.isFinite(v)) return fallback;
+            return Math.max(0, Math.min(1, v));
+        };
+
+        const cap = this.getExperimentWideLengthCapForBlocks();
+        const defaultLen = this.getExperimentWideBlockLengthDefault();
+
+        const renderMode = (document.getElementById('nbackDefaultRenderMode')?.value || 'token').toString();
+
+        const blockLen = (() => {
+            const raw = safeInt(defaultLen, 40);
+            const len = Number.isFinite(raw) ? Math.max(1, raw) : 40;
+            if (Number.isFinite(cap) && cap > 0) return Math.min(len, cap);
+            return len;
+        })();
+
+        return {
+            block_component_type: 'nback-block',
+            block_length: blockLen,
+            seed: (document.getElementById('nbackDefaultSeed')?.value || '').toString(),
+
+            nback_n: safeInt(document.getElementById('nbackDefaultN')?.value, 2),
+            nback_stimulus_mode: (document.getElementById('nbackDefaultStimulusMode')?.value || 'letters').toString(),
+            nback_stimulus_pool: (document.getElementById('nbackDefaultStimulusPool')?.value || '').toString(),
+            nback_target_probability: safeFloat01(document.getElementById('nbackDefaultTargetProb')?.value, 0.25),
+
+            nback_render_mode: renderMode,
+            ...(renderMode === 'custom_html'
+                ? { nback_stimulus_template_html: (document.getElementById('nbackDefaultTemplateHtml')?.value || '<div style="font-size:72px; font-weight:700; letter-spacing:0.02em;">{{TOKEN}}</div>').toString() }
+                : {}),
+
+            nback_stimulus_duration_ms: safeInt(document.getElementById('nbackDefaultStimulusMs')?.value, 500),
+            nback_isi_duration_ms: safeInt(document.getElementById('nbackDefaultIsiMs')?.value, 700),
+            nback_trial_duration_ms: safeInt(document.getElementById('nbackDefaultTrialMs')?.value, 1200),
+
+            nback_show_fixation_cross_between_trials: !!document.getElementById('nbackDefaultShowFixationCrossBetweenTrials')?.checked,
+
+            nback_response_paradigm: (document.getElementById('nbackDefaultParadigm')?.value || 'go_nogo').toString(),
+            // New blocks inherit response device from experiment defaults.
+            nback_response_device: 'inherit',
+            nback_go_key: (document.getElementById('nbackDefaultGoKey')?.value || 'space').toString(),
+            nback_match_key: (document.getElementById('nbackDefaultMatchKey')?.value || 'j').toString(),
+            nback_nonmatch_key: (document.getElementById('nbackDefaultNonmatchKey')?.value || 'f').toString(),
+            nback_show_buttons: !!document.getElementById('nbackDefaultShowButtons')?.checked,
+
+            nback_show_feedback: !!document.getElementById('nbackDefaultFeedback')?.checked,
+            nback_feedback_duration_ms: safeInt(document.getElementById('nbackDefaultFeedbackMs')?.value, 250)
+        };
+    }
+
+    getNbackDefaultsForNewSequence() {
+        const safeInt = (raw, fallback) => {
+            const v = Number.parseInt(raw, 10);
+            return Number.isFinite(v) ? v : fallback;
+        };
+
+        const safeFloat01 = (raw, fallback) => {
+            const v = Number.parseFloat(raw);
+            if (!Number.isFinite(v)) return fallback;
+            return Math.max(0, Math.min(1, v));
+        };
+
+        const cap = this.getExperimentWideLengthCapForBlocks();
+        const defaultLen = this.getExperimentWideBlockLengthDefault();
+
+        const renderMode = (document.getElementById('nbackDefaultRenderMode')?.value || 'token').toString();
+
+        const length = (() => {
+            const raw = safeInt(defaultLen, 24);
+            const len = Number.isFinite(raw) ? Math.max(1, raw) : 24;
+            if (Number.isFinite(cap) && cap > 0) return Math.min(len, cap);
+            return len;
+        })();
+
+        return {
+            length,
+            seed: (document.getElementById('nbackDefaultSeed')?.value || '').toString(),
+            n: safeInt(document.getElementById('nbackDefaultN')?.value, 2),
+
+            stimulus_mode: (document.getElementById('nbackDefaultStimulusMode')?.value || 'letters').toString(),
+            stimulus_pool: (document.getElementById('nbackDefaultStimulusPool')?.value || '').toString(),
+            target_probability: safeFloat01(document.getElementById('nbackDefaultTargetProb')?.value, 0.25),
+
+            render_mode: renderMode,
+            ...(renderMode === 'custom_html'
+                ? { stimulus_template_html: (document.getElementById('nbackDefaultTemplateHtml')?.value || '').toString() }
+                : {}),
+
+            stimulus_duration_ms: safeInt(document.getElementById('nbackDefaultStimulusMs')?.value, 500),
+            isi_duration_ms: safeInt(document.getElementById('nbackDefaultIsiMs')?.value, 700),
+            trial_duration_ms: safeInt(document.getElementById('nbackDefaultTrialMs')?.value, 1200),
+
+            show_fixation_cross_between_trials: !!document.getElementById('nbackDefaultShowFixationCrossBetweenTrials')?.checked,
+
+            response_paradigm: (document.getElementById('nbackDefaultParadigm')?.value || 'go_nogo').toString(),
+            response_device: 'inherit',
+            go_key: (document.getElementById('nbackDefaultGoKey')?.value || 'space').toString(),
+            match_key: (document.getElementById('nbackDefaultMatchKey')?.value || 'j').toString(),
+            nonmatch_key: (document.getElementById('nbackDefaultNonmatchKey')?.value || 'f').toString(),
+            show_buttons: !!document.getElementById('nbackDefaultShowButtons')?.checked,
+
+            show_feedback: !!document.getElementById('nbackDefaultFeedback')?.checked,
+            feedback_duration_ms: safeInt(document.getElementById('nbackDefaultFeedbackMs')?.value, 250),
 
             detection_response_task_enabled: false
         };
@@ -5104,11 +5808,11 @@ class JsonBuilder {
             if (!c || typeof c !== 'object') continue;
             if (c.type !== 'block') continue;
 
-            const len = Number.parseInt(c.length ?? '', 10);
+            const len = Number.parseInt(c.block_length ?? c.length ?? '', 10);
             if (!Number.isFinite(len)) continue;
             if (len <= cap) continue;
 
-            const rawType = (c.component_type ?? 'unknown').toString();
+            const rawType = (c.block_component_type ?? c.component_type ?? 'unknown').toString();
             const safeType = rawType.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || 'unknown';
             violations.push(`Block (${safeType}) length ${len} exceeds experiment length ${cap}.`);
         }
@@ -6410,8 +7114,8 @@ class JsonBuilder {
         const graphClient = window.GraphSharePointClient;
         if (graphClient?.uploadJsonToOneDriveFolder) {
             try {
-                // Upload any cached local assets (images) referenced by asset://... in the config.
-                if (graphClient.uploadFileToOneDriveFolder && window.PsychJsonAssetCache) {
+                // Upload any cached local assets (e.g., images/audio) referenced by asset://... in the config.
+                if (graphClient.uploadFileToOneDriveFolder && (window.CogFlowAssetCache || window.PsychJsonAssetCache)) {
                     try {
                         config = await this.uploadAssetRefsToGraphAndRewriteConfig(config, naming, graphClient);
                     } catch (e) {
@@ -6527,7 +7231,8 @@ class JsonBuilder {
             const componentId = m[1];
             const field = m[2];
 
-            const entry = window.PsychJsonAssetCache?.get?.(componentId, field);
+            const assetCache = window.CogFlowAssetCache || window.PsychJsonAssetCache;
+            const entry = assetCache?.get?.(componentId, field);
             const file = entry?.file;
             if (!file) {
                 console.warn('Missing cached file for', ref);
@@ -6596,6 +7301,7 @@ class JsonBuilder {
             };
             
             // Save to localStorage
+            localStorage.setItem('cogflow_templates', JSON.stringify(this.templates));
             localStorage.setItem('psychjson_templates', JSON.stringify(this.templates));
             this.showValidationResult('success', `Template "${name}" saved successfully!`);
         }
@@ -6606,7 +7312,7 @@ class JsonBuilder {
      */
     loadTemplate() {
         // Load templates from localStorage
-        const saved = localStorage.getItem('psychjson_templates');
+        const saved = localStorage.getItem('cogflow_templates') || localStorage.getItem('psychjson_templates');
         if (saved) {
             this.templates = JSON.parse(saved);
         }
