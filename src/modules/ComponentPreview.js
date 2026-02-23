@@ -86,7 +86,11 @@ class ComponentPreview {
         console.log('Showing preview for component type:', componentType, 'with data:', componentData);
         
         // Simple, direct routing like the Figma prototype
-        if (componentType === 'html-keyboard-response') {
+        if (componentType === 'detection-response-task-start') {
+            this.showDrtStartPreview(componentData);
+        } else if (componentType === 'detection-response-task-stop') {
+            this.showDrtStopPreview(componentData);
+        } else if (componentType === 'html-keyboard-response') {
             // Instructions component - show the actual stimulus text
             const stimulusText = componentData.stimulus || 'No instructions text provided';
             this.showInstructionsPreview(stimulusText, componentData);
@@ -134,6 +138,90 @@ class ComponentPreview {
             console.warn('Unknown component type for preview:', componentType);
             this.showGenericPreview(componentData);
         }
+    }
+
+    showDrtStartPreview(componentData) {
+        const previewModal = this.getPreviewModal();
+        if (!previewModal) return;
+        const { modalEl, modal } = previewModal;
+
+        const modalBody = modalEl.querySelector('.modal-body');
+        if (!modalBody) return;
+
+        const escape = (s) => {
+            return (s ?? '')
+                .toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        };
+
+        const location = (componentData.location ?? 'top-right').toString();
+        const sizePx = Number.isFinite(Number(componentData.size_px)) ? Number(componentData.size_px) : 18;
+        const color = (componentData.stimulus_color ?? '#ff3b3b').toString() || '#ff3b3b';
+        const shape = (componentData.stimulus_type ?? 'square').toString().toLowerCase() === 'circle' ? 'circle' : 'square';
+        const key = (componentData.response_key ?? 'space').toString() || 'space';
+
+        const minIti = Number.isFinite(Number(componentData.min_iti_ms)) ? Number(componentData.min_iti_ms) : 3000;
+        const maxIti = Number.isFinite(Number(componentData.max_iti_ms)) ? Number(componentData.max_iti_ms) : 5000;
+        const stimDur = Number.isFinite(Number(componentData.stimulus_duration_ms)) ? Number(componentData.stimulus_duration_ms) : 1000;
+        const minRt = Number.isFinite(Number(componentData.min_rt_ms)) ? Number(componentData.min_rt_ms) : 100;
+        const maxRt = Number.isFinite(Number(componentData.max_rt_ms)) ? Number(componentData.max_rt_ms) : 2000;
+
+        const posCss = (() => {
+            const margin = 18;
+            if (location === 'top-left') return `left:${margin}px; top:${margin}px;`;
+            if (location === 'bottom-left') return `left:${margin}px; bottom:${margin}px;`;
+            if (location === 'bottom-right') return `right:${margin}px; bottom:${margin}px;`;
+            return `right:${margin}px; top:${margin}px;`;
+        })();
+
+        modalBody.innerHTML = `
+            <div class="p-3">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <div class="h5 mb-0">DRT Start Preview</div>
+                        <div class="small text-muted">Response key: <span class="badge bg-secondary">${escape(key)}</span></div>
+                    </div>
+                    <div class="small text-muted text-end">
+                        ITI: ${escape(minIti)}–${escape(maxIti)} ms<br/>
+                        Stimulus: ${escape(stimDur)} ms<br/>
+                        RT window: ${escape(minRt)}–${escape(maxRt)} ms
+                    </div>
+                </div>
+
+                <div class="position-relative border rounded overflow-hidden" style="height:260px;">
+                    <div class="position-absolute" style="${posCss}">
+                        <div style="width:${escape(sizePx)}px; height:${escape(sizePx)}px; background:${escape(color)}; border-radius:${shape === 'circle' ? '999px' : '0px'};"></div>
+                    </div>
+                    <div class="small text-muted position-absolute" style="left:18px; bottom:18px;">
+                        Static preview (runtime will flash this stimulus periodically).
+                    </div>
+                </div>
+            </div>
+        `;
+
+        modal.show();
+    }
+
+    showDrtStopPreview(componentData) {
+        const previewModal = this.getPreviewModal();
+        if (!previewModal) return;
+        const { modalEl, modal } = previewModal;
+
+        const modalBody = modalEl.querySelector('.modal-body');
+        if (!modalBody) return;
+
+        modalBody.innerHTML = `
+            <div class="p-3">
+                <div class="h5 mb-2">DRT Stop</div>
+                <div class="text-muted">Stops the background DRT stream started by a prior DRT Start.</div>
+            </div>
+        `;
+
+        modal.show();
     }
 
     showNbackBlockPreview(componentData) {

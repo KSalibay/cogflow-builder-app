@@ -4,7 +4,7 @@
 
 # CogFlow Builder
 
-Static (non-bundled) web app for building JSON configurations for experimental psychology tasks. The current focus is Random Dot Motion (RDM) experiments, including compact “Block” representations for large trial counts.
+Static (non-bundled) web app for building JSON configurations for experimental psychology tasks. CogFlow is designed to work as a modular platform that supports classic jsPsych paradigms and expands them to provide continuous presentation paradigms, additional ecological validity tasks (such as the SOC Dashboard simulator), and customizable tasks with multiple data collection modalities across web and local hosts.
 
 This app is plain HTML/CSS/JS loaded via classic `<script>` tags (globals; no `import`/`export`).
 
@@ -25,7 +25,50 @@ This app is plain HTML/CSS/JS loaded via classic `<script>` tags (globals; no `i
 - Use VS Code Live Server on [index.html](index.html)
 - If you hit caching issues, bump the `?v=...` cache-buster querystring on local `<script>` tags in [index.html](index.html)
 
+## Recommended workflow (Feb 2026): Token Store export + JATOS
+
+The default “demo-ready” path avoids SharePoint/Graph setup and avoids relying on URL params inside JATOS:
+
+1. Run the Builder (locally or in JATOS)
+2. Click **Export → Token Store**
+3. The Builder creates a `config_id` and tokens, uploads the JSON (and any cached `asset://...` files), then shows an overlay containing the exact JSON to paste into JATOS
+4. Paste the values into the Interpreter component’s **Component Properties** (see Interpreter README)
+
+### Token Store Worker (Cloudflare)
+
+This repo includes a deployable Cloudflare Worker implementation at:
+
+- [token-store-worker/](token-store-worker/)
+
+It stores configs in KV behind unguessable read/write tokens, and (optionally) hosts binary assets via R2.
+
+### Assets (`asset://...`) during Token Store export
+
+Some parameters (e.g., `stimulus_image_url`, `stimulus_audio_url`) support choosing a local file.
+
+- While editing, the Builder stores the file in an in-memory cache and writes an `asset://<componentId>/<field>` placeholder into the JSON.
+- When exporting **to Token Store**, the Builder:
+  - uploads cached assets to the Worker (R2) and receives public, unguessable asset URLs
+  - rewrites all `asset://...` references in the exported JSON (including `asset://...` occurrences embedded inside custom HTML strings)
+- When exporting as a local download, `asset://...` references are kept as-is (you must host the files yourself).
+
+## JATOS
+
+This repo includes a JATOS entry wrapper: `index_jatos.html`.
+
+Recommended asset layout inside your JATOS study assets for the Builder component:
+
+- Component HTML file: `index_jatos.html`
+- Builder app files live under: `builder/` (so the wrapper can load `/publix/.../builder/index.html` while keeping the top-level page at `/publix/.../start`)
+
+Notes:
+
+- JATOS commonly applies a strict CSP to static asset routes; the wrapper keeps the top-level document at `/start` (which is typically marked `+nocsp`) and loads `builder/index.html` into it.
+- The Builder uses vendored third-party dependencies under `vendor/` (to avoid CDN and cross-origin issues in JATOS).
+
 ## Export to SharePoint via Microsoft Graph
+
+This is an optional/advanced export path. For most deployments (especially JATOS), prefer **Token Store export**.
 
 The **Export to SharePoint** button can upload the generated JSON directly into your OneDrive for Business / SharePoint “My Site” folder using Microsoft Graph.
 
@@ -75,13 +118,11 @@ For the folder you provided, the default is:
 
 ### Local assets (images + audio)
 
-Some component parameters (e.g., `stimulus_image_url`, `stimulus_audio_url`) support choosing a local file in the parameter editor.
+Asset placeholders behave the same way across exports (they are cached as `asset://...` while authoring), but the upload destination depends on the export type:
 
-- While editing, the Builder stores the file in an in-memory cache and writes an `asset://<componentId>/<field>` placeholder into the JSON.
-- When exporting **to SharePoint**, the Builder:
-  - Uploads any cached `asset://...` files to the same folder as the JSON (via Microsoft Graph)
-  - Rewrites all `asset://...` references in the exported JSON to the uploaded file URLs (including `asset://...` occurrences embedded inside custom HTML strings)
-- When exporting as a local download, `asset://...` references are kept as-is (you’ll need to host the referenced files yourself or export to SharePoint).
+- Token Store export: assets upload to the Worker (R2) and references are rewritten.
+- SharePoint/Graph export: assets upload next to the JSON in your target folder and references are rewritten.
+- Local download: placeholders are preserved; you must host assets yourself.
 
 ## What the builder outputs
 

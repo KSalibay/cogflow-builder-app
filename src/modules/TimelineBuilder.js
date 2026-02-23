@@ -91,11 +91,6 @@ class TimelineBuilder {
             name: component.name,
             ...component.parameters
         };
-
-        // Ensure detection-response-task flag exists for traceability
-        if (componentData.detection_response_task_enabled === undefined) {
-            componentData.detection_response_task_enabled = false;
-        }
         componentElement.dataset.componentData = JSON.stringify(componentData);
         
         componentElement.innerHTML = `
@@ -169,13 +164,14 @@ class TimelineBuilder {
             return;
         }
 
-        // Get component schema
+        // Prefer schema-driven editor when available.
+        // Fall back to Builder component definitions when schema is missing (e.g., DRT Start/Stop).
         const schema = this.jsonBuilder.schemaValidator.getPluginSchema(component.type);
-        
         console.log('Schema found:', schema);
 
-        // Generate form
-        modalBody.innerHTML = this.generateParameterForm(component, schema);
+        modalBody.innerHTML = schema
+            ? this.generateParameterForm(component, schema)
+            : this.generateParameterFormFromComponentDefinitions(component);
 
         // Setup form listeners
         this.setupParameterFormListeners(modalBody, component);
@@ -195,7 +191,6 @@ class TimelineBuilder {
         const title = component.title ?? component.parameters?.title ?? 'Survey';
         const instructions = component.instructions ?? component.parameters?.instructions ?? '';
         const submitLabel = component.submit_label ?? component.parameters?.submit_label ?? 'Continue';
-        const detectionEnabled = !!(component.detection_response_task_enabled ?? component.parameters?.detection_response_task_enabled ?? false);
         const allowEmptyOnTimeout = !!(component.allow_empty_on_timeout ?? component.parameters?.allow_empty_on_timeout ?? false);
         const timeoutMs = (component.timeout_ms ?? component.parameters?.timeout_ms ?? null);
         const questions = component.questions ?? component.parameters?.questions ?? [];
@@ -212,18 +207,6 @@ class TimelineBuilder {
             <div class="mb-3">
                 <label class="form-label fw-bold">Submit button label</label>
                 <input type="text" class="form-control" id="survey_submit_label" value="${this.escapeHtmlAttr(String(submitLabel))}">
-            </div>
-
-            <div class="border rounded p-2 mb-3">
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="survey_detection_response_task_enabled" ${detectionEnabled ? 'checked' : ''}>
-                    <label class="form-check-label fw-bold" for="survey_detection_response_task_enabled">
-                        Enable Detection Response Task
-                    </label>
-                </div>
-                <small class="text-muted d-block mt-1">
-                    When enabled, the interpreter app may run the detection/DRT overlay for this timeline item.
-                </small>
             </div>
 
             <div class="border rounded p-2 mb-3">
@@ -447,8 +430,6 @@ class TimelineBuilder {
         const instructions = modalBody.querySelector('#survey_instructions')?.value ?? '';
         const submit_label = modalBody.querySelector('#survey_submit_label')?.value ?? 'Continue';
 
-        const detection_response_task_enabled = !!modalBody.querySelector('#survey_detection_response_task_enabled')?.checked;
-
         const allow_empty_on_timeout = !!modalBody.querySelector('#survey_allow_empty_on_timeout')?.checked;
         const timeoutRaw = modalBody.querySelector('#survey_timeout_ms')?.value;
         const timeout_ms = (timeoutRaw === undefined || timeoutRaw === null || timeoutRaw === '')
@@ -509,7 +490,94 @@ class TimelineBuilder {
             questions.push(q);
         });
 
-        return { title, instructions, submit_label, detection_response_task_enabled, allow_empty_on_timeout, timeout_ms, questions };
+        return { title, instructions, submit_label, allow_empty_on_timeout, timeout_ms, questions };
+    }
+
+    generateParameterFormFromComponentDefinitions(component) {
+        const type = (component?.type ?? '').toString();
+        const defs = (this.jsonBuilder && typeof this.jsonBuilder.getComponentDefinitions === 'function')
+            ? this.jsonBuilder.getComponentDefinitions()
+            : [];
+
+        const def = Array.isArray(defs)
+            ? defs.find(d => d && (d.id === type || d.type === type))
+            : null;
+
+        const parameters = def && def.parameters && typeof def.parameters === 'object' ? def.parameters : null;
+        if (!parameters || Object.keys(parameters).length === 0) {
+            return '<p class="text-muted">No editable parameters for this component.</p>';
+        }
+
+        let formHtml = '';
+        for (const [paramName, paramDef] of Object.entries(parameters)) {
+            let currentValue;
+
+            if (component.parameters && Object.prototype.hasOwnProperty.call(component.parameters, paramName)) {
+                currentValue = component.parameters[paramName];
+            } else if (Object.prototype.hasOwnProperty.call(component, paramName)) {
+                currentValue = component[paramName];
+            } else {
+                currentValue = (paramDef && typeof paramDef === 'object') ? paramDef.default : undefined;
+            }
+
+            formHtml += `
+                <div class="mb-3" data-param-name="${this.escapeHtmlAttr(paramName)}">
+                    <label for="param_${this.escapeHtmlAttr(paramName)}" class="form-label">${this.formatParameterName(paramName)}</label>
+                    ${this.generateParameterInputFromComponentDef(paramName, paramDef, currentValue)}
+                </div>
+            `;
+        }
+
+        return formHtml;
+    }
+
+    generateParameterInputFromComponentDef(paramName, paramDef, currentValue) {
+        const inputId = `param_${paramName}`;
+        const def = (paramDef && typeof paramDef === 'object') ? paramDef : {};
+        const t = (def.type ?? 'string').toString();
+
+        const safeVal = (currentValue === undefined || currentValue === null)
+            ? (def.default ?? '')
+            : currentValue;
+
+        if (t === 'boolean') {
+            return `
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="${this.escapeHtmlAttr(inputId)}" ${safeVal ? 'checked' : ''}>
+                </div>
+            `;
+        }
+
+        if (t === 'select') {
+            const options = Array.isArray(def.options) ? def.options : [];
+            const v = (safeVal ?? '').toString();
+            const optionsHtml = options
+                .map(o => {
+                    const ov = (o ?? '').toString();
+                    return `<option value="${this.escapeHtmlAttr(ov)}" ${ov === v ? 'selected' : ''}>${this.escapeHtml(ov)}</option>`;
+                })
+                .join('');
+            return `<select class="form-select" id="${this.escapeHtmlAttr(inputId)}">${optionsHtml}</select>`;
+        }
+
+        if (t === 'number') {
+            const minAttr = (def.min !== undefined && def.min !== null) ? ` min="${this.escapeHtmlAttr(String(def.min))}"` : '';
+            const maxAttr = (def.max !== undefined && def.max !== null) ? ` max="${this.escapeHtmlAttr(String(def.max))}"` : '';
+            const stepAttr = (def.step !== undefined && def.step !== null) ? ` step="${this.escapeHtmlAttr(String(def.step))}"` : '';
+            return `<input type="number" class="form-control" id="${this.escapeHtmlAttr(inputId)}" value="${this.escapeHtmlAttr(String(safeVal))}"${minAttr}${maxAttr}${stepAttr}>`;
+        }
+
+        if (t === 'COLOR') {
+            const v = (safeVal ?? '').toString() || (def.default ?? '#ff3b3b');
+            return `
+                <div class="d-flex gap-2">
+                    <input type="color" class="form-control form-control-color" id="${this.escapeHtmlAttr(inputId)}" value="${this.escapeHtmlAttr(v)}">
+                    <input type="text" class="form-control" id="${this.escapeHtmlAttr(inputId)}_hex" value="${this.escapeHtmlAttr(v)}" placeholder="#RRGGBB" pattern="^#[0-9A-Fa-f]{6}$">
+                </div>
+            `;
+        }
+
+        return `<input type="text" class="form-control" id="${this.escapeHtmlAttr(inputId)}" value="${this.escapeHtmlAttr(String(safeVal))}">`;
     }
 
     escapeHtmlAttr(str) {

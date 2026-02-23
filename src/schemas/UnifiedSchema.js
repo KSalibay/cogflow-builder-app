@@ -3,7 +3,7 @@
  * No complex transformations, just parameter definitions
  */
 
-export class UnifiedSchema {
+class UnifiedSchema {
     constructor() {
         this.parameterTypes = {
             STRING: 'string',
@@ -240,4 +240,12 @@ export class UnifiedSchema {
             parameters: this.getComponentParameters(componentType)
         };
     }
+}
+
+// Expose globally (browser) and for optional CommonJS usage.
+if (typeof window !== 'undefined') {
+    window.UnifiedSchema = UnifiedSchema;
+}
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = UnifiedSchema;
 }

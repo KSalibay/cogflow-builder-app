@@ -22,10 +22,10 @@
         })();
     </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="vendor/bootstrap.min.css" rel="stylesheet">
 
     <!-- WYSIWYG editor for instructions / HTML components (Quill) -->
-    <link href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" rel="stylesheet">
+    <link href="vendor/quill.snow.css" rel="stylesheet">
 
     <!-- App theme + Bootstrap overrides (must load AFTER Bootstrap) -->
     <link rel="stylesheet" href="css/style.css">
@@ -52,7 +52,7 @@
                     <i class="fas fa-download"></i> Save JSON
                 </button>
                 <button class="btn btn-success" id="exportJsonBtn">
-                    <i class="fas fa-cloud-arrow-up"></i> Export to SharePoint
+                    <i class="fas fa-cloud-arrow-up"></i> Export
                 </button>
             </div>
         </div>
@@ -334,24 +334,34 @@
         </div>
     </footer>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script src="vendor/bootstrap.bundle.min.js"></script>
+    <script src="vendor/Sortable.min.js"></script>
 
     <!-- Quill WYSIWYG editor (used by instructions/html-keyboard-response editor) -->
-    <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
+    <script src="vendor/quill.min.js"></script>
 
     <!-- Microsoft Graph export (MSAL + helper). Requires serving via http(s), not file:// -->
-    <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+    <script src="vendor/msal-browser.min.js"></script>
     <script src="src/graphConfig.js?v=20260123-1"></script>
     <script src="src/GraphSharePointClient.js?v=20260123-1"></script>
 
+    <!-- Demo default: Token Store (Cloudflare Worker) base URL -->
+    <script>
+        // For distribution: change this value (or remove to re-enable prompt).
+        window.COGFLOW_TOKEN_STORE_BASE_URL = 'https://cool-star-379d.kami-salibayeva.workers.dev';
+
+        // Initial deployment mode: disables SharePoint/Graph prompts and uses Token Store by default.
+        // Remove this line (or set to false) to re-enable Graph/SharePoint export setup prompts.
+        window.COGFLOW_INITIAL_DEPLOYMENT = true;
+    </script>
+
     <!-- Cache-bust local scripts -->
-    <script src="src/JsonBuilder.js?v=20260222-1"></script>
+    <script src="src/JsonBuilder.js?v=20260223-1"></script>
     <script src="src/modules/DataCollectionModules.js?v=20260114-1"></script>
     <script src="src/modules/TrialManager.js?v=20260113-10"></script>
-    <script src="src/modules/TimelineBuilder.js?v=20260218-3"></script>
+    <script src="src/modules/TimelineBuilder.js?v=20260223-1"></script>
     <script src="src/modules/SocDashboardPreview.js?v=20260218-1"></script>
-    <script src="src/modules/ComponentPreview.js?v=20260219-2"></script>
+    <script src="src/modules/ComponentPreview.js?v=20260223-1"></script>
     <script src="src/schemas/RDMTaskSchema.js?v=20260113-10"></script>
     <script src="src/schemas/JSPsychSchemas.js?v=20260219-1"></script>
     <script src="src/schemas/UnifiedSchema.js?v=20260113-10"></script>

@@ -807,6 +807,298 @@ class JsonBuilder {
         return url;
     }
 
+    getTokenStoreBaseUrl() {
+        // Allow hard-coded runtime override (useful for JATOS deployments).
+        try {
+            const globalUrl = window.COGFLOW_TOKEN_STORE_BASE_URL;
+            if (typeof globalUrl === 'string' && globalUrl.trim()) {
+                const trimmed = globalUrl.trim();
+                if (/^https?:\/\//i.test(trimmed) && !/^(javascript:|data:|file:)/i.test(trimmed)) {
+                    return trimmed.replace(/\/+$/, '');
+                }
+            }
+        } catch {
+            // ignore
+        }
+
+        const key = 'cogflow_token_store_base_url_v1';
+        const legacyKey = 'psychjson_token_store_base_url_v1';
+        const last = (localStorage.getItem(key) || localStorage.getItem(legacyKey) || '').toString();
+
+        const raw = prompt(
+            'Enter Token Store API base URL:\n\nExample: https://your-worker.yourname.workers.dev',
+            last
+        );
+        if (raw === null) return null;
+
+        let url = String(raw || '').trim();
+        if (!url) return null;
+
+        // QoL: if the user pastes a bare host like cool-star....workers.dev, assume https://
+        if (!/^https?:\/\//i.test(url) && /^[A-Za-z0-9.-]+\.[A-Za-z]{2,}(\/.+)?$/.test(url)) {
+            url = `https://${url}`;
+        }
+
+        if (!/^https?:\/\//i.test(url)) {
+            this.showValidationResult('error', 'Token Store URL must start with http:// or https://');
+            return null;
+        }
+        if (/^(javascript:|data:|file:)/i.test(url)) {
+            this.showValidationResult('error', 'Invalid URL scheme.');
+            return null;
+        }
+
+        const normalized = url.replace(/\/+$/, '');
+        localStorage.setItem(key, normalized);
+        localStorage.setItem(legacyKey, normalized);
+        return normalized;
+    }
+
+    isInitialDeploymentMode() {
+        return window.COGFLOW_INITIAL_DEPLOYMENT === true;
+    }
+
+    getTokenStoreRecords() {
+        const key = 'cogflow_token_store_records_v1';
+        const legacyKey = 'psychjson_token_store_records_v1';
+        try {
+            const raw = localStorage.getItem(key) || localStorage.getItem(legacyKey) || '';
+            const parsed = raw ? JSON.parse(raw) : {};
+            if (parsed && typeof parsed === 'object') return parsed;
+        } catch {
+            // ignore
+        }
+        return {};
+    }
+
+    setTokenStoreRecords(records) {
+        const key = 'cogflow_token_store_records_v1';
+        const legacyKey = 'psychjson_token_store_records_v1';
+        try {
+            const obj = (records && typeof records === 'object') ? records : {};
+            const json = JSON.stringify(obj);
+            localStorage.setItem(key, json);
+            localStorage.setItem(legacyKey, json);
+        } catch {
+            // ignore
+        }
+    }
+
+    getTokenStoreRecordForCode(code) {
+        const c = (code || '').toString().trim();
+        if (!c) return null;
+        const all = this.getTokenStoreRecords();
+        const rec = all[c];
+        if (!rec || typeof rec !== 'object') return null;
+        const configId = (rec.config_id || rec.configId || '').toString().trim();
+        const writeToken = (rec.write_token || rec.writeToken || '').toString().trim();
+        const readToken = (rec.read_token || rec.readToken || '').toString().trim();
+        if (!configId || !writeToken || !readToken) return null;
+        return { config_id: configId, write_token: writeToken, read_token: readToken };
+    }
+
+    setTokenStoreRecordForCode(code, record) {
+        const c = (code || '').toString().trim();
+        if (!c) return;
+        const rec = (record && typeof record === 'object') ? record : null;
+        if (!rec) return;
+
+        const configId = (rec.config_id || rec.configId || '').toString().trim();
+        const writeToken = (rec.write_token || rec.writeToken || '').toString().trim();
+        const readToken = (rec.read_token || rec.readToken || '').toString().trim();
+        if (!configId || !writeToken || !readToken) return;
+
+        const all = this.getTokenStoreRecords();
+        all[c] = { config_id: configId, write_token: writeToken, read_token: readToken };
+        this.setTokenStoreRecords(all);
+
+        // Verify persistence (some browser/privacy modes can block localStorage).
+        try {
+            const reread = this.getTokenStoreRecordForCode(c);
+            if (!reread || reread.config_id !== configId || reread.write_token !== writeToken || reread.read_token !== readToken) {
+                throw new Error('Token record did not persist');
+            }
+        } catch {
+            const tokenJson = JSON.stringify({ config_id: configId, write_token: writeToken, read_token: readToken }, null, 2);
+            try {
+                navigator.clipboard.writeText(tokenJson);
+            } catch {
+                // ignore
+            }
+            this.showValidationResult(
+                'warning',
+                'Could not persist Token Store tokens in localStorage (browser privacy mode?). Tokens were copied to clipboard as a fallback.'
+            );
+        }
+    }
+
+    async createTokenStoreConfig(baseUrl) {
+        const safeBase = String(baseUrl || '').trim().replace(/\/+$/, '');
+        if (!safeBase) throw new Error('Missing token store base URL');
+
+        const url = `${safeBase}/v1/configs`;
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({})
+        });
+        if (!res.ok) {
+            const text = await res.text().catch(() => '');
+            throw new Error(`Token store create failed (${res.status})${text ? `: ${text.slice(0, 200)}` : ''}`);
+        }
+        const json = await res.json();
+        const configId = (json && (json.config_id || json.configId)) ? String(json.config_id || json.configId).trim() : '';
+        const writeToken = (json && (json.write_token || json.writeToken)) ? String(json.write_token || json.writeToken).trim() : '';
+        const readToken = (json && (json.read_token || json.readToken)) ? String(json.read_token || json.readToken).trim() : '';
+        if (!configId || !writeToken || !readToken) {
+            throw new Error('Token store create returned an invalid payload');
+        }
+        return { config_id: configId, write_token: writeToken, read_token: readToken };
+    }
+
+    async uploadConfigToTokenStore(baseUrl, record, config, naming) {
+        const safeBase = String(baseUrl || '').trim().replace(/\/+$/, '');
+        if (!safeBase) throw new Error('Missing token store base URL');
+        const configId = (record && record.config_id) ? String(record.config_id).trim() : '';
+        const writeToken = (record && record.write_token) ? String(record.write_token).trim() : '';
+        if (!configId || !writeToken) throw new Error('Missing token store record');
+
+        const url = `${safeBase}/v1/configs/${encodeURIComponent(configId)}`;
+        const payload = {
+            config,
+            meta: {
+                filename: naming && naming.filename ? naming.filename : null,
+                code: naming && naming.code ? naming.code : null,
+                task_type: naming && naming.taskType ? naming.taskType : null,
+                updated_at_local: new Date().toISOString()
+            }
+        };
+
+        const res = await fetch(url, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${writeToken}`
+            },
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+            const text = await res.text().catch(() => '');
+            throw new Error(`Token store update failed (${res.status})${text ? `: ${text.slice(0, 200)}` : ''}`);
+        }
+        const out = await res.json().catch(() => ({}));
+        return out;
+    }
+
+    async uploadAssetToTokenStore(baseUrl, record, file, filename) {
+        const safeBase = String(baseUrl || '').trim().replace(/\/+$/, '');
+        if (!safeBase) throw new Error('Missing token store base URL');
+        const configId = (record && record.config_id) ? String(record.config_id).trim() : '';
+        const writeToken = (record && record.write_token) ? String(record.write_token).trim() : '';
+        if (!configId || !writeToken) throw new Error('Missing token store record');
+
+        const url = `${safeBase}/v1/configs/${encodeURIComponent(configId)}/assets`;
+
+        const form = new FormData();
+        // Ensure the uploaded object has a stable, meaningful filename.
+        const outName = (filename && String(filename).trim()) ? String(filename).trim() : (file && file.name ? file.name : 'asset');
+        form.append('file', file, outName);
+
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${writeToken}`
+            },
+            body: form
+        });
+
+        if (!res.ok) {
+            const text = await res.text().catch(() => '');
+            throw new Error(`Token store asset upload failed (${res.status})${text ? `: ${text.slice(0, 200)}` : ''}`);
+        }
+
+        const json = await res.json().catch(() => ({}));
+        const outUrl = (json && json.url) ? String(json.url).trim() : '';
+        if (!outUrl) throw new Error('Token store asset upload returned no URL');
+        return { url: outUrl, asset_id: json.asset_id || null };
+    }
+
+    async uploadAssetRefsToTokenStoreAndRewriteConfig(config, naming, baseUrl, record) {
+        const cfg = (config && typeof config === 'object') ? config : {};
+        const jsonText = JSON.stringify(cfg);
+        const refs = this.findAssetRefsInString(jsonText);
+        if (refs.length === 0) return cfg;
+
+        const base = String(naming?.filename || 'export').replace(/\.json$/i, '');
+        const sanitizeFileName = (s) => {
+            return String(s || '')
+                .replace(/[^A-Za-z0-9._-]/g, '_')
+                .replace(/_+/g, '_')
+                .replace(/^_+|_+$/g, '')
+                .slice(0, 160) || 'asset';
+        };
+
+        const uploadedByRef = new Map();
+
+        for (const ref of refs) {
+            const m = /^asset:\/\/([^/]+)\/([^/]+)$/.exec(ref);
+            if (!m) continue;
+            const componentId = m[1];
+            const field = m[2];
+
+            const assetCache = window.CogFlowAssetCache || window.PsychJsonAssetCache;
+            const entry = assetCache?.get?.(componentId, field);
+            const file = entry?.file;
+            if (!file) {
+                console.warn('Missing cached file for', ref);
+                continue;
+            }
+
+            const originalName = entry?.filename || file.name || `${field}`;
+            const extMatch = /\.[A-Za-z0-9]{1,8}$/.exec(originalName);
+            const ext = extMatch ? extMatch[0] : '';
+            const outName = sanitizeFileName(`${base}-asset-${componentId}-${field}`) + ext;
+
+            if (!uploadedByRef.has(ref)) {
+                const uploaded = await this.uploadAssetToTokenStore(baseUrl, record, file, outName);
+                uploadedByRef.set(ref, uploaded.url);
+            }
+        }
+
+        // Rewrite any asset:// refs anywhere in the config (including HTML templates)
+        const replaceInString = (s) => {
+            const raw = (s ?? '').toString();
+            return raw.replace(/asset:\/\/([A-Za-z0-9_-]+)\/([A-Za-z0-9_-]+)/g, (full) => {
+                const mapped = uploadedByRef.get(full);
+                return mapped ? mapped : full;
+            });
+        };
+
+        const rewriteDeep = (x) => {
+            if (typeof x === 'string') return replaceInString(x);
+            if (Array.isArray(x)) return x.map(rewriteDeep);
+            if (x && typeof x === 'object') {
+                const out = {};
+                for (const [k, v] of Object.entries(x)) {
+                    out[k] = rewriteDeep(v);
+                }
+                return out;
+            }
+            return x;
+        };
+
+        const rewritten = rewriteDeep(cfg);
+        const uploadedCount = uploadedByRef.size;
+        if (uploadedCount > 0) {
+            this.showValidationResult('success', `Uploaded ${uploadedCount} asset(s) to Token Store (R2) and rewrote asset:// refs.`);
+        } else {
+            this.showValidationResult('warning', `Found ${refs.length} asset reference(s), but no cached files were available to upload.`);
+        }
+        return rewritten;
+    }
+
     getExportFilename(config) {
         // Ask for a 7-char alphanumeric code and use it in the filename.
         const last = (localStorage.getItem('cogflow_last_export_code') || localStorage.getItem('psychjson_last_export_code') || '').toString();
@@ -1025,7 +1317,11 @@ class JsonBuilder {
             'survey-response',
             'instructions',
             'visual-angle-calibration',
-            'reward-settings'
+            'reward-settings',
+
+            // Response Detection Task (independent timeline controls)
+            'detection-response-task-start',
+            'detection-response-task-stop'
         ]);
         if (alwaysAllowed.has(type)) return true;
 
@@ -3407,8 +3703,7 @@ class JsonBuilder {
                 block_component_type: { type: 'select', default: defaultType, options: baseOptions },
                 block_length: { type: 'number', default: defaultBlockLength, min: 1, max: 50000 },
                 sampling_mode: { type: 'select', default: 'per-trial', options: ['per-trial', 'per-block'] },
-                seed: { type: 'string', default: '' },
-                detection_response_task_enabled: { type: 'boolean', default: false }
+                seed: { type: 'string', default: '' }
             };
 
             const flankerStimulusTypeDefault = (() => {
@@ -3669,6 +3964,36 @@ class JsonBuilder {
                     trial_duration: null,
                     response_ends_trial: true
                 }
+            },
+            {
+                id: 'detection-response-task-start',
+                name: 'DRT Start (Response Detection Task)',
+                icon: 'fas fa-bullseye',
+                description: 'Start a background response-detection stream; DRT events are logged as separate data rows until a matching DRT Stop',
+                category: 'setup',
+                type: 'detection-response-task-start',
+                parameters: {
+                    segment_label: { type: 'string', default: '' },
+                    response_key: { type: 'string', default: 'space' },
+                    min_iti_ms: { type: 'number', default: 3000, min: 200, max: 600000, step: 50 },
+                    max_iti_ms: { type: 'number', default: 5000, min: 200, max: 600000, step: 50 },
+                    stimulus_duration_ms: { type: 'number', default: 1000, min: 50, max: 60000, step: 10 },
+                    stimulus_type: { type: 'select', default: 'square', options: ['square', 'circle'] },
+                    stimulus_color: { type: 'COLOR', default: '#ff3b3b' },
+                    location: { type: 'select', default: 'top-right', options: ['top-right', 'top-left', 'bottom-right', 'bottom-left'] },
+                    size_px: { type: 'number', default: 18, min: 6, max: 80, step: 1 },
+                    min_rt_ms: { type: 'number', default: 100, min: 0, max: 60000, step: 10 },
+                    max_rt_ms: { type: 'number', default: 2000, min: 50, max: 60000, step: 10 }
+                }
+            },
+            {
+                id: 'detection-response-task-stop',
+                name: 'DRT Stop (Response Detection Task)',
+                icon: 'fas fa-circle-stop',
+                description: 'Stop the background response-detection stream (started by DRT Start)',
+                category: 'setup',
+                type: 'detection-response-task-stop',
+                parameters: {}
             },
             {
                 id: 'survey-response',
@@ -4010,9 +4335,7 @@ class JsonBuilder {
                         patch_border_enabled: { type: 'boolean', default: true },
                         patch_border_width_px: { type: 'number', default: 2, min: 0, max: 50, step: 1 },
                         patch_border_color: { type: 'COLOR', default: '#ffffff' },
-                        patch_border_opacity: { type: 'number', default: 0.22, min: 0, max: 1, step: 0.01 },
-
-                        detection_response_task_enabled: { type: 'boolean', default: false }
+                        patch_border_opacity: { type: 'number', default: 0.22, min: 0, max: 1, step: 0.01 }
                     }
                 });
             }
@@ -4399,15 +4722,13 @@ class JsonBuilder {
             // Preserve the builder-specific identity even though the exported jsPsych type is html-keyboard-response.
             // This lets the UI distinguish calibration preface vs generic instructions reliably.
             instructionsComponent.dataset.builderComponentId = componentDef.id;
-            // Ensure detection-response-task flag exists for traceability
             const instructionsData = {
                 ...(componentDef.data || {}),
                 // Default Instructions cards should follow the auto-generated template until a human edits them.
                 // Calibration preface instructions should not be auto-templated.
                 auto_generated: componentDef.id === 'instructions'
                     ? !!(componentDef.data?.auto_generated ?? true)
-                    : false,
-                detection_response_task_enabled: !!(componentDef.data?.detection_response_task_enabled ?? false)
+                    : false
             };
             instructionsComponent.dataset.componentData = JSON.stringify(instructionsData);
 
@@ -4515,10 +4836,6 @@ class JsonBuilder {
                 }
             }
 
-            // Ensure detection-response-task flag exists for traceability
-            if (componentData.detection_response_task_enabled === undefined) {
-                componentData.detection_response_task_enabled = false;
-            }
             componentElement.dataset.componentData = JSON.stringify(componentData);
             
             componentElement.innerHTML = `
@@ -5035,8 +5352,7 @@ class JsonBuilder {
             congruency: 'congruent',
             stimulus_duration_ms: parseInt(document.getElementById('flankerStimulusDurationMs')?.value || '800', 10),
             trial_duration_ms: parseInt(document.getElementById('flankerTrialDurationMs')?.value || '1500', 10),
-            iti_ms: parseInt(document.getElementById('flankerItiMs')?.value || '500', 10),
-            detection_response_task_enabled: false
+            iti_ms: parseInt(document.getElementById('flankerItiMs')?.value || '500', 10)
         };
     }
 
@@ -5070,8 +5386,7 @@ class JsonBuilder {
             stimulus_duration_ms: parseInt(document.getElementById('sartStimulusDurationMs')?.value || '250', 10),
             mask_duration_ms: parseInt(document.getElementById('sartMaskDurationMs')?.value || '900', 10),
             trial_duration_ms: 1150,
-            iti_ms: parseInt(document.getElementById('sartItiMs')?.value || '0', 10),
-            detection_response_task_enabled: false
+            iti_ms: parseInt(document.getElementById('sartItiMs')?.value || '0', 10)
         };
     }
 
@@ -5184,9 +5499,7 @@ class JsonBuilder {
                 choice_keys: choiceKeys,
                 congruent_key: congruentKey,
                 incongruent_key: incongruentKey
-            },
-
-            detection_response_task_enabled: false
+            }
         };
     }
 
@@ -5229,9 +5542,7 @@ class JsonBuilder {
                 left_key: leftKey,
                 right_key: rightKey,
                 circle_diameter_px: Number.isFinite(circleDiameterPx) ? circleDiameterPx : 140
-            },
-
-            detection_response_task_enabled: false
+            }
         };
     }
 
@@ -5265,9 +5576,7 @@ class JsonBuilder {
             // Preview-only fields (mirrors pvt_settings export)
             feedback_enabled: feedbackEnabled,
             feedback_message: feedbackMessage,
-            add_trial_per_false_start: addTrialPerFalseStart,
-
-            detection_response_task_enabled: false
+            add_trial_per_false_start: addTrialPerFalseStart
         };
     }
 
@@ -5445,9 +5754,7 @@ class JsonBuilder {
             show_buttons: !!document.getElementById('nbackDefaultShowButtons')?.checked,
 
             show_feedback: !!document.getElementById('nbackDefaultFeedback')?.checked,
-            feedback_duration_ms: safeInt(document.getElementById('nbackDefaultFeedbackMs')?.value, 250),
-
-            detection_response_task_enabled: false
+            feedback_duration_ms: safeInt(document.getElementById('nbackDefaultFeedbackMs')?.value, 250)
         };
     }
 
@@ -5639,9 +5946,7 @@ class JsonBuilder {
             patch_border_enabled: patchBorderEnabled,
             patch_border_width_px: Number.isFinite(patchBorderWidth) ? Math.max(0, Math.min(50, patchBorderWidth)) : 2,
             patch_border_color: patchBorderColor,
-            patch_border_opacity: Number.isFinite(patchBorderOpacity) ? Math.max(0, Math.min(1, patchBorderOpacity)) : 0.22,
-
-            detection_response_task_enabled: false
+            patch_border_opacity: Number.isFinite(patchBorderOpacity) ? Math.max(0, Math.min(1, patchBorderOpacity)) : 0.22
         };
     }
 
@@ -5661,8 +5966,7 @@ class JsonBuilder {
             end_key: (document.getElementById('socEndKey')?.value || 'escape').toString(),
             icons_clickable: !!document.getElementById('socIconsClickable')?.checked,
             log_icon_clicks: !!document.getElementById('socLogIconClicks')?.checked,
-            icon_clicks_are_distractors: !!document.getElementById('socIconClicksAreDistractors')?.checked,
-            detection_response_task_enabled: false
+            icon_clicks_are_distractors: !!document.getElementById('socIconClicksAreDistractors')?.checked
         };
     }
 
@@ -5972,7 +6276,6 @@ class JsonBuilder {
             // Instructions components store parameters directly on the component object
             const instructionsComponent = {
                 type: component.type,
-                detection_response_task_enabled: !!(component.detection_response_task_enabled ?? false),
                 stimulus: component.stimulus,
                 choices: component.choices,
                 prompt: component.prompt,
@@ -6016,9 +6319,9 @@ class JsonBuilder {
 
         console.log('Base component before RDM check:', baseComponent);
 
-        // Ensure detection-response-task flag is always present for traceability
-        if (baseComponent.detection_response_task_enabled === undefined) {
-            baseComponent.detection_response_task_enabled = false;
+        // Back-compat: old configs may include this, but DRT is now handled via separate timeline items.
+        if (baseComponent.detection_response_task_enabled !== undefined) {
+            delete baseComponent.detection_response_task_enabled;
         }
 
         // Special handling for Block components (compact range/window representation)
@@ -6580,7 +6883,6 @@ class JsonBuilder {
 
         const out = {
             type: 'block',
-            detection_response_task_enabled: !!(blockComponent.detection_response_task_enabled ?? false),
             component_type: exportComponentType,
             length: length,
             sampling_mode: samplingMode,
@@ -6794,7 +7096,7 @@ class JsonBuilder {
             type: component.type
         };
 
-        transformed.detection_response_task_enabled = !!(component.detection_response_task_enabled ?? false);
+        // DRT is configured via separate timeline items; do not export per-component flags.
 
         // Preserve response override if it was generated upstream
         if (component.response_parameters_override) {
@@ -7081,6 +7383,141 @@ class JsonBuilder {
     }
 
     /**
+     * Show a simple overlay containing the JSON that researchers need to paste into JATOS.
+     * This is a robust fallback when clipboard permissions are blocked.
+     */
+    showExportTokenOverlay({ title, subtitle, jsonText }) {
+        try {
+            const existing = document.getElementById('cogflowExportTokenOverlay');
+            if (existing) existing.remove();
+        } catch {
+            // ignore
+        }
+
+        const overlay = document.createElement('div');
+        overlay.id = 'cogflowExportTokenOverlay';
+        overlay.style.cssText = [
+            'position:fixed',
+            'inset:0',
+            'z-index:100000',
+            'background:rgba(0,0,0,0.6)',
+            'display:flex',
+            'align-items:flex-start',
+            'justify-content:center',
+            'padding:24px',
+            'overflow:auto'
+        ].join(';');
+
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.style.cssText = 'width:min(900px, 100%); box-shadow: 0 8px 30px rgba(0,0,0,0.35);';
+
+        const header = document.createElement('div');
+        header.className = 'card-header d-flex align-items-start justify-content-between gap-3';
+
+        const hWrap = document.createElement('div');
+        const hTitle = document.createElement('div');
+        hTitle.style.cssText = 'font-weight:600;';
+        hTitle.textContent = title || 'Export Complete';
+        const hSub = document.createElement('div');
+        hSub.className = 'text-muted';
+        hSub.style.cssText = 'margin-top:4px; font-size: 0.95rem;';
+        hSub.textContent = subtitle || 'Copy this JSON somewhere safe (paste into JATOS Component Properties JSON).';
+        hWrap.appendChild(hTitle);
+        hWrap.appendChild(hSub);
+
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'btn btn-sm btn-outline-secondary';
+        closeBtn.textContent = 'Close';
+
+        header.appendChild(hWrap);
+        header.appendChild(closeBtn);
+
+        const body = document.createElement('div');
+        body.className = 'card-body';
+
+        const note = document.createElement('div');
+        note.className = 'alert alert-warning';
+        note.style.cssText = 'margin-bottom: 12px;';
+        note.textContent = 'Keep these tokens private. The interpreter typically needs only the read token, but the write token allows overwriting this config.';
+
+        const textarea = document.createElement('textarea');
+        textarea.className = 'form-control';
+        textarea.style.cssText = 'font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; min-height: 240px;';
+        textarea.readOnly = true;
+        textarea.value = (jsonText || '').toString();
+
+        const actions = document.createElement('div');
+        actions.className = 'd-flex gap-2 justify-content-end';
+        actions.style.cssText = 'margin-top: 12px;';
+
+        const copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.className = 'btn btn-primary';
+        copyBtn.textContent = 'Copy JSON';
+
+        const selectBtn = document.createElement('button');
+        selectBtn.type = 'button';
+        selectBtn.className = 'btn btn-outline-primary';
+        selectBtn.textContent = 'Select All';
+
+        actions.appendChild(selectBtn);
+        actions.appendChild(copyBtn);
+
+        body.appendChild(note);
+        body.appendChild(textarea);
+        body.appendChild(actions);
+
+        card.appendChild(header);
+        card.appendChild(body);
+        overlay.appendChild(card);
+        document.body.appendChild(overlay);
+
+        const close = () => {
+            try { overlay.remove(); } catch { /* ignore */ }
+        };
+
+        closeBtn.addEventListener('click', close);
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) close();
+        });
+
+        selectBtn.addEventListener('click', () => {
+            try {
+                textarea.focus();
+                textarea.select();
+            } catch {
+                // ignore
+            }
+        });
+
+        copyBtn.addEventListener('click', async () => {
+            const text = textarea.value || '';
+            try {
+                await navigator.clipboard.writeText(text);
+                this.showValidationResult('success', 'Copied tokens JSON to clipboard.');
+            } catch (e) {
+                this.showValidationResult('warning', 'Clipboard copy blocked. Use Select All then Ctrl+C.');
+                try {
+                    textarea.focus();
+                    textarea.select();
+                } catch {
+                    // ignore
+                }
+            }
+        });
+
+        // Convenience: auto-select so a researcher can Ctrl+C immediately.
+        try {
+            textarea.focus();
+            textarea.select();
+        } catch {
+            // ignore
+        }
+    }
+
+    /**
      * Copy JSON to clipboard
      */
     async copyJSONToClipboard() {
@@ -7111,9 +7548,27 @@ class JsonBuilder {
         if (!naming) return;
 
         // Preferred flow: upload directly via Microsoft Graph (requires Entra ID app registration)
-        const graphClient = window.GraphSharePointClient;
+        // Initial deployment mode skips Graph entirely to avoid setup prompts.
+        const graphClient = this.isInitialDeploymentMode() ? null : window.GraphSharePointClient;
         if (graphClient?.uploadJsonToOneDriveFolder) {
             try {
+                // If Graph isn't configured, optionally configure; otherwise fall back to token store.
+                // IMPORTANT: check this BEFORE attempting any asset uploads via Graph.
+                const runtime = graphClient.getRuntimeConfig?.() || {};
+                if (!runtime.clientId) {
+                    const shouldConfigure = confirm(
+                        'SharePoint (Graph) export is not configured yet (missing clientId).\n\nConfigure now?\n\nCancel = use Token Store / local fallback.'
+                    );
+                    if (shouldConfigure) {
+                        const updated = await graphClient.promptAndPersistSettings();
+                        if (!updated?.clientId) {
+                            throw new Error('Graph export not configured (missing clientId)');
+                        }
+                    } else {
+                        throw new Error('Graph export not configured (missing clientId)');
+                    }
+                }
+
                 // Upload any cached local assets (e.g., images/audio) referenced by asset://... in the config.
                 if (graphClient.uploadFileToOneDriveFolder && (window.CogFlowAssetCache || window.PsychJsonAssetCache)) {
                     try {
@@ -7125,22 +7580,6 @@ class JsonBuilder {
                 }
 
                 const json = JSON.stringify(config, null, 2);
-
-                const runtime = graphClient.getRuntimeConfig?.() || {};
-                if (!runtime.clientId) {
-                    const shouldConfigure = confirm(
-                        'Graph export is not configured yet (missing clientId).\n\nConfigure now?'
-                    );
-                    if (shouldConfigure) {
-                        const updated = await graphClient.promptAndPersistSettings();
-                        if (!updated?.clientId) {
-                            this.showValidationResult('warning', 'Graph export not configured; falling back to local download.');
-                            return this.exportJSONLegacy({ json, filename: naming.filename });
-                        }
-                    } else {
-                        return this.exportJSONLegacy({ json, filename: naming.filename });
-                    }
-                }
 
                 const driveItem = await graphClient.uploadJsonToOneDriveFolder({
                     jsonText: json,
@@ -7160,23 +7599,98 @@ class JsonBuilder {
                 return;
             } catch (error) {
                 console.error('Graph export failed:', error);
-                this.showValidationResult('warning', `Graph export failed; falling back to local download. (${error?.message || 'Unknown error'})`);
-                return this.exportJSONLegacy({ json: JSON.stringify(config, null, 2), filename: naming.filename });
+                this.showValidationResult('warning', `Graph export unavailable; trying Token Store. (${error?.message || 'Unknown error'})`);
             }
         }
 
-        // Fallback: local download + open SharePoint folder URL.
+        // Fallback #1: Token store API (mutable per export code)
+        try {
+            const baseUrl = this.getTokenStoreBaseUrl();
+            if (!baseUrl) {
+                if (this.isInitialDeploymentMode()) {
+                    this.showValidationResult('error', 'Token Store base URL is not set (COGFLOW_TOKEN_STORE_BASE_URL). Export cannot continue in initial deployment mode.');
+                    return;
+                }
+                throw new Error('Token store URL not set');
+            }
+
+            let record = this.getTokenStoreRecordForCode(naming.code);
+            if (record) {
+                const ok = confirm(
+                    `A Token Store record already exists for export code ${naming.code}.\n\nContinuing will OVERWRITE the previously uploaded config for this code.\n\nContinue?`
+                );
+                if (!ok) {
+                    this.showValidationResult('warning', 'Export cancelled.');
+                    return;
+                }
+            }
+            if (!record) {
+                this.showValidationResult('warning', `No token found for code ${naming.code}. Creating a new token...`);
+                record = await this.createTokenStoreConfig(baseUrl);
+                this.setTokenStoreRecordForCode(naming.code, record);
+            }
+
+            // Upload cached assets referenced by asset://... and rewrite config to use unguessable Worker URLs.
+            try {
+                config = await this.uploadAssetRefsToTokenStoreAndRewriteConfig(config, naming, baseUrl, record);
+            } catch (e) {
+                console.warn('Token store asset upload failed (continuing with JSON-only):', e);
+                this.showValidationResult('warning', `Asset upload failed; exporting JSON only. (${e?.message || 'Unknown error'})`);
+            }
+
+            await this.uploadConfigToTokenStore(baseUrl, record, config, naming);
+
+            // Best-effort: copy JATOS-friendly component properties to clipboard.
+            const props = {
+                config_store_base_url: baseUrl,
+                config_store_config_id: record.config_id,
+                config_store_read_token: record.read_token,
+                // Optional (kept for researchers/admins who need to update the same config later)
+                config_store_write_token: record.write_token
+            };
+            const propsText = JSON.stringify(props, null, 2);
+            try {
+                await navigator.clipboard.writeText(propsText);
+            } catch {
+                // ignore
+            }
+
+            // Always show an overlay so tokens can't get lost due to clipboard permissions.
+            this.showExportTokenOverlay({
+                title: 'Token Store export complete',
+                subtitle: 'Paste this JSON into JATOS Component Properties (JSON). Save it somewhere safe in case clipboard permissions are blocked.',
+                jsonText: propsText
+            });
+
+            this.showValidationResult(
+                'success',
+                `Uploaded config to Token Store.\nConfig ID: ${record.config_id}.\nRead token copied (JATOS Component Properties JSON).`
+            );
+            return;
+        } catch (e) {
+            console.error('Token store export failed:', e);
+            if (this.isInitialDeploymentMode()) {
+                this.showValidationResult('error', `Token Store export failed. (${e?.message || 'Unknown error'})`);
+                return;
+            }
+            this.showValidationResult('warning', `Token Store export failed; falling back to local download. (${e?.message || 'Unknown error'})`);
+        }
+
+        // Fallback #2: local download + open SharePoint folder URL.
         const json = JSON.stringify(config, null, 2);
         return this.exportJSONLegacy({ json, filename: naming.filename });
     }
 
     exportJSONLegacy({ json, filename }) {
         // If the config contains asset:// refs, local download will not include the binary files.
-        // We warn so the researcher knows to use Graph export (or replace with URLs).
+        // We warn so the researcher knows to use a hosted export flow (or replace with URLs).
         try {
             const assetRefs = this.findAssetRefsInString(json);
             if (assetRefs.length > 0) {
-                this.showValidationResult('warning', `This config references ${assetRefs.length} local asset(s) (asset://...). Use "Export to SharePoint" to upload images, or replace with URLs.`);
+                const msg = this.isInitialDeploymentMode()
+                    ? `This config references ${assetRefs.length} local asset(s) (asset://...). Use "Export" (Token Store) to upload images, or replace with URLs.`
+                    : `This config references ${assetRefs.length} local asset(s) (asset://...). Use SharePoint/Graph export to upload images, or replace with URLs.`;
+                this.showValidationResult('warning', msg);
             }
         } catch {
             // ignore
@@ -7913,7 +8427,33 @@ class JsonBuilder {
             return;
         }
 
-        // For RDM previews, merge experiment-wide display defaults so preview matches the main UI
+        const isRdmLike = (() => {
+            const t = (componentType ?? '').toString();
+            if (t.includes('rdm') || t === 'psychophysics-rdm' || t === 'rdk') return true;
+            if (storedData && typeof storedData === 'object' && storedData.coherence !== undefined) return true;
+            if (currentParams.coherence !== undefined) return true;
+            return false;
+        })();
+
+        // Non-RDM previews: do NOT inject RDM defaults (it forces the preview to look like RDM).
+        if (!isRdmLike) {
+            const previewData = {
+                type: componentType,
+                name: componentName,
+                ...(storedData && typeof storedData === 'object' ? storedData : {}),
+                ...currentParams
+            };
+
+            console.log('Preview data for component type:', previewData.type, previewData);
+            if (window.componentPreview) {
+                window.componentPreview.showPreview(previewData);
+            } else {
+                console.error('ComponentPreview not found');
+            }
+            return;
+        }
+
+        // RDM previews: merge experiment-wide display defaults so preview matches the main UI
         const display = this.getRDMDisplayParameters();
         const aperture = this.getRDMApertureParameters();
         const dotDefaults = this.getRDMDotParameters();
