@@ -1042,6 +1042,44 @@ class JsonBuilder {
         }
     }
 
+    getExportBackups() {
+        const key = 'cogflow_export_backups_v1';
+        const legacyKey = 'psychjson_export_backups_v1';
+        try {
+            const raw = localStorage.getItem(key) || localStorage.getItem(legacyKey) || '';
+            const parsed = raw ? JSON.parse(raw) : [];
+            if (Array.isArray(parsed)) return parsed;
+        } catch {
+            // ignore
+        }
+        return [];
+    }
+
+    persistExportBackup({ jsonText, naming, source }) {
+        const text = (jsonText ?? '').toString();
+        if (!text.trim()) return;
+
+        const entry = {
+            v: 1,
+            created_at_local: new Date().toISOString(),
+            source: (source || 'export').toString(),
+            code: naming?.code || null,
+            task_type: naming?.taskType || null,
+            filename: naming?.filename || null,
+            json_text: text
+        };
+
+        const key = 'cogflow_export_backups_v1';
+        const legacyKey = 'psychjson_export_backups_v1';
+        const existing = this.getExportBackups();
+
+        // Most recent first; keep small to avoid quota issues.
+        const next = [entry, ...existing].slice(0, 10);
+        const out = JSON.stringify(next);
+        localStorage.setItem(key, out);
+        localStorage.setItem(legacyKey, out);
+    }
+
 
     peekTokenStoreBaseUrl() {
         // Non-interactive: prefer global override, then localStorage.
@@ -7747,6 +7785,23 @@ class JsonBuilder {
 
         const naming = this.getExportFilename(config);
         if (!naming) return;
+
+        // Resilience: store a local snapshot as soon as Export is initiated.
+        // This helps recover the config even if Token Store / network is unavailable.
+        try {
+            const jsonSnapshot = JSON.stringify(config, null, 2);
+            this.persistExportBackup({
+                jsonText: jsonSnapshot,
+                naming,
+                source: 'export_start'
+            });
+        } catch (e) {
+            console.warn('Failed to persist export backup:', e);
+            this.showValidationResult(
+                'warning',
+                'Could not persist an export backup locally (storage quota or privacy mode). Export will continue.'
+            );
+        }
 
         // Preferred flow: upload directly via Microsoft Graph (requires Entra ID app registration)
         // Initial deployment mode skips Graph entirely to avoid setup prompts.
