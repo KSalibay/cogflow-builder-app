@@ -35,6 +35,11 @@ The default “demo-ready” path avoids SharePoint/Graph setup and avoids relyi
 3. The Builder creates a `config_id` and tokens, uploads the JSON (and any cached `asset://...` files), then shows an overlay containing the exact JSON to paste into JATOS
 4. Paste the values into the Interpreter component’s **Component Properties** (see Interpreter README)
 
+Reliability notes:
+
+- The Builder stores a local “export snapshot” backup in browser storage as soon as you click **Export**.
+- When running inside **JATOS**, the Builder also uploads the exported JSON snapshot as a **JATOS result file** (best-effort) so the config is preserved server-side even if Cloudflare / Token Store is unreachable.
+
 ### JATOS Props button (single + multi-config bundles)
 
 The Builder UI includes a **JATOS Props** button that generates a complete Component Properties JSON blob.

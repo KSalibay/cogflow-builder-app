@@ -1080,6 +1080,78 @@ class JsonBuilder {
         localStorage.setItem(legacyKey, out);
     }
 
+    getJatosApi() {
+        // JATOS injects a global `jatos` object inside component pages.
+        try {
+            const j = window.jatos;
+            if (j && typeof j === 'object') return j;
+        } catch {
+            // ignore
+        }
+        return null;
+    }
+
+    sanitizeFilenamePart(x) {
+        return String(x || '')
+            .replace(/\s+/g, '_')
+            .replace(/[^A-Za-z0-9._-]/g, '_')
+            .replace(/_+/g, '_')
+            .replace(/^_+|_+$/g, '')
+            .slice(0, 80);
+    }
+
+    formatTimestampForFilename(d) {
+        const pad = (n) => String(n).padStart(2, '0');
+        const dt = d instanceof Date ? d : new Date();
+        const y = dt.getFullYear();
+        const m = pad(dt.getMonth() + 1);
+        const day = pad(dt.getDate());
+        const hh = pad(dt.getHours());
+        const mm = pad(dt.getMinutes());
+        const ss = pad(dt.getSeconds());
+        return `${y}${m}${day}-${hh}${mm}${ss}`;
+    }
+
+    buildJatosExportBackupFilename(naming) {
+        const filename = naming?.filename ? String(naming.filename) : 'export.json';
+        const base = filename.toLowerCase().endsWith('.json') ? filename.slice(0, -'.json'.length) : filename;
+        const safeBase = this.sanitizeFilenamePart(base) || 'export';
+        const stamp = this.formatTimestampForFilename(new Date());
+        return `cogflow-builder-export-${safeBase}-${stamp}.json`;
+    }
+
+    async tryUploadExportBackupToJatos({ jsonText, naming }) {
+        const j = this.getJatosApi();
+        if (!j || typeof j.uploadResultFile !== 'function') return { ok: false, reason: 'jatos_unavailable' };
+
+        const text = (jsonText || '').toString();
+        if (!text.trim()) return { ok: false, reason: 'empty' };
+
+        const outName = this.buildJatosExportBackupFilename(naming);
+
+        let fileObj = null;
+        try {
+            fileObj = new File([text], outName, { type: 'application/json' });
+        } catch {
+            try {
+                const blob = new Blob([text], { type: 'application/json' });
+                blob.name = outName;
+                fileObj = blob;
+            } catch {
+                fileObj = null;
+            }
+        }
+
+        if (!fileObj) return { ok: false, reason: 'file_construct_failed' };
+
+        try {
+            const res = await j.uploadResultFile(fileObj, outName);
+            return { ok: true, filename: outName, size: text.length, result: res };
+        } catch (e) {
+            return { ok: false, reason: e && e.message ? e.message : String(e) };
+        }
+    }
+
 
     peekTokenStoreBaseUrl() {
         // Non-interactive: prefer global override, then localStorage.
@@ -7795,6 +7867,21 @@ class JsonBuilder {
                 naming,
                 source: 'export_start'
             });
+
+            // Additional resilience: if running inside JATOS, upload the snapshot as a result file.
+            // This does NOT end/advance the component; it's a best-effort server-side backup.
+            try {
+                const uploaded = await this.tryUploadExportBackupToJatos({ jsonText: jsonSnapshot, naming });
+                if (uploaded?.ok) {
+                    this.showValidationResult('success', `Saved export backup to JATOS result files: ${uploaded.filename}`);
+                }
+            } catch (e) {
+                console.warn('JATOS export backup upload failed:', e);
+                this.showValidationResult(
+                    'warning',
+                    `Could not save export backup to JATOS. Export will continue. (${e?.message || 'Unknown error'})`
+                );
+            }
         } catch (e) {
             console.warn('Failed to persist export backup:', e);
             this.showValidationResult(

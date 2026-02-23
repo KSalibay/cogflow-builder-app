@@ -61,6 +61,49 @@
         }
       };
 
+      async function ensureJatosApiLoaded() {
+        try {
+          if (typeof window.jatos !== 'undefined' && window.jatos) return true;
+        } catch {
+          // ignore
+        }
+
+        const tryLoad = (src) => {
+          return new Promise((resolve) => {
+            try {
+              const s = document.createElement('script');
+              s.src = src;
+              s.async = true;
+              s.onload = () => resolve(true);
+              s.onerror = () => resolve(false);
+              document.head.appendChild(s);
+            } catch {
+              resolve(false);
+            }
+          });
+        };
+
+        // Try common JATOS API locations across deployments.
+        const candidates = [
+          '/assets/javascripts/jatos.js',
+          '/jatos.js',
+          '/jatos/assets/javascripts/jatos.js',
+          '/jatos/jatos.js'
+        ];
+
+        for (const src of candidates) {
+          const ok = await tryLoad(src);
+          log('JATOS API load', ok ? 'OK' : 'FAIL', src);
+          try {
+            if (ok && typeof window.jatos !== 'undefined' && window.jatos) return true;
+          } catch {
+            // ignore
+          }
+        }
+
+        return false;
+      }
+
       const pathname = (window.location && typeof window.location.pathname === 'string') ? window.location.pathname : '';
 
       const parts = pathname.split('/').filter(Boolean);
@@ -238,6 +281,10 @@
       (async () => {
         log('location.pathname:', pathname);
         log('builderBase:', builderBase);
+
+        // Best-effort: load the JATOS API early so Builder can back up exports
+        // to JATOS result files via jatos.uploadResultFile.
+        await ensureJatosApiLoaded();
 
         if (!builderIndexUrl) {
           log('ERROR: This page must be opened via JATOS /publix/<studyResultUuid>/<componentUuid>/start');
