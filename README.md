@@ -19,6 +19,7 @@ This app is plain HTML/CSS/JS loaded via classic `<script>` tags (globals; no `i
 - Fixation cross support added as an ITI visual marker via `show_fixation_cross_between_trials` (propagates through export and is rendered by the Interpreter).
 - UX overhaul (“CogFlow” rebrand): palette-driven theming (CSS variables), IBM Plex Sans typography, collapsible parameter groups for long defaults, and an app-shell layout to avoid whole-page scrolling.
 - Accessibility Mode toggle added (Atkinson Hyperlegible + higher contrast tokens), persisted locally.
+- New **JATOS Props** button generates a ready-to-paste JATOS **Component Properties** JSON bundle for Token Store exports (including **multi-config** bundles).
 
 ## Run locally
 
@@ -33,6 +34,39 @@ The default “demo-ready” path avoids SharePoint/Graph setup and avoids relyi
 2. Click **Export → Token Store**
 3. The Builder creates a `config_id` and tokens, uploads the JSON (and any cached `asset://...` files), then shows an overlay containing the exact JSON to paste into JATOS
 4. Paste the values into the Interpreter component’s **Component Properties** (see Interpreter README)
+
+### JATOS Props button (single + multi-config bundles)
+
+The Builder UI includes a **JATOS Props** button that generates a complete Component Properties JSON blob.
+
+This supports two common setups:
+
+- **Single config**: export one config to Token Store → paste its `config_store_config_id` + `config_store_read_token` into the Interpreter.
+- **Multi-config bundle**: export multiple configs (often multiple task types) under the same **export code** → generate a bundle that the Interpreter will fetch, shuffle, and run sequentially.
+
+How multi-config works:
+
+1. Export each config to Token Store using the same export code (e.g. `TEST001`).
+2. Click **JATOS Props** and enter that export code.
+3. The Builder assembles a JSON object like:
+
+```json
+{
+  "config_store_base_url": "https://<your-worker>.workers.dev",
+  "config_store_code": "TEST001",
+  "config_store_configs": [
+    { "config_id": "...", "read_token": "...", "task_type": "rdm", "filename": "..." },
+    { "config_id": "...", "read_token": "...", "task_type": "sart", "filename": "..." }
+  ]
+}
+```
+
+4. Paste it into the Interpreter component’s **Component Properties**.
+
+Notes:
+
+- The bundle is generated **client-side** from Token Store exports that were created in that browser session (stored in local storage). The Token Store Worker intentionally cannot “list tokens by export code”.
+- If you cleared storage / switched browsers, you can re-export the configs (to re-create tokens) and re-generate the bundle.
 
 ### Token Store Worker (Cloudflare)
 

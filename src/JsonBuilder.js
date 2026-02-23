@@ -736,6 +736,13 @@ class JsonBuilder {
             this.exportJSON();
         });
 
+        const prepBtn = document.getElementById('prepJatosPropsBtn');
+        if (prepBtn) {
+            prepBtn.addEventListener('click', () => {
+                this.prepareJatosComponentPropertiesForTokenStoreBundle();
+            });
+        }
+
         const saveJsonBtn = document.getElementById('saveJsonBtn');
         if (saveJsonBtn) {
             saveJsonBtn.addEventListener('click', () => {
@@ -871,35 +878,107 @@ class JsonBuilder {
         return {};
     }
 
-    setTokenStoreRecords(records) {
-        const key = 'cogflow_token_store_records_v1';
-        const legacyKey = 'psychjson_token_store_records_v1';
-        try {
-            const obj = (records && typeof records === 'object') ? records : {};
-            const json = JSON.stringify(obj);
-            localStorage.setItem(key, json);
-            localStorage.setItem(legacyKey, json);
-        } catch {
-            // ignore
-        }
+    normalizeTokenStoreTaskType(taskType) {
+        const t = (taskType || '').toString().trim().toLowerCase();
+        return t || 'task';
     }
 
-    getTokenStoreRecordForCode(code) {
+    getTokenStoreBundleForCode(code) {
         const c = (code || '').toString().trim();
         if (!c) return null;
+
         const all = this.getTokenStoreRecords();
         const rec = all[c];
         if (!rec || typeof rec !== 'object') return null;
-        const configId = (rec.config_id || rec.configId || '').toString().trim();
-        const writeToken = (rec.write_token || rec.writeToken || '').toString().trim();
-        const readToken = (rec.read_token || rec.readToken || '').toString().trim();
-        if (!configId || !writeToken || !readToken) return null;
-        return { config_id: configId, write_token: writeToken, read_token: readToken };
+
+        // Legacy shape: { config_id, write_token, read_token }
+        if (rec.config_id || rec.configId) {
+            const configId = (rec.config_id || rec.configId || '').toString().trim();
+            const writeToken = (rec.write_token || rec.writeToken || '').toString().trim();
+            const readToken = (rec.read_token || rec.readToken || '').toString().trim();
+            if (!configId || !writeToken || !readToken) return null;
+            return {
+                v: 1,
+                configs: [
+                    {
+                        task_type: null,
+                        filename: null,
+                        config_id: configId,
+                        write_token: writeToken,
+                        read_token: readToken,
+                        updated_at_local: null
+                    }
+                ]
+            };
+        }
+
+        // v2+ shape: { v: 2, by_task: { rdm: { ... }, flanker: { ... } } }
+        const byTask = rec.by_task && typeof rec.by_task === 'object' ? rec.by_task : null;
+        if (!byTask) return null;
+
+        const configs = [];
+        for (const [task, r] of Object.entries(byTask)) {
+            if (!r || typeof r !== 'object') continue;
+            const configId = (r.config_id || r.configId || '').toString().trim();
+            const writeToken = (r.write_token || r.writeToken || '').toString().trim();
+            const readToken = (r.read_token || r.readToken || '').toString().trim();
+            if (!configId || !writeToken || !readToken) continue;
+            configs.push({
+                task_type: (task || '').toString().trim() || null,
+                filename: (r.filename || '').toString().trim() || null,
+                config_id: configId,
+                write_token: writeToken,
+                read_token: readToken,
+                updated_at_local: (r.updated_at_local || '').toString().trim() || null
+            });
+        }
+
+        if (configs.length === 0) return null;
+        configs.sort((a, b) => (a.task_type || '').localeCompare(b.task_type || ''));
+        return { v: 2, configs };
     }
 
-    setTokenStoreRecordForCode(code, record) {
+    getTokenStoreRecordForCodeAndTask(code, taskType) {
+        const c = (code || '').toString().trim();
+        if (!c) return null;
+        const t = this.normalizeTokenStoreTaskType(taskType);
+
+        const all = this.getTokenStoreRecords();
+        const rec = all[c];
+        if (!rec || typeof rec !== 'object') return null;
+
+        // Legacy shape: treat it as "single record" (no per-task distinction)
+        if (rec.config_id || rec.configId) {
+            const configId = (rec.config_id || rec.configId || '').toString().trim();
+            const writeToken = (rec.write_token || rec.writeToken || '').toString().trim();
+            const readToken = (rec.read_token || rec.readToken || '').toString().trim();
+            if (!configId || !writeToken || !readToken) return null;
+            return { config_id: configId, write_token: writeToken, read_token: readToken, task_type: t, filename: null };
+        }
+
+        const byTask = rec.by_task && typeof rec.by_task === 'object' ? rec.by_task : null;
+        if (!byTask) return null;
+        const r = byTask[t];
+        if (!r || typeof r !== 'object') return null;
+
+        const configId = (r.config_id || r.configId || '').toString().trim();
+        const writeToken = (r.write_token || r.writeToken || '').toString().trim();
+        const readToken = (r.read_token || r.readToken || '').toString().trim();
+        if (!configId || !writeToken || !readToken) return null;
+        return {
+            config_id: configId,
+            write_token: writeToken,
+            read_token: readToken,
+            task_type: t,
+            filename: (r.filename || '').toString().trim() || null
+        };
+    }
+
+    setTokenStoreRecordForCodeAndTask(code, taskType, record, meta) {
         const c = (code || '').toString().trim();
         if (!c) return;
+        const t = this.normalizeTokenStoreTaskType(taskType);
+
         const rec = (record && typeof record === 'object') ? record : null;
         if (!rec) return;
 
@@ -908,13 +987,31 @@ class JsonBuilder {
         const readToken = (rec.read_token || rec.readToken || '').toString().trim();
         if (!configId || !writeToken || !readToken) return;
 
+        const filename = meta && meta.filename ? String(meta.filename).trim() : null;
+        const updatedAt = new Date().toISOString();
+
         const all = this.getTokenStoreRecords();
-        all[c] = { config_id: configId, write_token: writeToken, read_token: readToken };
+        const existing = all[c];
+        const next = (existing && typeof existing === 'object' && existing.by_task && typeof existing.by_task === 'object')
+            ? existing
+            : { v: 2, by_task: {} };
+
+        if (!next.by_task || typeof next.by_task !== 'object') next.by_task = {};
+
+        next.by_task[t] = {
+            config_id: configId,
+            write_token: writeToken,
+            read_token: readToken,
+            filename: filename,
+            updated_at_local: updatedAt
+        };
+
+        all[c] = next;
         this.setTokenStoreRecords(all);
 
         // Verify persistence (some browser/privacy modes can block localStorage).
         try {
-            const reread = this.getTokenStoreRecordForCode(c);
+            const reread = this.getTokenStoreRecordForCodeAndTask(c, t);
             if (!reread || reread.config_id !== configId || reread.write_token !== writeToken || reread.read_token !== readToken) {
                 throw new Error('Token record did not persist');
             }
@@ -929,6 +1026,110 @@ class JsonBuilder {
                 'warning',
                 'Could not persist Token Store tokens in localStorage (browser privacy mode?). Tokens were copied to clipboard as a fallback.'
             );
+        }
+    }
+
+    setTokenStoreRecords(records) {
+        const key = 'cogflow_token_store_records_v1';
+        const legacyKey = 'psychjson_token_store_records_v1';
+        try {
+            const obj = (records && typeof records === 'object') ? records : {};
+            const json = JSON.stringify(obj);
+            localStorage.setItem(key, json);
+            localStorage.setItem(legacyKey, json);
+        } catch {
+            // ignore
+        }
+    }
+
+
+    peekTokenStoreBaseUrl() {
+        // Non-interactive: prefer global override, then localStorage.
+        try {
+            const globalUrl = window.COGFLOW_TOKEN_STORE_BASE_URL;
+            if (typeof globalUrl === 'string' && globalUrl.trim()) {
+                const trimmed = globalUrl.trim();
+                if (/^https?:\/\//i.test(trimmed) && !/^(javascript:|data:|file:)/i.test(trimmed)) {
+                    return trimmed.replace(/\/+$/, '');
+                }
+            }
+        } catch {
+            // ignore
+        }
+
+        try {
+            const key = 'cogflow_token_store_base_url_v1';
+            const legacyKey = 'psychjson_token_store_base_url_v1';
+            const raw = (localStorage.getItem(key) || localStorage.getItem(legacyKey) || '').toString().trim();
+            if (raw && /^https?:\/\//i.test(raw) && !/^(javascript:|data:|file:)/i.test(raw)) return raw.replace(/\/+$/, '');
+        } catch {
+            // ignore
+        }
+        return '';
+    }
+
+    promptForExportCodeOnly() {
+        const last = (localStorage.getItem('cogflow_last_export_code') || localStorage.getItem('psychjson_last_export_code') || '').toString();
+        const rawCode = prompt('Enter export code (7 alphanumeric characters):', last);
+        if (rawCode === null) return null;
+        const code = (rawCode || '').toString().trim();
+        if (!/^[A-Za-z0-9]{7}$/.test(code)) {
+            this.showValidationResult('error', 'Invalid export code. Please use exactly 7 letters/numbers (A-Z, a-z, 0-9).');
+            return null;
+        }
+        localStorage.setItem('cogflow_last_export_code', code);
+        localStorage.setItem('psychjson_last_export_code', code);
+        return code;
+    }
+
+    prepareJatosComponentPropertiesForTokenStoreBundle() {
+        try {
+            const code = this.promptForExportCodeOnly();
+            if (!code) return;
+
+            let baseUrl = this.peekTokenStoreBaseUrl();
+            if (!baseUrl) {
+                baseUrl = this.getTokenStoreBaseUrl();
+            }
+            if (!baseUrl) return;
+
+            const bundle = this.getTokenStoreBundleForCode(code);
+            const configs = bundle && Array.isArray(bundle.configs) ? bundle.configs : [];
+            if (configs.length === 0) {
+                this.showValidationResult('error', `No Token Store exports found locally for code ${code}. Export at least one task first.`);
+                return;
+            }
+
+            const safeConfigs = configs.map((c) => {
+                return {
+                    task_type: c.task_type || null,
+                    filename: c.filename || null,
+                    config_id: c.config_id,
+                    read_token: c.read_token
+                };
+            });
+
+            const props = {
+                config_store_base_url: baseUrl,
+                config_store_code: code,
+                config_store_configs: safeConfigs
+            };
+
+            const propsText = JSON.stringify(props, null, 2);
+            try {
+                navigator.clipboard.writeText(propsText);
+            } catch {
+                // ignore
+            }
+
+            this.showExportTokenOverlay({
+                title: 'JATOS Component Properties (multi-config)',
+                subtitle: 'Paste this JSON into the Interpreter component’s JATOS Component Properties (JSON). It contains read tokens for multiple tasks under one export code.',
+                jsonText: propsText
+            });
+        } catch (e) {
+            console.error('prepareJatosComponentPropertiesForTokenStoreBundle failed:', e);
+            this.showValidationResult('error', `Failed to prepare JATOS props. (${e?.message || 'Unknown error'})`);
         }
     }
 
@@ -7614,20 +7815,23 @@ class JsonBuilder {
                 throw new Error('Token store URL not set');
             }
 
-            let record = this.getTokenStoreRecordForCode(naming.code);
+            const taskType = naming && naming.taskType ? naming.taskType : (config && config.task_type ? config.task_type : 'task');
+
+            let record = this.getTokenStoreRecordForCodeAndTask(naming.code, taskType);
             if (record) {
                 const ok = confirm(
-                    `A Token Store record already exists for export code ${naming.code}.\n\nContinuing will OVERWRITE the previously uploaded config for this code.\n\nContinue?`
+                    `A Token Store record already exists for export code ${naming.code} and task ${String(taskType).toUpperCase()}.\n\nContinuing will OVERWRITE the previously uploaded config for this task.\n\nContinue?`
                 );
                 if (!ok) {
                     this.showValidationResult('warning', 'Export cancelled.');
                     return;
                 }
             }
+
             if (!record) {
-                this.showValidationResult('warning', `No token found for code ${naming.code}. Creating a new token...`);
+                this.showValidationResult('warning', `No token found for code ${naming.code} (${String(taskType).toUpperCase()}). Creating a new token...`);
                 record = await this.createTokenStoreConfig(baseUrl);
-                this.setTokenStoreRecordForCode(naming.code, record);
+                this.setTokenStoreRecordForCodeAndTask(naming.code, taskType, record, { filename: naming.filename });
             }
 
             // Upload cached assets referenced by asset://... and rewrite config to use unguessable Worker URLs.
@@ -7639,6 +7843,13 @@ class JsonBuilder {
             }
 
             await this.uploadConfigToTokenStore(baseUrl, record, config, naming);
+
+            // Persist/refresh per-task record metadata (filename, timestamp).
+            try {
+                this.setTokenStoreRecordForCodeAndTask(naming.code, taskType, record, { filename: naming.filename });
+            } catch {
+                // ignore
+            }
 
             // Best-effort: copy JATOS-friendly component properties to clipboard.
             const props = {
@@ -7658,7 +7869,7 @@ class JsonBuilder {
             // Always show an overlay so tokens can't get lost due to clipboard permissions.
             this.showExportTokenOverlay({
                 title: 'Token Store export complete',
-                subtitle: 'Paste this JSON into JATOS Component Properties (JSON). Save it somewhere safe in case clipboard permissions are blocked.',
+                subtitle: 'Paste this JSON into JATOS Component Properties (JSON). For multi-task runs under the same export code, use the “JATOS Props” button to generate a bundle JSON.',
                 jsonText: propsText
             });
 
