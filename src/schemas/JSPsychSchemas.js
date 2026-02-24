@@ -46,13 +46,12 @@ class JSPsychSchemas {
     }
 
     getCommonTrialParameters() {
-        return {
-            detection_response_task_enabled: {
-                type: this.parameterTypes.BOOL,
-                default: false,
-                description: 'Enable/disable Detection Response Task (DRT) overlay for this component (handled by interpreter)'
-            }
-        };
+        // Legacy: older builds exposed a per-trial DRT toggle here.
+        // DRT is now configured via explicit timeline items:
+        //   - detection-response-task-start
+        //   - detection-response-task-stop
+        // So we intentionally do not expose any common DRT flag in schemas.
+        return {};
     }
 
     /**
@@ -121,11 +120,6 @@ class JSPsychSchemas {
                         type: this.parameterTypes.BOOL,
                         default: true,
                         description: 'Tag icon-click events as distractors'
-                    },
-                    detection_response_task_enabled: {
-                        type: this.parameterTypes.BOOL,
-                        default: false,
-                        description: 'Enable/disable DRT overlay for this component (handled by interpreter)'
                     }
                 }
             },
@@ -263,11 +257,6 @@ class JSPsychSchemas {
                         min: 0,
                         max: 1,
                         description: 'Probability a new entry is a distractor (0–1). Remaining probability becomes neutral.'
-                    },
-                    detection_response_task_enabled: {
-                        type: this.parameterTypes.BOOL,
-                        default: false,
-                        description: 'Enable/disable DRT overlay for this component (handled by interpreter)'
                     }
                 }
             },
@@ -406,11 +395,6 @@ class JSPsychSchemas {
                         type: this.parameterTypes.BOOL,
                         default: false,
                         description: 'Briefly show Correct/Incorrect after response (preview + interpreter)'
-                    },
-                    detection_response_task_enabled: {
-                        type: this.parameterTypes.BOOL,
-                        default: false,
-                        description: 'Enable/disable DRT overlay for this component (handled by interpreter)'
                     }
                 }
             },
@@ -517,12 +501,6 @@ class JSPsychSchemas {
                         default: false,
                         description: 'Show brief on-screen feedback after responses (off by default)'
                     },
-
-                    detection_response_task_enabled: {
-                        type: this.parameterTypes.BOOL,
-                        default: false,
-                        description: 'Enable/disable DRT overlay for this component (handled by interpreter)'
-                    }
                 }
             },
             'soc-subtask-wcst-like': {
@@ -743,11 +721,6 @@ class JSPsychSchemas {
                         min: 0,
                         max: 3600000,
                         description: 'Maximum subtask runtime in ms (0 = no maximum). If max < min, values are swapped at runtime.'
-                    },
-                    detection_response_task_enabled: {
-                        type: this.parameterTypes.BOOL,
-                        default: false,
-                        description: 'Enable/disable DRT overlay for this component (handled by interpreter)'
                     }
                 }
             },
@@ -872,12 +845,6 @@ class JSPsychSchemas {
                         max: 3600000,
                         description: 'Maximum subtask runtime in ms (0 = no maximum). If max < min, values are swapped at runtime.'
                     },
-
-                    detection_response_task_enabled: {
-                        type: this.parameterTypes.BOOL,
-                        default: false,
-                        description: 'Enable/disable DRT overlay for this component (handled by interpreter)'
-                    }
                 }
             },
 
@@ -916,11 +883,6 @@ class JSPsychSchemas {
                         type: this.parameterTypes.BOOL,
                         default: true,
                         description: 'Whether clicking this icon should be treated as a distractor'
-                    },
-                    detection_response_task_enabled: {
-                        type: this.parameterTypes.BOOL,
-                        default: false,
-                        description: 'Enable/disable DRT overlay for this component (handled by interpreter)'
                     }
                 }
             },
@@ -1550,11 +1512,6 @@ class JSPsychSchemas {
                         type: this.parameterTypes.FLOAT,
                         default: 0.22,
                         description: 'Patch border opacity (0–1)'
-                    },
-                    detection_response_task_enabled: {
-                        type: this.parameterTypes.BOOL,
-                        default: false,
-                        description: 'Enable/disable Detection Response Task (DRT) overlay for this component (handled by interpreter)'
                     }
                 }
             },
@@ -1722,11 +1679,6 @@ class JSPsychSchemas {
                 name: 'block',
                 description: 'Generate many trials from parameter windows/ranges (compact representation for large experiments)',
                 parameters: {
-                    detection_response_task_enabled: {
-                        type: this.parameterTypes.BOOL,
-                        default: false,
-                        description: 'Enable/disable Detection Response Task (DRT) overlay for this block (handled by interpreter)'
-                    },
                     block_component_type: {
                         type: this.parameterTypes.SELECT,
                         default: 'rdm-trial',
@@ -3707,13 +3659,19 @@ class JSPsychSchemas {
         if (!schema) return null;
 
         // Inject common per-trial parameters for all plugins without mutating the base schema.
+        // Also strip legacy DRT toggles that should no longer be present.
         const common = this.getCommonTrialParameters();
+        const merged = {
+            ...common,
+            ...(schema.parameters || {})
+        };
+        if (merged.detection_response_task_enabled !== undefined) {
+            delete merged.detection_response_task_enabled;
+        }
+
         return {
             ...schema,
-            parameters: {
-                ...common,
-                ...(schema.parameters || {})
-            }
+            parameters: merged
         };
     }
 

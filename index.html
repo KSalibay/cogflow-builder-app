@@ -51,12 +51,18 @@
                 <button class="btn btn-outline-light me-2" id="saveJsonBtn">
                     <i class="fas fa-download"></i> Save JSON
                 </button>
+                <button class="btn btn-outline-light me-2" id="importLocalJsonBtn">
+                    <i class="fas fa-file-arrow-up"></i> Import JSON(s)
+                </button>
                 <button class="btn btn-outline-light me-2" id="prepJatosPropsBtn">
                     <i class="fas fa-clipboard"></i> JATOS Props
                 </button>
                 <button class="btn btn-success" id="exportJsonBtn">
                     <i class="fas fa-cloud-arrow-up"></i> Export
                 </button>
+
+                <!-- Hidden input: local JSON import for Token Store uploads -->
+                <input id="importLocalJsonInput" type="file" accept=".json,application/json" multiple style="display:none" />
             </div>
         </div>
     </nav>
@@ -359,7 +365,7 @@
     </script>
 
     <!-- Cache-bust local scripts -->
-    <script src="src/JsonBuilder.js?v=20260223-1"></script>
+    <script src="src/JsonBuilder.js?v=20260224-1"></script>
     <script src="src/modules/DataCollectionModules.js?v=20260114-1"></script>
     <script src="src/modules/TrialManager.js?v=20260113-10"></script>
     <script src="src/modules/TimelineBuilder.js?v=20260223-1"></script>

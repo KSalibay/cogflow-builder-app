@@ -35,6 +35,25 @@ The default “demo-ready” path avoids SharePoint/Graph setup and avoids relyi
 3. The Builder creates a `config_id` and tokens, uploads the JSON (and any cached `asset://...` files), then shows an overlay containing the exact JSON to paste into JATOS
 4. Paste the values into the Interpreter component’s **Component Properties** (see Interpreter README)
 
+### Import local JSON(s) → Token Store (batch)
+
+If you already have one or more CogFlow JSON files (e.g., versioned configs exported from a prior session), you can upload them directly:
+
+1. Click **Import JSON(s)**
+2. Select one or more `.json` files
+3. The Builder uploads each file to the Token Store and then shows a **multi-config** JATOS Component Properties bundle you can paste into the Interpreter
+
+Notes:
+
+- This is the fastest “turn local files into a runnable JATOS session” path.
+- The bundle is generated from what was uploaded in that browser session (stored in local storage). If you clear storage or switch browsers, re-import/re-export to re-create the tokens.
+
+### DRT authoring note
+
+The legacy per-element `detection_response_task_enabled` toggle is no longer part of the Builder schema and is stripped on export.
+
+- To schedule DRT in the Interpreter, use explicit timeline items: `detection-response-task-start` / `detection-response-task-stop`.
+
 Reliability notes:
 
 - The Builder stores a local “export snapshot” backup in browser storage as soon as you click **Export**.

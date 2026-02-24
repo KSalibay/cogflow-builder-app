@@ -614,16 +614,12 @@ class JsonBuilder {
         const toggle = document.getElementById('rewardsEnabled');
         if (!toggle) return;
 
-        // Rewards are currently implemented for trial-based timelines.
-        if (this.experimentType !== 'trial-based') {
-            toggle.disabled = true;
-            toggle.checked = false;
-            toggle.title = 'Rewards are currently supported in trial-based experiments.';
-            return;
-        }
-
+        // Rewards are supported for the task types that output RT and correctness/accuracy.
+        // Allow enabling in any experiment type; unsupported tasks simply won't accrue points.
         toggle.disabled = false;
-        toggle.title = '';
+        toggle.title = (this.experimentType === 'trial-based')
+            ? ''
+            : 'Rewards may not be supported for all continuous-task plugins.';
 
         // Ensure UI reflects timeline state when panel is re-rendered.
         this.syncRewardsToggleFromTimeline();
@@ -735,6 +731,38 @@ class JsonBuilder {
         document.getElementById('exportJsonBtn').addEventListener('click', () => {
             this.exportJSON();
         });
+
+        // Local JSON import -> Token Store upload (batch)
+        const importBtn = document.getElementById('importLocalJsonBtn');
+        const importInput = document.getElementById('importLocalJsonInput');
+        if (importBtn && importInput && importBtn.dataset.bound !== '1') {
+            importBtn.dataset.bound = '1';
+
+            importBtn.addEventListener('click', () => {
+                try {
+                    // Re-selecting the same file(s) should re-trigger change.
+                    importInput.value = '';
+                } catch {
+                    // ignore
+                }
+                try {
+                    importInput.click();
+                } catch {
+                    // ignore
+                }
+            });
+
+            importInput.addEventListener('change', async () => {
+                const files = Array.from(importInput.files || []);
+                if (files.length === 0) return;
+                try {
+                    await this.importLocalJsonFilesToTokenStore(files);
+                } catch (e) {
+                    console.error('importLocalJsonFilesToTokenStore failed:', e);
+                    this.showValidationResult('error', `Import failed. (${e?.message || 'Unknown error'})`);
+                }
+            });
+        }
 
         const prepBtn = document.getElementById('prepJatosPropsBtn');
         if (prepBtn) {
@@ -1081,10 +1109,29 @@ class JsonBuilder {
     }
 
     getJatosApi() {
-        // JATOS injects a global `jatos` object inside component pages.
+        // JATOS' jatos.js defines `const jatos = {}` in the global lexical scope.
+        // That does NOT necessarily become `window.jatos`, so detect it via `typeof jatos`.
         try {
-            const j = window.jatos;
-            if (j && typeof j === 'object') return j;
+            // eslint-disable-next-line no-undef
+            if (typeof jatos !== 'undefined' && jatos) {
+                // eslint-disable-next-line no-undef
+                return jatos;
+            }
+        } catch {
+            // ignore
+        }
+        try {
+            if (typeof window.jatos !== 'undefined' && window.jatos) return window.jatos;
+        } catch {
+            // ignore
+        }
+        try {
+            if (window.parent && window.parent !== window && typeof window.parent.jatos !== 'undefined' && window.parent.jatos) return window.parent.jatos;
+        } catch {
+            // ignore
+        }
+        try {
+            if (window.top && window.top !== window && typeof window.top.jatos !== 'undefined' && window.top.jatos) return window.top.jatos;
         } catch {
             // ignore
         }
@@ -1190,6 +1237,201 @@ class JsonBuilder {
         localStorage.setItem('cogflow_last_export_code', code);
         localStorage.setItem('psychjson_last_export_code', code);
         return code;
+    }
+
+    async importLocalJsonFilesToTokenStore(files) {
+        const inputFiles = Array.isArray(files) ? files : [];
+        if (inputFiles.length === 0) return;
+
+        const code = this.promptForExportCodeOnly();
+        if (!code) return;
+
+        let baseUrl = this.peekTokenStoreBaseUrl();
+        if (!baseUrl) {
+            baseUrl = this.getTokenStoreBaseUrl();
+        }
+        if (!baseUrl) return;
+
+        if (!/^https?:\/\//i.test(baseUrl) || /^(javascript:|data:|file:)/i.test(baseUrl)) {
+            this.showValidationResult('error', 'Invalid Token Store base URL.');
+            return;
+        }
+
+        const readFileAsText = (file) => {
+            return new Promise((resolve, reject) => {
+                try {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve((reader.result ?? '').toString());
+                    reader.onerror = () => reject(reader.error || new Error('Failed to read file'));
+                    reader.readAsText(file);
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        };
+
+        const ensureJsonFilename = (name) => {
+            const raw = (name || '').toString().trim() || 'config.json';
+            return /\.json$/i.test(raw) ? raw : `${raw}.json`;
+        };
+
+        // Sort for predictable behavior.
+        const queue = inputFiles.slice().sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || '')));
+
+        const seenTaskTypes = new Map();
+        const overwritesConfirmed = new Set();
+
+        const results = [];
+
+        for (const file of queue) {
+            const filename = ensureJsonFilename(file?.name || 'config.json');
+
+            let config;
+            let jsonText;
+            try {
+                jsonText = await readFileAsText(file);
+                config = JSON.parse(jsonText);
+            } catch (e) {
+                results.push({ ok: false, filename, error: `Invalid JSON (${e?.message || 'parse error'})` });
+                continue;
+            }
+
+            if (!config || typeof config !== 'object' || Array.isArray(config)) {
+                results.push({ ok: false, filename, error: 'JSON must be an object at the top level' });
+                continue;
+            }
+
+            const taskTypeRaw = (config.task_type || config.taskType || '').toString().trim();
+            const taskType = this.normalizeTokenStoreTaskType(taskTypeRaw || 'task');
+
+            // Token store record storage is per (code, task). Multiple JSONs with same task under one code will overwrite.
+            const prior = seenTaskTypes.get(taskType);
+            if (prior && prior !== filename && !overwritesConfirmed.has(taskType)) {
+                const ok = confirm(
+                    `You selected multiple JSON files with task_type "${taskType}" (e.g., ${prior} and ${filename}).\n\nToken Store supports ONE config per (export code, task_type). Continuing will overwrite earlier uploads for this task type under code ${code}.\n\nContinue?`
+                );
+                if (!ok) {
+                    results.push({ ok: false, filename, taskType, error: 'Skipped (duplicate task_type under same export code)' });
+                    continue;
+                }
+                overwritesConfirmed.add(taskType);
+            }
+            seenTaskTypes.set(taskType, filename);
+
+            const naming = {
+                code,
+                taskType,
+                filename
+            };
+
+            // Persist an import backup early (helps recover if upload fails).
+            try {
+                this.persistExportBackup({
+                    jsonText: JSON.stringify(config, null, 2),
+                    naming,
+                    source: 'import_start'
+                });
+            } catch {
+                // ignore
+            }
+
+            try {
+                let record = this.getTokenStoreRecordForCodeAndTask(code, taskType);
+
+                if (record && !overwritesConfirmed.has(taskType)) {
+                    const ok = confirm(
+                        `A Token Store record already exists locally for export code ${code} and task ${String(taskType).toUpperCase()}.\n\nContinuing will OVERWRITE the previously uploaded config for this task.\n\nContinue?`
+                    );
+                    if (!ok) {
+                        results.push({ ok: false, filename, taskType, error: 'Cancelled (existing token record)' });
+                        continue;
+                    }
+                    overwritesConfirmed.add(taskType);
+                }
+
+                if (!record) {
+                    record = await this.createTokenStoreConfig(baseUrl);
+                    this.setTokenStoreRecordForCodeAndTask(code, taskType, record, { filename });
+                }
+
+                // Attempt asset:// upload rewrite if cached assets exist.
+                try {
+                    config = await this.uploadAssetRefsToTokenStoreAndRewriteConfig(config, naming, baseUrl, record);
+                } catch (e) {
+                    console.warn('Token store asset upload failed (continuing with JSON-only):', e);
+                    this.showValidationResult('warning', `Asset upload failed for ${filename}; uploading JSON only. (${e?.message || 'Unknown error'})`);
+                }
+
+                await this.uploadConfigToTokenStore(baseUrl, record, config, naming);
+                this.setTokenStoreRecordForCodeAndTask(code, taskType, record, { filename });
+
+                // Persist post-import snapshot.
+                try {
+                    this.persistExportBackup({
+                        jsonText: JSON.stringify(config, null, 2),
+                        naming,
+                        source: 'import_success'
+                    });
+                } catch {
+                    // ignore
+                }
+
+                results.push({ ok: true, filename, taskType, record });
+            } catch (e) {
+                console.error('Import upload failed:', e);
+                results.push({ ok: false, filename, taskType, error: e?.message || 'Upload failed' });
+            }
+        }
+
+        const okCount = results.filter((r) => r && r.ok).length;
+        const failCount = results.length - okCount;
+
+        if (okCount === 0) {
+            const msg = failCount > 0
+                ? `No JSON files were uploaded. (${failCount} failed)`
+                : 'No JSON files were uploaded.';
+            this.showValidationResult('error', msg);
+            return;
+        }
+
+        // Show bundled multi-config props for this export code (Interpreter supports this).
+        try {
+            const bundle = this.getTokenStoreBundleForCode(code);
+            const configs = bundle && Array.isArray(bundle.configs) ? bundle.configs : [];
+            const safeConfigs = configs.map((c) => {
+                return {
+                    task_type: c.task_type || null,
+                    filename: c.filename || null,
+                    config_id: c.config_id,
+                    read_token: c.read_token
+                };
+            }).filter((c) => c && c.config_id && c.read_token);
+
+            const props = {
+                config_store_base_url: baseUrl,
+                config_store_code: code,
+                config_store_configs: safeConfigs
+            };
+            const propsText = JSON.stringify(props, null, 2);
+            try {
+                await navigator.clipboard.writeText(propsText);
+            } catch {
+                // ignore
+            }
+
+            this.showExportTokenOverlay({
+                title: 'Token Store import complete',
+                subtitle: 'Paste this JSON into the Interpreter component’s JATOS Component Properties (JSON). It contains read tokens for multiple tasks under one export code.',
+                jsonText: propsText
+            });
+        } catch (e) {
+            console.warn('Failed to prepare bundle props after import:', e);
+        }
+
+        const summary = failCount > 0
+            ? `Imported ${okCount} config(s) to Token Store (${failCount} failed). JATOS props copied/shown.`
+            : `Imported ${okCount} config(s) to Token Store. JATOS props copied/shown.`;
+        this.showValidationResult(failCount > 0 ? 'warning' : 'success', summary);
     }
 
     prepareJatosComponentPropertiesForTokenStoreBundle() {
@@ -4385,6 +4627,28 @@ class JsonBuilder {
                     show_summary_at_end: { type: 'boolean', default: true },
                     continue_key: { type: 'select', default: 'space', options: ['space', 'enter', 'ALL_KEYS'] },
 
+                    // New (v2) reward screen model
+                    instructions_screen: {
+                        type: 'object',
+                        default: {
+                            title: 'Rewards',
+                            template_html: '<p>You can earn <b>{{currency_label}}</b> during this study.</p>\n<ul>\n<li><b>Basis</b>: {{scoring_basis_label}}</li>\n<li><b>RT threshold</b>: {{rt_threshold_ms}} ms</li>\n<li><b>Points per success</b>: {{points_per_success}}</li>\n</ul>\n<p>Press {{continue_key_label}} to begin.</p>',
+                            image_url: '',
+                            audio_url: ''
+                        }
+                    },
+                    intermediate_screens: { type: 'object', default: [] },
+                    milestones: { type: 'object', default: [] },
+                    summary_screen: {
+                        type: 'object',
+                        default: {
+                            title: 'Rewards Summary',
+                            template_html: '<p><b>Total earned</b>: {{total_points}} {{currency_label}}</p>\n<p><b>Rewarded trials</b>: {{rewarded_trials}} / {{eligible_trials}}</p>\n<p>Press {{continue_key_label}} to finish.</p>',
+                            image_url: '',
+                            audio_url: ''
+                        }
+                    },
+
                     instructions_title: { type: 'string', default: 'Rewards' },
                     instructions_template_html: {
                         type: 'string',
@@ -5199,8 +5463,24 @@ class JsonBuilder {
      */
     getDefaultParameters(parameterDefs) {
         const params = {};
+
+        const cloneDefault = (value) => {
+            if (!value || typeof value !== 'object') return value;
+            try {
+                // Modern browsers
+                return structuredClone(value);
+            } catch {
+                // Fallback for plain JSON-able objects
+                try {
+                    return JSON.parse(JSON.stringify(value));
+                } catch {
+                    return value;
+                }
+            }
+        };
+
         for (const [key, def] of Object.entries(parameterDefs)) {
-            params[key] = def.default;
+            params[key] = cloneDefault(def.default);
         }
         return params;
     }
@@ -7874,6 +8154,13 @@ class JsonBuilder {
                 const uploaded = await this.tryUploadExportBackupToJatos({ jsonText: jsonSnapshot, naming });
                 if (uploaded?.ok) {
                     this.showValidationResult('success', `Saved export backup to JATOS result files: ${uploaded.filename}`);
+                } else {
+                    // Only warn when we likely expected JATOS to be present.
+                    const p = (window.location && typeof window.location.pathname === 'string') ? window.location.pathname : '';
+                    if (p.includes('/publix/')) {
+                        const reason = uploaded && uploaded.reason ? uploaded.reason : 'unknown';
+                        this.showValidationResult('warning', `Could not save export backup to JATOS (${reason}). Export will continue.`);
+                    }
                 }
             } catch (e) {
                 console.warn('JATOS export backup upload failed:', e);

@@ -164,6 +164,12 @@ class TimelineBuilder {
             return;
         }
 
+        // Custom editor for rewards (screens + milestone timing)
+        if (component.type === 'reward-settings') {
+            this.showRewardSettingsParameterModal(component, componentElement, { modal, modalBody, modalTitle });
+            return;
+        }
+
         // Prefer schema-driven editor when available.
         // Fall back to Builder component definitions when schema is missing (e.g., DRT Start/Stop).
         const schema = this.jsonBuilder.schemaValidator.getPluginSchema(component.type);
@@ -179,6 +185,646 @@ class TimelineBuilder {
         // Show modal
         const bootstrapModal = new bootstrap.Modal(modal);
         bootstrapModal.show();
+    }
+
+    showRewardSettingsParameterModal(component, componentElement, { modal, modalBody, modalTitle }) {
+        modalTitle.textContent = `Edit ${component.name || 'Reward Settings'}`;
+        modal.setAttribute('data-component-element', 'stored');
+
+        const safeNum = (v, fallback) => {
+            const n = Number(v);
+            return Number.isFinite(n) ? n : fallback;
+        };
+
+        const normalizeScreen = (raw, legacyTitle, legacyTpl) => {
+            const s = (raw && typeof raw === 'object') ? raw : {};
+            return {
+                title: (s.title ?? legacyTitle ?? '').toString() || 'Rewards',
+                template_html: (s.template_html ?? s.html ?? legacyTpl ?? '').toString(),
+                image_url: (s.image_url ?? '').toString(),
+                audio_url: (s.audio_url ?? '').toString()
+            };
+        };
+
+        // Normalize legacy flat fields into nested screen objects.
+        const instructionsScreen = normalizeScreen(
+            component.instructions_screen,
+            component.instructions_title,
+            component.instructions_template_html
+        );
+        const summaryScreen = normalizeScreen(
+            component.summary_screen,
+            component.summary_title,
+            component.summary_template_html
+        );
+
+        const intermediateScreens = Array.isArray(component.intermediate_screens)
+            ? component.intermediate_screens
+            : (Array.isArray(component.extra_screens) ? component.extra_screens : []);
+
+        const milestones = Array.isArray(component.milestones) ? component.milestones : [];
+
+        const storeKey = (component.store_key ?? '__psy_rewards').toString();
+        const currencyLabel = (component.currency_label ?? 'points').toString();
+        const scoringBasis = (component.scoring_basis ?? 'both').toString();
+        const rtThreshold = safeNum(component.rt_threshold_ms, 600);
+        const ptsPerSuccess = safeNum(component.points_per_success, 1);
+        const requireCorrectForRt = !!component.require_correct_for_rt;
+        const calcOnFly = (component.calculate_on_the_fly !== false);
+        const showSummary = (component.show_summary_at_end !== false);
+        const continueKey = (component.continue_key ?? 'space').toString();
+
+        const escape = (s) => this.escapeHtml(String(s ?? ''));
+        const escapeAttr = (s) => this.escapeHtmlAttr(String(s ?? ''));
+
+        const getContinueKeyLabel = (raw) => {
+            const k = (raw ?? '').toString();
+            if (k === 'ALL_KEYS') return 'any key';
+            return k;
+        };
+
+        const getScoringBasisLabel = (raw) => {
+            const b = (raw ?? '').toString();
+            if (b === 'accuracy') return 'Accuracy';
+            if (b === 'reaction_time') return 'Reaction time';
+            if (b === 'both') return 'Accuracy + reaction time';
+            return b;
+        };
+
+        const getPreviewVars = () => {
+            const currency = (modalBody.querySelector('#reward_currency_label')?.value ?? currencyLabel).toString() || 'points';
+            const basis = (modalBody.querySelector('#reward_scoring_basis')?.value ?? scoringBasis).toString() || 'both';
+            const rt = Number(modalBody.querySelector('#reward_rt_threshold_ms')?.value);
+            const pts = Number(modalBody.querySelector('#reward_points_per_success')?.value);
+            const cont = (modalBody.querySelector('#reward_continue_key')?.value ?? continueKey).toString() || 'space';
+
+            return {
+                currency_label: currency,
+                scoring_basis_label: getScoringBasisLabel(basis),
+                rt_threshold_ms: Number.isFinite(rt) ? String(rt) : String(rtThreshold),
+                points_per_success: Number.isFinite(pts) ? String(pts) : String(ptsPerSuccess),
+                continue_key_label: getContinueKeyLabel(cont),
+
+                // Totals / live metrics (sample values for preview)
+                total_points: '12',
+                rewarded_trials: '8',
+                eligible_trials: '10',
+                success_streak: '3',
+                badge_level: 'Bronze'
+            };
+        };
+
+        const applyTemplateVars = (html, vars) => {
+            const text = (html ?? '').toString();
+            return text.replace(/{{\s*([a-zA-Z0-9_]+)\s*}}/g, (m, key) => {
+                if (Object.prototype.hasOwnProperty.call(vars, key)) return String(vars[key]);
+                return m;
+            });
+        };
+
+        const resolveMediaUrlForParam = (paramName) => {
+            const inputEl = modalBody.querySelector(`#${CSS.escape(`param_${paramName}`)}`);
+            const val = (inputEl?.value ?? '').toString();
+            if (!val) return '';
+
+            if (val.startsWith('asset://')) {
+                const previewEl = modalBody.querySelector(`#${CSS.escape(`param_${paramName}__preview`)}`);
+                const src = (previewEl && (previewEl.currentSrc || previewEl.src)) ? (previewEl.currentSrc || previewEl.src) : '';
+                return src || '';
+            }
+
+            return val;
+        };
+
+        const getTemplateVariablesHelp = () => {
+            return [
+                '{{currency_label}}',
+                '{{scoring_basis_label}}',
+                '{{rt_threshold_ms}}',
+                '{{points_per_success}}',
+                '{{total_points}}',
+                '{{rewarded_trials}}',
+                '{{eligible_trials}}',
+                '{{success_streak}}',
+                '{{badge_level}}',
+                '{{continue_key_label}}'
+            ].join(', ');
+        };
+
+        const getTemplatePlaceholder = (kind) => {
+            if (kind === 'instructions') {
+                return '<p>You can earn <b>{{currency_label}}</b>.</p>\n<ul>\n<li><b>Basis</b>: {{scoring_basis_label}}</li>\n<li><b>RT threshold</b>: {{rt_threshold_ms}} ms</li>\n<li><b>Points per success</b>: {{points_per_success}}</li>\n</ul>\n<p>Press {{continue_key_label}} to begin.</p>';
+            }
+            if (kind === 'summary') {
+                return '<p><b>Total earned</b>: {{total_points}} {{currency_label}}</p>\n<p><b>Rewarded trials</b>: {{rewarded_trials}} / {{eligible_trials}}</p>\n<p>Press {{continue_key_label}} to finish.</p>';
+            }
+            return '<p>Total so far: <b>{{total_points}}</b> {{currency_label}}</p>\n<p>Press {{continue_key_label}} to continue.</p>';
+        };
+
+        const renderImageAssetField = (paramName, label, initialValue) => {
+            const inputId = `param_${paramName}`;
+            const helpId = `${inputId}__help`;
+            const fileId = `${inputId}__file`;
+            const previewId = `${inputId}__preview`;
+            const clearId = `${inputId}__clear`;
+            const safeVal = (initialValue ?? '').toString();
+            return `
+                <div class="mb-2">
+                    <label class="form-label">${escape(label)}</label>
+                    <div class="d-flex flex-column gap-2">
+                        <div class="input-group">
+                            <span class="input-group-text">URL</span>
+                            <input type="text" class="form-control" id="${escapeAttr(inputId)}" value="${escapeAttr(safeVal)}" aria-describedby="${escapeAttr(helpId)}">
+                        </div>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <input type="file" class="form-control form-control-sm" id="${escapeAttr(fileId)}" accept="image/*"
+                                   data-psy-image-file="1" data-psy-image-param="${escapeAttr(String(paramName))}" style="max-width: 360px;">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="${escapeAttr(clearId)}"
+                                    data-psy-image-clear="1" data-psy-image-param="${escapeAttr(String(paramName))}">
+                                Clear local file
+                            </button>
+                            <small class="text-muted" id="${escapeAttr(helpId)}">
+                                Choose a local image to preview; it is stored as <code>asset://...</code> until exported.
+                            </small>
+                        </div>
+                        <div>
+                            <div class="small text-muted mb-1">Preview</div>
+                            <div class="border rounded p-2">
+                                <img id="${escapeAttr(previewId)}" alt="image preview" style="max-width: 100%; max-height: 240px; display:none;" />
+                                <div class="text-muted" data-psy-image-empty="1" style="display:none;">No image selected.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderAudioAssetField = (paramName, label, initialValue) => {
+            const inputId = `param_${paramName}`;
+            const helpId = `${inputId}__help`;
+            const fileId = `${inputId}__file`;
+            const previewId = `${inputId}__preview`;
+            const clearId = `${inputId}__clear`;
+            const safeVal = (initialValue ?? '').toString();
+            return `
+                <div class="mb-2">
+                    <label class="form-label">${escape(label)}</label>
+                    <div class="d-flex flex-column gap-2">
+                        <div class="input-group">
+                            <span class="input-group-text">URL</span>
+                            <input type="text" class="form-control" id="${escapeAttr(inputId)}" value="${escapeAttr(safeVal)}" aria-describedby="${escapeAttr(helpId)}">
+                        </div>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <input type="file" class="form-control form-control-sm" id="${escapeAttr(fileId)}" accept="audio/*"
+                                   data-psy-audio-file="1" data-psy-audio-param="${escapeAttr(String(paramName))}" style="max-width: 360px;">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="${escapeAttr(clearId)}"
+                                    data-psy-audio-clear="1" data-psy-audio-param="${escapeAttr(String(paramName))}">
+                                Clear local file
+                            </button>
+                            <small class="text-muted" id="${escapeAttr(helpId)}">
+                                Choose a local audio file to preview; it is stored as <code>asset://...</code> until exported.
+                            </small>
+                        </div>
+                        <div>
+                            <div class="small text-muted mb-1">Preview</div>
+                            <div class="border rounded p-2">
+                                <audio id="${escapeAttr(previewId)}" controls style="width: 100%; display:none;"></audio>
+                                <div class="text-muted" data-psy-audio-empty="1" style="display:none;">No audio selected.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderScreenCard = ({ kind, index, screen, titleLabel }) => {
+            const prefix = `rw_${kind}_${index}`;
+            const titleId = `${prefix}__title`;
+            const htmlId = `${prefix}__html`;
+            const imageParam = `${prefix}__image_url`;
+            const audioParam = `${prefix}__audio_url`;
+
+            const imageVal = (screen && typeof screen === 'object') ? (screen.image_url ?? '') : '';
+            const audioVal = (screen && typeof screen === 'object') ? (screen.audio_url ?? '') : '';
+            const titleVal = (screen && typeof screen === 'object') ? (screen.title ?? '') : '';
+            const tplVal = (screen && typeof screen === 'object') ? (screen.template_html ?? screen.html ?? '') : '';
+            const tplPlaceholder = getTemplatePlaceholder(kind);
+
+            return `
+                <div class="reward-screen border rounded p-2" data-rw-kind="${escapeAttr(kind)}" data-rw-index="${escapeAttr(String(index))}">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <strong>${escape(titleLabel)}</strong>
+                        <button type="button" class="btn btn-sm btn-outline-danger" data-rw-action="remove">Remove</button>
+                    </div>
+
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label">Title</label>
+                            <input type="text" class="form-control" id="${escapeAttr(titleId)}" value="${escapeAttr(titleVal)}" placeholder="Screen title">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Template variables</label>
+                            <div class="form-text">
+                                Available: ${escape(getTemplateVariablesHelp())}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-2">
+                        <label class="form-label">HTML (template)</label>
+                        <textarea class="form-control" id="${escapeAttr(htmlId)}" rows="5" placeholder="${escapeAttr(tplPlaceholder)}">${escape(tplVal)}</textarea>
+                        <div class="form-text">You may reference uploaded media URLs directly or embed <code>asset://...</code> which will be uploaded on Export.</div>
+                    </div>
+
+                    <div class="mt-2">
+                        <button type="button" class="btn btn-sm btn-outline-primary" data-rw-action="preview">Preview this screen</button>
+                        <div class="border rounded p-2 mt-2" data-rw-preview="1" style="display:none;"></div>
+                        <div class="form-text">Preview uses sample values for totals (e.g., <code>{{total_points}}</code>) and the selected image/audio from this editor.</div>
+                    </div>
+
+                    <div class="mt-2">
+                        ${renderImageAssetField(imageParam, 'Image (optional)', imageVal)}
+                        ${renderAudioAssetField(audioParam, 'Audio (optional)', audioVal)}
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderPreviewForScreenCard = (cardEl) => {
+            if (!cardEl) return;
+            const kind = (cardEl.getAttribute('data-rw-kind') ?? '').toString();
+            const index = Number(cardEl.getAttribute('data-rw-index'));
+            if (!kind || !Number.isFinite(index)) return;
+
+            const prefix = `rw_${kind}_${index}`;
+            const html = (modalBody.querySelector(`#${CSS.escape(`${prefix}__html`)}`)?.value ?? '').toString();
+            const imgSrc = resolveMediaUrlForParam(`${prefix}__image_url`);
+            const audSrc = resolveMediaUrlForParam(`${prefix}__audio_url`);
+            const vars = getPreviewVars();
+
+            const previewEl = cardEl.querySelector('[data-rw-preview="1"]');
+            if (!previewEl) return;
+
+            const rendered = applyTemplateVars(html || getTemplatePlaceholder(kind), vars);
+
+            let mediaHtml = '';
+            if (imgSrc) {
+                mediaHtml += `<div class="mb-2"><img src="${escapeAttr(imgSrc)}" alt="preview image" style="max-width:100%; max-height:240px;"></div>`;
+            }
+            if (audSrc) {
+                mediaHtml += `<div class="mb-2"><audio src="${escapeAttr(audSrc)}" controls style="width:100%;"></audio></div>`;
+            }
+
+            previewEl.innerHTML = `${mediaHtml}<div>${rendered}</div>`;
+            previewEl.style.display = '';
+        };
+
+        const bindPreviewButtons = (rootEl) => {
+            if (!rootEl) return;
+            rootEl.querySelectorAll('button[data-rw-action="preview"]').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const cardEl = btn.closest('.reward-screen');
+                    renderPreviewForScreenCard(cardEl);
+                });
+            });
+        };
+
+        const bindRemoveButtons = (rootEl) => {
+            if (!rootEl) return;
+            rootEl.querySelectorAll('button[data-rw-action="remove"]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    try {
+                        btn.closest('.reward-screen')?.remove();
+                    } catch {
+                        // ignore
+                    }
+                });
+            });
+        };
+
+        const bindScreenCardBehaviors = (rootEl) => {
+            bindRemoveButtons(rootEl);
+            bindPreviewButtons(rootEl);
+        };
+
+        modalBody.innerHTML = `
+            <div class="d-flex flex-column gap-3">
+                <div class="border rounded p-2">
+                    <h6 class="mb-2">Scoring</h6>
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <label class="form-label">Store key</label>
+                            <input type="text" class="form-control" id="reward_store_key" value="${escapeAttr(storeKey)}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Currency label</label>
+                            <input type="text" class="form-control" id="reward_currency_label" value="${escapeAttr(currencyLabel)}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Continue key</label>
+                            <select class="form-select" id="reward_continue_key">
+                                <option value="space">space</option>
+                                <option value="enter">enter</option>
+                                <option value="ALL_KEYS">ALL_KEYS</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Scoring basis</label>
+                            <select class="form-select" id="reward_scoring_basis">
+                                <option value="accuracy">accuracy</option>
+                                <option value="reaction_time">reaction_time</option>
+                                <option value="both">both</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">RT threshold (ms)</label>
+                            <input type="number" class="form-control" id="reward_rt_threshold_ms" min="0" max="60000" step="1" value="${escapeAttr(String(rtThreshold))}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Points per success</label>
+                            <input type="number" class="form-control" id="reward_points_per_success" min="0" max="1000" step="0.1" value="${escapeAttr(String(ptsPerSuccess))}">
+                        </div>
+                    </div>
+
+                    <div class="form-check form-switch mt-2">
+                        <input class="form-check-input" type="checkbox" id="reward_require_correct_for_rt" ${requireCorrectForRt ? 'checked' : ''}>
+                        <label class="form-check-label" for="reward_require_correct_for_rt">Require correct response for RT-based success</label>
+                    </div>
+                    <div class="form-check form-switch mt-1">
+                        <input class="form-check-input" type="checkbox" id="reward_calculate_on_the_fly" ${calcOnFly ? 'checked' : ''}>
+                        <label class="form-check-label" for="reward_calculate_on_the_fly">Update totals on the fly</label>
+                    </div>
+                    <div class="form-check form-switch mt-1">
+                        <input class="form-check-input" type="checkbox" id="reward_show_summary_at_end" ${showSummary ? 'checked' : ''}>
+                        <label class="form-check-label" for="reward_show_summary_at_end">Show final summary screen</label>
+                    </div>
+                </div>
+
+                <div class="border rounded p-2">
+                    <h6 class="mb-2">Instructions Screen</h6>
+                    <div id="rw_instructions"></div>
+                </div>
+
+                <div class="border rounded p-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0">Additional Screens (shown after instructions)</h6>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="rw_add_intermediate">
+                            <i class="fas fa-plus"></i> Add screen
+                        </button>
+                    </div>
+                    <div class="form-text mb-2">These screens are shown once, before the first task trial.</div>
+                    <div id="rw_intermediate_list" class="d-flex flex-column gap-2"></div>
+                </div>
+
+                <div class="border rounded p-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0">Milestone Screens (achievement-based or trial-count-based)</h6>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="rw_add_milestone">
+                            <i class="fas fa-plus"></i> Add milestone
+                        </button>
+                    </div>
+                    <div class="form-text mb-2">Each milestone triggers a screen immediately after the trial that achieves it.</div>
+                    <div id="rw_milestone_list" class="d-flex flex-column gap-2"></div>
+                </div>
+
+                <div class="border rounded p-2">
+                    <h6 class="mb-2">Final Summary Screen</h6>
+                    <div id="rw_summary"></div>
+                </div>
+            </div>
+        `;
+
+        // Set selects
+        const contEl = modalBody.querySelector('#reward_continue_key');
+        if (contEl) contEl.value = continueKey;
+        const basisEl = modalBody.querySelector('#reward_scoring_basis');
+        if (basisEl) basisEl.value = scoringBasis;
+
+        // Render fixed instruction + summary cards
+        const instrHost = modalBody.querySelector('#rw_instructions');
+        if (instrHost) {
+            instrHost.innerHTML = renderScreenCard({
+                kind: 'instructions',
+                index: 0,
+                screen: instructionsScreen,
+                titleLabel: 'Instructions'
+            });
+            bindScreenCardBehaviors(instrHost);
+        }
+        const summaryHost = modalBody.querySelector('#rw_summary');
+        if (summaryHost) {
+            summaryHost.innerHTML = renderScreenCard({
+                kind: 'summary',
+                index: 0,
+                screen: summaryScreen,
+                titleLabel: 'Summary'
+            });
+            bindScreenCardBehaviors(summaryHost);
+        }
+
+        const nextChildIndex = (containerEl, selector, attrName) => {
+            if (!containerEl) return 0;
+            let max = -1;
+            containerEl.querySelectorAll(selector).forEach((el) => {
+                const raw = el.getAttribute(attrName);
+                const n = Number(raw);
+                if (Number.isFinite(n) && n > max) max = n;
+            });
+            return max + 1;
+        };
+
+        // Helper to create intermediate screen
+        const intermediateList = modalBody.querySelector('#rw_intermediate_list');
+        const addIntermediate = (screen = {}) => {
+            if (!intermediateList) return;
+            const idx = nextChildIndex(intermediateList, '.reward-screen[data-rw-kind="intermediate"]', 'data-rw-index');
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = renderScreenCard({ kind: 'intermediate', index: idx, screen, titleLabel: `Additional screen #${idx + 1}` });
+            const el = wrapper.firstElementChild;
+            if (el) {
+                intermediateList.appendChild(el);
+                bindScreenCardBehaviors(el);
+                try { this.setupImageParameterInputs(modalBody); } catch { /* ignore */ }
+                try { this.setupAudioParameterInputs(modalBody); } catch { /* ignore */ }
+            }
+        };
+
+        (Array.isArray(intermediateScreens) ? intermediateScreens : []).forEach(s => addIntermediate(s));
+        const addIntermediateBtn = modalBody.querySelector('#rw_add_intermediate');
+        if (addIntermediateBtn) {
+            addIntermediateBtn.addEventListener('click', () => addIntermediate({
+                title: '',
+                template_html: getTemplatePlaceholder('intermediate')
+            }));
+        }
+
+        // Helper to create milestone rule + screen
+        const milestoneList = modalBody.querySelector('#rw_milestone_list');
+        const addMilestone = (m = {}) => {
+            if (!milestoneList) return;
+            const idx = nextChildIndex(milestoneList, '.rw-milestone', 'data-rw-milestone-index');
+
+            const triggerType = (m.trigger_type ?? m.trigger ?? 'trial_count').toString();
+            const threshold = safeNum(m.threshold ?? m.value ?? 10, 10);
+            const scr = (m.screen && typeof m.screen === 'object') ? m.screen : m;
+
+            const prefix = `rw_milestone_${idx}`;
+            const triggerId = `${prefix}__trigger`;
+            const thresholdId = `${prefix}__threshold`;
+
+            const outer = document.createElement('div');
+            outer.className = 'rw-milestone border rounded p-2';
+            outer.setAttribute('data-rw-milestone-index', String(idx));
+            outer.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center">
+                    <strong>Milestone #${idx + 1}</strong>
+                    <button type="button" class="btn btn-sm btn-outline-danger" data-rw-action="remove-milestone">Remove</button>
+                </div>
+                <div class="row g-2 mt-1">
+                    <div class="col-md-6">
+                        <label class="form-label">Trigger</label>
+                        <select class="form-select" id="${escapeAttr(triggerId)}">
+                            <option value="trial_count">After X trials</option>
+                            <option value="total_points">After X total points</option>
+                            <option value="success_streak">After X successful trials in a row</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Threshold (X)</label>
+                        <input type="number" class="form-control" id="${escapeAttr(thresholdId)}" min="1" step="1" value="${escapeAttr(String(threshold))}">
+                    </div>
+                </div>
+                <div class="mt-2" data-rw-milestone-screen="1"></div>
+            `;
+
+            const scrHost = outer.querySelector('[data-rw-milestone-screen="1"]');
+            if (scrHost) {
+                scrHost.innerHTML = renderScreenCard({ kind: 'milestone', index: idx, screen: scr, titleLabel: 'Milestone screen' });
+                bindScreenCardBehaviors(scrHost);
+            }
+
+            milestoneList.appendChild(outer);
+            const trigEl = outer.querySelector(`#${CSS.escape(triggerId)}`);
+            if (trigEl) trigEl.value = (triggerType === 'success_streak') ? 'success_streak'
+                : (triggerType === 'total_points') ? 'total_points'
+                : 'trial_count';
+
+            const rmBtn = outer.querySelector('button[data-rw-action="remove-milestone"]');
+            if (rmBtn) {
+                rmBtn.addEventListener('click', () => outer.remove());
+            }
+
+            try { this.setupImageParameterInputs(modalBody); } catch { /* ignore */ }
+            try { this.setupAudioParameterInputs(modalBody); } catch { /* ignore */ }
+        };
+
+        (Array.isArray(milestones) ? milestones : []).forEach(m => addMilestone(m));
+        const addMilestoneBtn = modalBody.querySelector('#rw_add_milestone');
+        if (addMilestoneBtn) {
+            addMilestoneBtn.addEventListener('click', () => addMilestone({
+                trigger_type: 'trial_count',
+                threshold: 10,
+                screen: {
+                    title: '',
+                    template_html: getTemplatePlaceholder('milestone')
+                }
+            }));
+        }
+
+        // Bind asset pickers + previews for the whole modal.
+        try { this.setupImageParameterInputs(modalBody); } catch { /* ignore */ }
+        try { this.setupAudioParameterInputs(modalBody); } catch { /* ignore */ }
+
+        const bootstrapModal = new bootstrap.Modal(modal);
+        bootstrapModal.show();
+    }
+
+    collectRewardSettingsFromModal(modalBody) {
+        const getText = (sel) => (modalBody.querySelector(sel)?.value ?? '').toString();
+        const getNum = (sel, fallback) => {
+            const raw = modalBody.querySelector(sel)?.value;
+            const n = Number(raw);
+            return Number.isFinite(n) ? n : fallback;
+        };
+        const getBool = (sel) => !!modalBody.querySelector(sel)?.checked;
+
+        const store_key = getText('#reward_store_key') || '__psy_rewards';
+        const currency_label = getText('#reward_currency_label') || 'points';
+        const continue_key = getText('#reward_continue_key') || 'space';
+        const scoring_basis = getText('#reward_scoring_basis') || 'both';
+        const rt_threshold_ms = getNum('#reward_rt_threshold_ms', 600);
+        const points_per_success = getNum('#reward_points_per_success', 1);
+        const require_correct_for_rt = getBool('#reward_require_correct_for_rt');
+        const calculate_on_the_fly = getBool('#reward_calculate_on_the_fly');
+        const show_summary_at_end = getBool('#reward_show_summary_at_end');
+
+        const readScreen = (kind, index) => {
+            const prefix = `rw_${kind}_${index}`;
+            const title = (modalBody.querySelector(`#${CSS.escape(`${prefix}__title`)}`)?.value ?? '').toString();
+            const template_html = (modalBody.querySelector(`#${CSS.escape(`${prefix}__html`)}`)?.value ?? '').toString();
+            const image_url = (modalBody.querySelector(`#${CSS.escape(`param_${prefix}__image_url`)}`)?.value ?? '').toString();
+            const audio_url = (modalBody.querySelector(`#${CSS.escape(`param_${prefix}__audio_url`)}`)?.value ?? '').toString();
+            return { title, template_html, image_url, audio_url };
+        };
+
+        const instructions_screen = readScreen('instructions', 0);
+        const summary_screen = readScreen('summary', 0);
+
+        const intermediate_screens = [];
+        modalBody.querySelectorAll('.reward-screen[data-rw-kind="intermediate"]').forEach((el) => {
+            const idx = Number(el.getAttribute('data-rw-index'));
+            if (!Number.isFinite(idx)) return;
+            intermediate_screens.push(readScreen('intermediate', idx));
+        });
+
+        const milestones = [];
+        modalBody.querySelectorAll('.rw-milestone').forEach((outer) => {
+            const idxRaw = outer.getAttribute('data-rw-milestone-index');
+            const idx = Number(idxRaw);
+            const safeIdx = Number.isFinite(idx) ? idx : milestones.length;
+
+            const trigger = (outer.querySelector(`#${CSS.escape(`rw_milestone_${safeIdx}__trigger`)}`)?.value ?? 'trial_count').toString();
+            const thresholdRaw = outer.querySelector(`#${CSS.escape(`rw_milestone_${safeIdx}__threshold`)}`)?.value;
+            const threshold = Number.parseInt(thresholdRaw, 10);
+
+            const screen = readScreen('milestone', safeIdx);
+            milestones.push({
+                id: `m${milestones.length + 1}`,
+                trigger_type: (trigger === 'total_points') ? 'total_points'
+                    : (trigger === 'success_streak') ? 'success_streak'
+                    : 'trial_count',
+                threshold: Number.isFinite(threshold) ? threshold : 10,
+                screen
+            });
+        });
+
+        // Keep legacy flat fields for backward compatibility with older Interpreters.
+        const instructions_title = (instructions_screen.title || 'Rewards').toString();
+        const instructions_template_html = (instructions_screen.template_html || '').toString();
+        const summary_title = (summary_screen.title || 'Rewards Summary').toString();
+        const summary_template_html = (summary_screen.template_html || '').toString();
+
+        return {
+            store_key,
+            currency_label,
+            scoring_basis,
+            rt_threshold_ms,
+            points_per_success,
+            require_correct_for_rt,
+            calculate_on_the_fly,
+            show_summary_at_end,
+            continue_key,
+
+            instructions_screen,
+            intermediate_screens,
+            milestones,
+            summary_screen,
+
+            instructions_title,
+            instructions_template_html,
+            summary_title,
+            summary_template_html
+        };
     }
 
     showSurveyResponseParameterModal(component, componentElement, { modal, modalBody, modalTitle }) {
@@ -1768,6 +2414,47 @@ class TimelineBuilder {
                 ...survey
             };
 
+            // Legacy DRT per-element toggle is deprecated; never persist it.
+            if (Object.prototype.hasOwnProperty.call(updatedData, 'detection_response_task_enabled')) {
+                delete updatedData.detection_response_task_enabled;
+            }
+            if (updatedData.parameters && typeof updatedData.parameters === 'object') {
+                if (Object.prototype.hasOwnProperty.call(updatedData.parameters, 'detection_response_task_enabled')) {
+                    delete updatedData.parameters.detection_response_task_enabled;
+                }
+            }
+
+            this.jsonBuilder.currentEditingComponent.dataset.componentData = JSON.stringify(updatedData);
+            this.jsonBuilder.updateJSON();
+
+            const paramModal = document.getElementById('parameterModal');
+            const bootstrapModal = bootstrap.Modal.getInstance(paramModal);
+            if (bootstrapModal) {
+                bootstrapModal.hide();
+            }
+            return;
+        }
+
+        // Reward settings editor uses a custom DOM (screens + milestones)
+        if (currentData.type === 'reward-settings') {
+            const rewards = this.collectRewardSettingsFromModal(modalBody);
+            const updatedData = {
+                type: currentData.type,
+                name: currentData.name || 'Reward Settings',
+                ...currentData,
+                ...rewards
+            };
+
+            // Legacy DRT per-element toggle is deprecated; never persist it.
+            if (Object.prototype.hasOwnProperty.call(updatedData, 'detection_response_task_enabled')) {
+                delete updatedData.detection_response_task_enabled;
+            }
+            if (updatedData.parameters && typeof updatedData.parameters === 'object') {
+                if (Object.prototype.hasOwnProperty.call(updatedData.parameters, 'detection_response_task_enabled')) {
+                    delete updatedData.parameters.detection_response_task_enabled;
+                }
+            }
+
             this.jsonBuilder.currentEditingComponent.dataset.componentData = JSON.stringify(updatedData);
             this.jsonBuilder.updateJSON();
 
@@ -2095,6 +2782,16 @@ class TimelineBuilder {
                     ...currentData, // Include any other existing properties
                     ...newParameters // Override with new parameters
                 };
+            }
+
+            // Legacy DRT per-element toggle is deprecated; never persist it.
+            if (Object.prototype.hasOwnProperty.call(updatedData, 'detection_response_task_enabled')) {
+                delete updatedData.detection_response_task_enabled;
+            }
+            if (updatedData.parameters && typeof updatedData.parameters === 'object') {
+                if (Object.prototype.hasOwnProperty.call(updatedData.parameters, 'detection_response_task_enabled')) {
+                    delete updatedData.parameters.detection_response_task_enabled;
+                }
             }
 
             // WCST-like: keep output clean when toggling response device.

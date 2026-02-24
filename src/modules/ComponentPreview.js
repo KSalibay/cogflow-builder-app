@@ -1061,64 +1061,155 @@ class ComponentPreview {
             });
         };
 
-        const currency = (componentData?.currency_label || 'points').toString();
-        const basis = (componentData?.scoring_basis || 'both').toString();
-        const rtThresh = Number.isFinite(Number(componentData?.rt_threshold_ms)) ? Number(componentData.rt_threshold_ms) : 600;
-        const pps = Number.isFinite(Number(componentData?.points_per_success)) ? Number(componentData.points_per_success) : 1;
-        const instrTitle = (componentData?.instructions_title || 'Rewards').toString();
-        const sumTitle = (componentData?.summary_title || 'Rewards Summary').toString();
-
-        const varsInstr = {
-            currency_label: currency,
-            scoring_basis: basis,
-            scoring_basis_label: basis,
-            rt_threshold_ms: rtThresh,
-            points_per_success: pps,
-            continue_key_label: 'SPACE'
+        const normalizeScreen = (raw, legacyTitle, legacyTpl) => {
+            const s = (raw && typeof raw === 'object') ? raw : {};
+            return {
+                title: (s.title ?? legacyTitle ?? '').toString() || 'Rewards',
+                template_html: (s.template_html ?? s.html ?? legacyTpl ?? '').toString(),
+                image_url: (s.image_url ?? '').toString(),
+                audio_url: (s.audio_url ?? '').toString()
+            };
         };
 
-        const instrHtml = componentData?.instructions_template_html
-            ? rewriteAssetRefsInHtml(renderTemplate(componentData.instructions_template_html, varsInstr))
-            : `<p>You can earn <b>${escapeHtml(currency)}</b> during the task.</p>`;
+        const currency = (componentData?.currency_label || 'points').toString();
+        const basis = (componentData?.scoring_basis || 'both').toString();
+        const continueKey = (componentData?.continue_key ?? 'space').toString();
+        const rtThresh = Number.isFinite(Number(componentData?.rt_threshold_ms)) ? Number(componentData.rt_threshold_ms) : 600;
+        const pps = Number.isFinite(Number(componentData?.points_per_success)) ? Number(componentData.points_per_success) : 1;
 
-        const varsSum = {
+        const scoringBasisLabel = (b) => {
+            if (b === 'accuracy') return 'Accuracy';
+            if (b === 'reaction_time') return 'Reaction time';
+            if (b === 'both') return 'Accuracy + reaction time';
+            return b;
+        };
+
+        const continueKeyLabel = (k) => {
+            if (k === 'ALL_KEYS') return 'ANY KEY';
+            return k.toUpperCase();
+        };
+
+        // Support both legacy flat fields and v2 nested screen objects.
+        const instructionsScreenObj = normalizeScreen(
+            componentData?.instructions_screen,
+            componentData?.instructions_title,
+            componentData?.instructions_template_html
+        );
+        const summaryScreenObj = normalizeScreen(
+            componentData?.summary_screen,
+            componentData?.summary_title,
+            componentData?.summary_template_html
+        );
+
+        const intermediateScreens = Array.isArray(componentData?.intermediate_screens)
+            ? componentData.intermediate_screens
+            : (Array.isArray(componentData?.extra_screens) ? componentData.extra_screens : []);
+
+        const milestones = Array.isArray(componentData?.milestones) ? componentData.milestones : [];
+
+        const vars = {
             currency_label: currency,
+            scoring_basis: basis,
+            scoring_basis_label: scoringBasisLabel(basis),
+            rt_threshold_ms: rtThresh,
+            points_per_success: pps,
+            continue_key_label: continueKeyLabel(continueKey),
+
+            // sample values for preview
             total_points: 12,
             rewarded_trials: 8,
             eligible_trials: 20,
-            points_per_success: pps,
-            rt_threshold_ms: rtThresh
+            success_streak: 3,
+            badge_level: 'Bronze'
         };
 
-        const sumHtml = componentData?.summary_template_html
-            ? rewriteAssetRefsInHtml(renderTemplate(componentData.summary_template_html, varsSum))
-            : `<p>Total: <b>${varsSum.total_points}</b> ${escapeHtml(currency)}.</p>`;
+        const resolveMediaUrl = (rawUrl) => {
+            const u = (rawUrl ?? '').toString();
+            if (!u) return '';
+            const resolved = this.resolveMaybeAssetUrl(u);
+            return resolved || u;
+        };
 
-        const instructionsScreen = `
-            <h5 style="margin:0 0 10px 0;">${escapeHtml(instrTitle)}</h5>
-            <div>${instrHtml}</div>
-            <div style="margin-top:14px; font-size:12px; opacity:0.75;">
-                <div><b>Scoring:</b> ${escapeHtml(basis)}</div>
-                <div><b>RT threshold:</b> ${rtThresh}ms</div>
-                <div><b>Points per success:</b> ${pps}</div>
-            </div>
-        `;
+        const renderRewardScreen = (screen, { subtitle = '' } = {}) => {
+            const title = (screen?.title ?? '').toString();
+            const tpl = (screen?.template_html ?? '').toString();
+            const html = tpl
+                ? rewriteAssetRefsInHtml(renderTemplate(tpl, vars))
+                : '<div class="text-muted">No HTML template provided.</div>';
 
-        const summaryScreen = `
-            <h5 style="margin:0 0 10px 0;">${escapeHtml(sumTitle)}</h5>
-            <div>${sumHtml}</div>
-            <div style="margin-top:14px; font-size:12px; opacity:0.75;">Preview uses example totals.</div>
-        `;
+            const img = resolveMediaUrl(screen?.image_url);
+            const aud = resolveMediaUrl(screen?.audio_url);
+
+            const mediaHtml = `
+                ${img ? `<div style="margin:0 0 12px 0;"><img src="${escapeHtml(img)}" alt="preview image" style="max-width:100%; max-height:260px;"></div>` : ''}
+                ${aud ? `<div style="margin:0 0 12px 0;"><audio src="${escapeHtml(aud)}" controls style="width:100%;"></audio></div>` : ''}
+            `;
+
+            const subtitleHtml = subtitle ? `<div style="margin:0 0 10px 0; font-size:12px; opacity:0.75;">${escapeHtml(subtitle)}</div>` : '';
+            return `
+                <h5 style="margin:0 0 10px 0;">${escapeHtml(title || 'Rewards')}</h5>
+                ${subtitleHtml}
+                ${mediaHtml}
+                <div>${html}</div>
+            `;
+        };
+
+        const screens = [];
+        screens.push({
+            id: 'rew_instr',
+            label: 'Instructions',
+            body: renderRewardScreen(instructionsScreenObj, {
+                subtitle: `Scoring: ${vars.scoring_basis_label} • RT threshold: ${rtThresh}ms • Points per success: ${pps}`
+            })
+        });
+
+        intermediateScreens.forEach((s, i) => {
+            const screenObj = normalizeScreen(s, `Additional screen #${i + 1}`, '');
+            screens.push({
+                id: `rew_int_${i + 1}`,
+                label: `Additional ${i + 1}`,
+                body: renderRewardScreen(screenObj)
+            });
+        });
+
+        milestones.forEach((m, i) => {
+            const triggerType = (m?.trigger_type ?? m?.trigger ?? 'trial_count').toString();
+            const threshold = Number.isFinite(Number(m?.threshold ?? m?.value)) ? Number(m.threshold ?? m.value) : 10;
+            const scr = (m?.screen && typeof m.screen === 'object') ? m.screen : m;
+            const screenObj = normalizeScreen(scr, `Milestone ${i + 1}`, '');
+
+            const triggerLabel = (triggerType === 'total_points')
+                ? `After ${threshold} total points`
+                : (triggerType === 'success_streak')
+                    ? `After ${threshold} successful trials in a row`
+                    : `After ${threshold} trials`;
+
+            screens.push({
+                id: `rew_ms_${i + 1}`,
+                label: `Milestone ${i + 1}`,
+                body: renderRewardScreen(screenObj, { subtitle: triggerLabel })
+            });
+        });
+
+        screens.push({
+            id: 'rew_sum',
+            label: 'Final summary',
+            body: renderRewardScreen(summaryScreenObj, { subtitle: 'Preview uses example totals.' })
+        });
+
+        const tabsHtml = screens.map((s, idx) => {
+            const active = idx === 0 ? 'active' : '';
+            return `<li class="nav-item" role="presentation"><button class="nav-link ${active}" data-bs-toggle="tab" data-bs-target="#${s.id}" type="button" role="tab">${escapeHtml(s.label)}</button></li>`;
+        }).join('');
+
+        const panesHtml = screens.map((s, idx) => {
+            const active = idx === 0 ? 'show active' : '';
+            return `<div class="tab-pane fade ${active}" id="${s.id}" role="tabpanel">${this.wrapCenteredPreview(s.body)}</div>`;
+        }).join('');
 
         modalBody.innerHTML = `
-            <ul class="nav nav-tabs" role="tablist">
-              <li class="nav-item" role="presentation"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#rew_instr" type="button" role="tab">Instructions</button></li>
-              <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#rew_sum" type="button" role="tab">Final summary</button></li>
-            </ul>
-            <div class="tab-content" style="margin-top:10px;">
-              <div class="tab-pane fade show active" id="rew_instr" role="tabpanel">${this.wrapCenteredPreview(instructionsScreen)}</div>
-              <div class="tab-pane fade" id="rew_sum" role="tabpanel">${this.wrapCenteredPreview(summaryScreen)}</div>
-            </div>
+            <ul class="nav nav-tabs" role="tablist">${tabsHtml}</ul>
+            <div class="tab-content" style="margin-top:10px;">${panesHtml}</div>
         `;
 
         modal.show();
