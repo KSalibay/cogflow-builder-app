@@ -1145,6 +1145,29 @@ class TimelineBuilder {
             ? this.jsonBuilder.getComponentDefinitions()
             : [];
 
+        const isDrtStart = (type === 'detection-response-task-start');
+        const isoLockedFieldNames = new Set([
+            'min_iti_ms',
+            'max_iti_ms',
+            'stimulus_duration_ms',
+            'min_rt_ms',
+            'max_rt_ms'
+        ]);
+
+        const overrideIso = (() => {
+            try {
+                if (component?.parameters && Object.prototype.hasOwnProperty.call(component.parameters, 'override_iso_standard')) {
+                    return !!component.parameters.override_iso_standard;
+                }
+                if (Object.prototype.hasOwnProperty.call(component || {}, 'override_iso_standard')) {
+                    return !!component.override_iso_standard;
+                }
+            } catch {
+                // ignore
+            }
+            return false;
+        })();
+
         const def = Array.isArray(defs)
             ? defs.find(d => d && (d.id === type || d.type === type))
             : null;
@@ -1166,10 +1189,20 @@ class TimelineBuilder {
                 currentValue = (paramDef && typeof paramDef === 'object') ? paramDef.default : undefined;
             }
 
+            const shouldDisable = isDrtStart && isoLockedFieldNames.has(paramName) && !overrideIso;
+            const label = (isDrtStart && paramName === 'override_iso_standard')
+                ? 'Override ISO standard'
+                : this.formatParameterName(paramName);
+
+            const helpText = (isDrtStart && paramName === 'override_iso_standard')
+                ? '<div class="form-text">When unchecked, ISO timing/RT fields are locked to default values.</div>'
+                : '';
+
             formHtml += `
                 <div class="mb-3" data-param-name="${this.escapeHtmlAttr(paramName)}">
-                    <label for="param_${this.escapeHtmlAttr(paramName)}" class="form-label">${this.formatParameterName(paramName)}</label>
-                    ${this.generateParameterInputFromComponentDef(paramName, paramDef, currentValue)}
+                    <label for="param_${this.escapeHtmlAttr(paramName)}" class="form-label">${label}</label>
+                    ${this.generateParameterInputFromComponentDef(paramName, paramDef, currentValue, shouldDisable)}
+                    ${helpText}
                 </div>
             `;
         }
@@ -1177,10 +1210,12 @@ class TimelineBuilder {
         return formHtml;
     }
 
-    generateParameterInputFromComponentDef(paramName, paramDef, currentValue) {
+    generateParameterInputFromComponentDef(paramName, paramDef, currentValue, shouldDisable = false) {
         const inputId = `param_${paramName}`;
         const def = (paramDef && typeof paramDef === 'object') ? paramDef : {};
         const t = (def.type ?? 'string').toString();
+
+        const disabledAttr = shouldDisable ? 'disabled' : '';
 
         const safeVal = (currentValue === undefined || currentValue === null)
             ? (def.default ?? '')
@@ -1189,7 +1224,7 @@ class TimelineBuilder {
         if (t === 'boolean') {
             return `
                 <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="${this.escapeHtmlAttr(inputId)}" ${safeVal ? 'checked' : ''}>
+                    <input class="form-check-input" type="checkbox" id="${this.escapeHtmlAttr(inputId)}" ${safeVal ? 'checked' : ''} ${disabledAttr}>
                 </div>
             `;
         }
@@ -1203,27 +1238,27 @@ class TimelineBuilder {
                     return `<option value="${this.escapeHtmlAttr(ov)}" ${ov === v ? 'selected' : ''}>${this.escapeHtml(ov)}</option>`;
                 })
                 .join('');
-            return `<select class="form-select" id="${this.escapeHtmlAttr(inputId)}">${optionsHtml}</select>`;
+            return `<select class="form-select" id="${this.escapeHtmlAttr(inputId)}" ${disabledAttr}>${optionsHtml}</select>`;
         }
 
         if (t === 'number') {
             const minAttr = (def.min !== undefined && def.min !== null) ? ` min="${this.escapeHtmlAttr(String(def.min))}"` : '';
             const maxAttr = (def.max !== undefined && def.max !== null) ? ` max="${this.escapeHtmlAttr(String(def.max))}"` : '';
             const stepAttr = (def.step !== undefined && def.step !== null) ? ` step="${this.escapeHtmlAttr(String(def.step))}"` : '';
-            return `<input type="number" class="form-control" id="${this.escapeHtmlAttr(inputId)}" value="${this.escapeHtmlAttr(String(safeVal))}"${minAttr}${maxAttr}${stepAttr}>`;
+            return `<input type="number" class="form-control" id="${this.escapeHtmlAttr(inputId)}" value="${this.escapeHtmlAttr(String(safeVal))}"${minAttr}${maxAttr}${stepAttr} ${disabledAttr}>`;
         }
 
         if (t === 'COLOR') {
             const v = (safeVal ?? '').toString() || (def.default ?? '#ff3b3b');
             return `
                 <div class="d-flex gap-2">
-                    <input type="color" class="form-control form-control-color" id="${this.escapeHtmlAttr(inputId)}" value="${this.escapeHtmlAttr(v)}">
-                    <input type="text" class="form-control" id="${this.escapeHtmlAttr(inputId)}_hex" value="${this.escapeHtmlAttr(v)}" placeholder="#RRGGBB" pattern="^#[0-9A-Fa-f]{6}$">
+                    <input type="color" class="form-control form-control-color" id="${this.escapeHtmlAttr(inputId)}" value="${this.escapeHtmlAttr(v)}" ${disabledAttr}>
+                    <input type="text" class="form-control" id="${this.escapeHtmlAttr(inputId)}_hex" value="${this.escapeHtmlAttr(v)}" placeholder="#RRGGBB" pattern="^#[0-9A-Fa-f]{6}$" ${disabledAttr}>
                 </div>
             `;
         }
 
-        return `<input type="text" class="form-control" id="${this.escapeHtmlAttr(inputId)}" value="${this.escapeHtmlAttr(String(safeVal))}">`;
+        return `<input type="text" class="form-control" id="${this.escapeHtmlAttr(inputId)}" value="${this.escapeHtmlAttr(String(safeVal))}" ${disabledAttr}>`;
     }
 
     escapeHtmlAttr(str) {
@@ -2152,6 +2187,40 @@ class TimelineBuilder {
         } catch (e) {
             console.warn('Audio parameter setup failed:', e);
         }
+
+        // DRT ISO override behavior (component-definitions based editor)
+        try {
+            const type = (component?.type ?? '').toString();
+            if (type === 'detection-response-task-start') {
+                const overrideEl = formContainer.querySelector('#param_override_iso_standard');
+                const isoFields = [
+                    { name: 'min_iti_ms', value: 3000 },
+                    { name: 'max_iti_ms', value: 5000 },
+                    { name: 'stimulus_duration_ms', value: 1000 },
+                    { name: 'min_rt_ms', value: 100 },
+                    { name: 'max_rt_ms', value: 2500 }
+                ];
+
+                const applyIsoLockState = () => {
+                    const override = !!overrideEl?.checked;
+                    isoFields.forEach(({ name, value }) => {
+                        const el = formContainer.querySelector(`#${CSS.escape(`param_${name}`)}`);
+                        if (!el) return;
+                        el.disabled = !override;
+                        if (!override) {
+                            el.value = String(value);
+                        }
+                    });
+                };
+
+                if (overrideEl) {
+                    overrideEl.addEventListener('change', applyIsoLockState);
+                }
+                applyIsoLockState();
+            }
+        } catch {
+            // ignore
+        }
     }
 
     setupAudioParameterInputs(formContainer) {
@@ -2525,6 +2594,26 @@ class TimelineBuilder {
 
             newParameters[paramName] = value;
         });
+
+        // DRT Start: ISO-compliant by default unless explicitly overridden.
+        try {
+            const isDrtStart = (currentData.type || '') === 'detection-response-task-start';
+            if (isDrtStart) {
+                const override = (newParameters.override_iso_standard !== undefined)
+                    ? !!newParameters.override_iso_standard
+                    : !!(currentData.parameters?.override_iso_standard ?? currentData.override_iso_standard);
+
+                if (!override) {
+                    newParameters.min_iti_ms = 3000;
+                    newParameters.max_iti_ms = 5000;
+                    newParameters.stimulus_duration_ms = 1000;
+                    newParameters.min_rt_ms = 100;
+                    newParameters.max_rt_ms = 2500;
+                }
+            }
+        } catch {
+            // ignore
+        }
 
         // Block length: default to (and cap at) the experiment-wide length.
         // Researchers may shorten blocks, but cannot extend them beyond the experiment length.

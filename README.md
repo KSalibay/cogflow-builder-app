@@ -20,6 +20,7 @@ This app is plain HTML/CSS/JS loaded via classic `<script>` tags (globals; no `i
 - UX overhaul (“CogFlow” rebrand): palette-driven theming (CSS variables), IBM Plex Sans typography, collapsible parameter groups for long defaults, and an app-shell layout to avoid whole-page scrolling.
 - Accessibility Mode toggle added (Atkinson Hyperlegible + higher contrast tokens), persisted locally.
 - New **JATOS Props** button generates a ready-to-paste JATOS **Component Properties** JSON bundle for Token Store exports (including **multi-config** bundles).
+- DRT (Detection Response Task) is ISO-compliant by default (timing/RT defaults) with an **Override ISO standard** toggle on `detection-response-task-start` for researchers who explicitly need to edit those values.
 
 ## Run locally
 
@@ -53,6 +54,18 @@ Notes:
 The legacy per-element `detection_response_task_enabled` toggle is no longer part of the Builder schema and is stripped on export.
 
 - To schedule DRT in the Interpreter, use explicit timeline items: `detection-response-task-start` / `detection-response-task-stop`.
+
+#### DRT ISO defaults + override
+
+`detection-response-task-start` includes an **Override ISO standard** checkbox.
+
+- Default (unchecked): ISO timing/RT fields are locked and saved as:
+  - `min_iti_ms`: 3000
+  - `max_iti_ms`: 5000
+  - `stimulus_duration_ms`: 1000 (or until response at runtime)
+  - `min_rt_ms`: 100
+  - `max_rt_ms`: 2500
+- If checked: those fields become editable.
 
 Reliability notes:
 

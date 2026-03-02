@@ -4526,6 +4526,7 @@ class JsonBuilder {
                 category: 'setup',
                 type: 'detection-response-task-start',
                 parameters: {
+                    override_iso_standard: { type: 'boolean', default: false },
                     segment_label: { type: 'string', default: '' },
                     response_key: { type: 'string', default: 'space' },
                     min_iti_ms: { type: 'number', default: 3000, min: 200, max: 600000, step: 50 },
@@ -4536,7 +4537,7 @@ class JsonBuilder {
                     location: { type: 'select', default: 'top-right', options: ['top-right', 'top-left', 'bottom-right', 'bottom-left'] },
                     size_px: { type: 'number', default: 18, min: 6, max: 80, step: 1 },
                     min_rt_ms: { type: 'number', default: 100, min: 0, max: 60000, step: 10 },
-                    max_rt_ms: { type: 'number', default: 2000, min: 50, max: 60000, step: 10 }
+                    max_rt_ms: { type: 'number', default: 2500, min: 50, max: 60000, step: 10 }
                 }
             },
             {
