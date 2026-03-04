@@ -21,6 +21,7 @@ This app is plain HTML/CSS/JS loaded via classic `<script>` tags (globals; no `i
 - Accessibility Mode toggle added (Atkinson Hyperlegible + higher contrast tokens), persisted locally.
 - New **JATOS Props** button generates a ready-to-paste JATOS **Component Properties** JSON bundle for Token Store exports (including **multi-config** bundles).
 - DRT (Detection Response Task) is ISO-compliant by default (timing/RT defaults) with an **Override ISO standard** toggle on `detection-response-task-start` for researchers who explicitly need to edit those values.
+- Blocks now support additional “generic jsPsych” inner types (`html-keyboard-response`, `html-button-response`, `image-keyboard-response`) with correct in-Builder previews. `image-keyboard-response` Blocks can optionally use `stimulus_images` (comma/newline list) to sample different images across trials.
 
 ## Run locally
 
@@ -122,6 +123,18 @@ Some parameters (e.g., `stimulus_image_url`, `stimulus_audio_url`) support choos
   - uploads cached assets to the Worker (R2) and receives public, unguessable asset URLs
   - rewrites all `asset://...` references in the exported JSON (including `asset://...` occurrences embedded inside custom HTML strings)
 - When exporting as a local download, `asset://...` references are kept as-is (you must host the files yourself).
+
+### Upload Assets (folder) → refer to images by filename
+
+The **Upload Assets** button uploads a local folder to the Token Store and saves a **filename → URL** index in browser storage (scoped to your export code + task type).
+
+- After uploading, you can reference images in parameters by filename (e.g., `b1.png`) instead of pasting full URLs.
+- This works for:
+  - `image-keyboard-response` components (`stimulus`, `stimulus_image`)
+  - `image-keyboard-response` Blocks (`stimulus_image` or `stimulus_images`)
+- The Builder preview will also resolve bare filenames via this saved index.
+
+Note: the filename→URL mapping is stored locally in the browser. If you clear site data or switch browsers, you’ll need to re-run **Upload Assets**.
 
 ## JATOS
 
@@ -345,7 +358,8 @@ The timeline is authored in the UI and serialized from DOM `dataset.componentDat
 - `rdm-practice`
 - `rdm-adaptive`
 - `rdm-dot-groups`
-- `block` (component_type can be `rdm-trial`, `rdm-practice`, `rdm-adaptive`, `rdm-dot-groups`)
+- `block` (component_type can be `rdm-trial`, `rdm-practice`, `rdm-adaptive`, `rdm-dot-groups`, `html-keyboard-response`, `html-button-response`, or `image-keyboard-response`)
+  - For `image-keyboard-response` blocks, you can provide `stimulus_images` as a comma/newline-separated list to sample from across generated trials.
 - `html-button-response` (generic button-response screen; available in RDM mode)
 
 ### Gabor components (`task_type: "gabor"`)
@@ -476,6 +490,29 @@ When `experiment_type` is `continuous`:
 
 - Plugin parameter schemas live in [src/schemas/JSPsychSchemas.js](src/schemas/JSPsychSchemas.js).
 - RDM-specific validation helpers live in [src/schemas/RDMTaskSchema.js](src/schemas/RDMTaskSchema.js) (some portions are legacy/aspirational; the builder output shape is the authoritative reference).
+
+## Reference docs (where they went)
+
+Docs live under [docs/](docs/):
+
+- High-level notes: [docs/quick_reference.md](docs/quick_reference.md), [docs/inputs_outputs.md](docs/inputs_outputs.md)
+- Schema entry points: [docs/SchemaReference.md](docs/SchemaReference.md)
+
+### Plugin refdocs generator
+
+If you’re looking for the “generated plugin reference docs”, the repo now includes a checked-in snapshot:
+
+- Generated snapshot: [docs/reference/plugins/plugin_schema_reference.md](docs/reference/plugins/plugin_schema_reference.md)
+
+To refresh/regenerate it, use one of:
+
+- Browser generator (no Node required): [tools/generate_plugin_refdocs.html](tools/generate_plugin_refdocs.html)
+  - Open it with Live Server and click **Generate** → **Download markdown**
+- Optional Node script (writes files into `docs/reference/plugins/`): [tools/generate_plugin_refdocs.js](tools/generate_plugin_refdocs.js)
+  - Run: `node tools/generate_plugin_refdocs.js`
+- Optional Python script (writes the single snapshot file above): [tools/generate_plugin_refdocs_quickjs.py](tools/generate_plugin_refdocs_quickjs.py)
+  - Requires: `pip install quickjs`
+  - Run: `python tools/generate_plugin_refdocs_quickjs.py`
 
 ## Useful local test pages
 

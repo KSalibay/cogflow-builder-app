@@ -1874,7 +1874,7 @@ class TimelineBuilder {
         // Task-scoped block types (keep the library constrained per task)
         if (blockTypeEl) {
             const currentTaskType = document.getElementById('taskType')?.value || 'rdm';
-            const allowed = (currentTaskType === 'flanker')
+            const baseAllowed = (currentTaskType === 'flanker')
                 ? ['flanker-trial']
                 : (currentTaskType === 'sart')
                     ? ['sart-trial']
@@ -1889,6 +1889,11 @@ class TimelineBuilder {
                     : (currentTaskType === 'gabor')
                         ? ['gabor-trial', 'gabor-quest']
                     : ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups'];
+
+            // Always include generic jsPsych options for Block inner trials.
+            // (These are schema-driven elsewhere; this allowlist rebuild must not strip them.)
+            const generic = ['html-button-response', 'html-keyboard-response', 'image-keyboard-response'];
+            const allowed = Array.from(new Set([...(baseAllowed || []), ...generic]));
 
             // Rebuild options if the schema contains extra entries.
             const currentValue = blockTypeEl.value;

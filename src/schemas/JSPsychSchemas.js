@@ -7,7 +7,7 @@
 
 class JSPsychSchemas {
     constructor() {
-        console.log('[SchemaDebug] Loaded JSPsychSchemas.js build: 20260114-3');
+        console.log('[SchemaDebug] Loaded JSPsychSchemas.js build: 20260304-1');
         this.parameterTypes = this.initializeParameterTypes();
         this.pluginSchemas = this.initializePluginSchemas();
         this.experimentSchemas = this.initializeExperimentSchemas();
@@ -1682,7 +1682,7 @@ class JSPsychSchemas {
                     block_component_type: {
                         type: this.parameterTypes.SELECT,
                         default: 'rdm-trial',
-                        options: ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups', 'flanker-trial', 'sart-trial', 'simon-trial', 'pvt-trial', 'stroop-trial', 'gabor-trial', 'gabor-quest', 'nback-block'],
+                        options: ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups', 'flanker-trial', 'sart-trial', 'simon-trial', 'pvt-trial', 'stroop-trial', 'gabor-trial', 'gabor-quest', 'nback-block', 'html-button-response', 'html-keyboard-response', 'image-keyboard-response'],
                         required: true,
                         description: 'What component type this block generates'
                     },
@@ -1702,6 +1702,50 @@ class JSPsychSchemas {
                         type: this.parameterTypes.STRING,
                         default: '',
                         description: 'Optional random seed (blank = no seed)'
+                    },
+
+                    // Generic jsPsych trials inside Blocks (minimal set)
+                    stimulus_html: {
+                        type: this.parameterTypes.HTML_STRING,
+                        default: '<p>Replace this with your HTML.</p>',
+                        blockTarget: 'html-keyboard-response,html-button-response',
+                        description: 'HTML stimulus content for generated trials'
+                    },
+                    prompt: {
+                        type: this.parameterTypes.HTML_STRING,
+                        default: '',
+                        blockTarget: 'html-keyboard-response,html-button-response,image-keyboard-response',
+                        description: 'Optional prompt shown below the stimulus (HTML allowed)'
+                    },
+                    choices: {
+                        type: this.parameterTypes.STRING,
+                        default: 'ALL_KEYS',
+                        blockTarget: 'html-keyboard-response,image-keyboard-response',
+                        description: 'Keyboard choices: ALL_KEYS, NO_KEYS, or a comma/space-separated list (e.g., "f j")'
+                    },
+                    button_choices: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Continue',
+                        blockTarget: 'html-button-response',
+                        description: 'Button labels (comma/newline separated)'
+                    },
+                    button_html: {
+                        type: this.parameterTypes.HTML_STRING,
+                        default: '',
+                        blockTarget: 'html-button-response',
+                        description: 'Optional custom button HTML template (advanced)'
+                    },
+                    stimulus_image: {
+                        type: this.parameterTypes.IMAGE,
+                        default: '',
+                        blockTarget: 'image-keyboard-response',
+                        description: 'Single image URL or filename (e.g., "img1.png" after uploading assets). If you provide stimulus_images, it takes precedence.'
+                    },
+                    stimulus_images: {
+                        type: this.parameterTypes.HTML_STRING,
+                        default: '',
+                        blockTarget: 'image-keyboard-response',
+                        description: 'List of images (comma or newline separated). Use this to sample different images across trials in the Block (works with uploaded assets filenames).'
                     },
 
                     // N-back generator parameters (Block → nback-block)

@@ -5,6 +5,8 @@
  * for experimental psychology tasks compatible with jsPsych and JATOS
  */
 
+try { console.log('[BuilderDebug] Loaded JsonBuilder.js build: 20260304-1'); } catch { /* ignore */ }
+
 class JsonBuilder {
     constructor() {
         this.timeline = [];
@@ -732,6 +734,37 @@ class JsonBuilder {
             this.exportJSON();
         });
 
+        // Assets folder upload -> Token Store assets + filename-to-URL index
+        const assetsBtn = document.getElementById('uploadAssetsFolderBtn');
+        const assetsInput = document.getElementById('assetsFolderInput');
+        if (assetsBtn && assetsInput && assetsBtn.dataset.bound !== '1') {
+            assetsBtn.dataset.bound = '1';
+
+            assetsBtn.addEventListener('click', () => {
+                try {
+                    assetsInput.value = '';
+                } catch {
+                    // ignore
+                }
+                try {
+                    assetsInput.click();
+                } catch {
+                    // ignore
+                }
+            });
+
+            assetsInput.addEventListener('change', async () => {
+                const files = Array.from(assetsInput.files || []);
+                if (files.length === 0) return;
+                try {
+                    await this.uploadAssetDirectoryToTokenStore(files);
+                } catch (e) {
+                    console.error('uploadAssetDirectoryToTokenStore failed:', e);
+                    this.showValidationResult('error', `Asset folder upload failed. (${e?.message || 'Unknown error'})`);
+                }
+            });
+        }
+
         // Local JSON import -> Token Store upload (batch)
         const importBtn = document.getElementById('importLocalJsonBtn');
         const importInput = document.getElementById('importLocalJsonInput');
@@ -904,6 +937,198 @@ class JsonBuilder {
             // ignore
         }
         return {};
+    }
+
+    getTokenStoreAssetIndex() {
+        const key = 'cogflow_token_store_asset_index_v1';
+        const legacyKey = 'psychjson_token_store_asset_index_v1';
+        try {
+            const raw = localStorage.getItem(key) || localStorage.getItem(legacyKey) || '';
+            const parsed = raw ? JSON.parse(raw) : {};
+            if (parsed && typeof parsed === 'object') return parsed;
+        } catch {
+            // ignore
+        }
+        return {};
+    }
+
+    setTokenStoreAssetIndex(index) {
+        const key = 'cogflow_token_store_asset_index_v1';
+        const legacyKey = 'psychjson_token_store_asset_index_v1';
+        try {
+            const obj = (index && typeof index === 'object') ? index : {};
+            const json = JSON.stringify(obj);
+            localStorage.setItem(key, json);
+            localStorage.setItem(legacyKey, json);
+        } catch {
+            // ignore
+        }
+    }
+
+    getTokenStoreAssetMapForCodeAndTask(code, taskType) {
+        const c = (code || '').toString().trim();
+        if (!c) return null;
+        const t = this.normalizeTokenStoreTaskType(taskType);
+        const all = this.getTokenStoreAssetIndex();
+        const byCode = all[c];
+        if (!byCode || typeof byCode !== 'object') return null;
+        const byTask = byCode.by_task && typeof byCode.by_task === 'object' ? byCode.by_task : null;
+        if (!byTask) return null;
+        const m = byTask[t];
+        if (!m || typeof m !== 'object') return null;
+        const files = m.files && typeof m.files === 'object' ? m.files : null;
+        if (!files) return null;
+        return files;
+    }
+
+    setTokenStoreAssetMapForCodeAndTask(code, taskType, filesMap) {
+        const c = (code || '').toString().trim();
+        if (!c) return;
+        const t = this.normalizeTokenStoreTaskType(taskType);
+        const all = this.getTokenStoreAssetIndex();
+        const existing = all[c];
+        const next = (existing && typeof existing === 'object' && existing.by_task && typeof existing.by_task === 'object')
+            ? existing
+            : { v: 1, by_task: {} };
+        if (!next.by_task || typeof next.by_task !== 'object') next.by_task = {};
+        next.by_task[t] = {
+            updated_at_local: new Date().toISOString(),
+            files: (filesMap && typeof filesMap === 'object') ? filesMap : {}
+        };
+        all[c] = next;
+        this.setTokenStoreAssetIndex(all);
+    }
+
+    escapeRegex(s) {
+        return String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    rewriteStringUsingTokenStoreAssets(raw, assetsByFilename) {
+        const s = (raw ?? '').toString();
+        if (!s) return s;
+
+        // Do not touch already-hosted URLs or asset:// placeholders.
+        if (/^(https?:|data:|blob:|asset:)/i.test(s.trim())) return s;
+
+        // Exact string match first (most common: image stimulus = "img1.png").
+        const direct = assetsByFilename && assetsByFilename[s];
+        if (direct && direct.url) return direct.url;
+
+        // Replace occurrences inside HTML/templates safely.
+        // Only replace when the filename appears as its own token (e.g., src="img1.png", url('img1.png')).
+        let out = s;
+        const entries = assetsByFilename && typeof assetsByFilename === 'object' ? Object.entries(assetsByFilename) : [];
+        for (const [filename, meta] of entries) {
+            const url = meta && meta.url ? String(meta.url) : '';
+            if (!filename || !url) continue;
+            if (!out.includes(filename)) continue;
+
+            const escaped = this.escapeRegex(filename);
+            const re = new RegExp(`(^|[\\s"'=:(),])(${escaped})(?=$|[\\s"'<>),;])`, 'g');
+            out = out.replace(re, `$1${url}`);
+        }
+        return out;
+    }
+
+    rewriteBareAssetFilenamesToTokenStoreUrls(config, { code, taskType }) {
+        const filesMap = this.getTokenStoreAssetMapForCodeAndTask(code, taskType);
+        if (!filesMap) return config;
+
+        const rewriteDeep = (x) => {
+            if (typeof x === 'string') {
+                return this.rewriteStringUsingTokenStoreAssets(x, filesMap);
+            }
+            if (Array.isArray(x)) return x.map(rewriteDeep);
+            if (x && typeof x === 'object') {
+                const out = {};
+                for (const [k, v] of Object.entries(x)) {
+                    out[k] = rewriteDeep(v);
+                }
+                return out;
+            }
+            return x;
+        };
+
+        return rewriteDeep((config && typeof config === 'object') ? config : {});
+    }
+
+    async uploadAssetDirectoryToTokenStore(files) {
+        const inputFiles = Array.isArray(files) ? files : [];
+        if (inputFiles.length === 0) return;
+
+        const code = this.promptForExportCodeOnly();
+        if (!code) return;
+
+        // Use current Builder task selection as the Token Store task bucket.
+        const taskType = this.normalizeTokenStoreTaskType(document.getElementById('taskType')?.value || 'task');
+
+        let baseUrl = this.peekTokenStoreBaseUrl();
+        if (!baseUrl) {
+            baseUrl = this.getTokenStoreBaseUrl();
+        }
+        if (!baseUrl) return;
+
+        if (!/^https?:\/\//i.test(baseUrl) || /^(javascript:|data:|file:)/i.test(baseUrl)) {
+            this.showValidationResult('error', 'Invalid Token Store base URL.');
+            return;
+        }
+
+        let record = this.getTokenStoreRecordForCodeAndTask(code, taskType);
+        if (!record) {
+            this.showValidationResult('warning', `No token found for code ${code} (${String(taskType).toUpperCase()}). Creating a new token...`);
+            record = await this.createTokenStoreConfig(baseUrl);
+            this.setTokenStoreRecordForCodeAndTask(code, taskType, record, { filename: null });
+        }
+
+        // De-dupe by basename (folder uploads can contain duplicates). Keep first.
+        const queue = inputFiles.slice().filter((f) => f && f.name).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+        const seen = new Set();
+        const duplicates = [];
+        const unique = [];
+        for (const f of queue) {
+            const name = String(f.name || '').trim();
+            if (!name) continue;
+            const key = name;
+            if (seen.has(key)) {
+                duplicates.push(name);
+                continue;
+            }
+            seen.add(key);
+            unique.push(f);
+        }
+
+        if (duplicates.length > 0) {
+            this.showValidationResult('warning', `Skipped ${duplicates.length} duplicate filename(s) in the selected folder (kept first occurrence).`);
+        }
+
+        const existing = this.getTokenStoreAssetMapForCodeAndTask(code, taskType) || {};
+        const conflicts = unique.filter((f) => {
+            const name = String(f.name || '').trim();
+            return !!(name && existing[name] && existing[name].url);
+        });
+
+        if (conflicts.length > 0) {
+            const ok = confirm(
+                `This assets index already contains ${conflicts.length} file(s) for code ${code} and task ${String(taskType).toUpperCase()} (e.g., ${conflicts[0].name}).\n\nContinue and overwrite the saved URL mapping(s) by re-uploading?`
+            );
+            if (!ok) {
+                this.showValidationResult('warning', 'Asset folder upload cancelled.');
+                return;
+            }
+        }
+
+        const nextMap = { ...existing };
+        let uploaded = 0;
+        for (const file of unique) {
+            const filename = String(file.name || '').trim();
+            if (!filename) continue;
+            const out = await this.uploadAssetToTokenStore(baseUrl, record, file, filename);
+            nextMap[filename] = { url: out.url };
+            uploaded += 1;
+        }
+
+        this.setTokenStoreAssetMapForCodeAndTask(code, taskType, nextMap);
+        this.showValidationResult('success', `Uploaded ${uploaded} asset(s) to Token Store and saved a filename→URL index for code ${code} (${String(taskType).toUpperCase()}).`);
     }
 
     normalizeTokenStoreTaskType(taskType) {
@@ -4248,12 +4473,16 @@ class JsonBuilder {
                             ? ['stroop-trial']
                         : ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups'];
 
-            const defaultType = baseOptions[0] || 'rdm-trial';
+            // Always allow generic jsPsych trial types inside Blocks (across all tasks).
+            const genericOptions = ['html-button-response', 'html-keyboard-response', 'image-keyboard-response'];
+            const options = Array.from(new Set([...(baseOptions || []), ...genericOptions]));
+
+            const defaultType = (baseOptions && baseOptions[0]) ? baseOptions[0] : (options[0] || 'rdm-trial');
 
             const defaultBlockLength = this.getExperimentWideBlockLengthDefault();
 
             const commonParams = {
-                block_component_type: { type: 'select', default: defaultType, options: baseOptions },
+                block_component_type: { type: 'select', default: defaultType, options },
                 block_length: { type: 'number', default: defaultBlockLength, min: 1, max: 50000 },
                 sampling_mode: { type: 'select', default: 'per-trial', options: ['per-trial', 'per-block'] },
                 seed: { type: 'string', default: '' }
@@ -4974,6 +5203,21 @@ class JsonBuilder {
                     }
                 },
                 {
+                    id: 'html-button-response',
+                    name: 'HTML + Button',
+                    icon: 'fas fa-mouse-pointer',
+                    description: 'Show HTML content and collect button response',
+                    category: 'basic',
+                    parameters: {
+                        stimulus: { type: 'string', default: '<p>Click a button to continue.</p>' },
+                        choices: { type: 'array', default: ['Continue'] },
+                        prompt: { type: 'string', default: '' },
+                        stimulus_duration: { type: 'number', default: null, min: 0, max: 30000 },
+                        trial_duration: { type: 'number', default: null, min: 0, max: 60000 },
+                        response_ends_trial: { type: 'boolean', default: true }
+                    }
+                },
+                {
                     id: 'image-keyboard-response',
                     name: 'Image + Keyboard',
                     icon: 'fas fa-image',
@@ -5141,6 +5385,21 @@ class JsonBuilder {
 
         // Add generic stimulus components (RDM mode)
         baseComponents.push(
+            {
+                id: 'html-keyboard-response',
+                name: 'HTML + Keyboard',
+                icon: 'fas fa-keyboard',
+                description: 'Show HTML content and collect keyboard response',
+                category: 'basic',
+                parameters: {
+                    stimulus: { type: 'string', default: '<p>Press a key to continue.</p>' },
+                    choices: { type: 'select', default: 'ALL_KEYS', options: ['ALL_KEYS', 'space', 'enter', 'escape'] },
+                    prompt: { type: 'string', default: '' },
+                    stimulus_duration: { type: 'number', default: null, min: 0, max: 30000 },
+                    trial_duration: { type: 'number', default: null, min: 0, max: 60000 },
+                    response_ends_trial: { type: 'boolean', default: true }
+                }
+            },
             {
                 id: 'image-keyboard-response',
                 name: 'Image + Keyboard',
@@ -7471,6 +7730,54 @@ class JsonBuilder {
             addWindow('foreperiod_ms', blockComponent.pvt_foreperiod_min, blockComponent.pvt_foreperiod_max);
             addWindow('trial_duration_ms', blockComponent.pvt_trial_duration_min, blockComponent.pvt_trial_duration_max);
             addWindow('iti_ms', blockComponent.pvt_iti_min, blockComponent.pvt_iti_max);
+        } else if (componentType === 'html-keyboard-response') {
+            const stim = (blockComponent.stimulus_html ?? blockComponent.stimulus ?? '').toString();
+            if (stim.trim() !== '') {
+                values.stimulus_html = stim;
+            }
+            const prompt = (blockComponent.prompt ?? '').toString();
+            if (prompt.trim() !== '') {
+                values.prompt = prompt;
+            }
+            const choices = (blockComponent.choices ?? '').toString().trim();
+            if (choices !== '') {
+                values.choices = choices;
+            }
+        } else if (componentType === 'html-button-response') {
+            const stim = (blockComponent.stimulus_html ?? blockComponent.stimulus ?? '').toString();
+            if (stim.trim() !== '') {
+                values.stimulus_html = stim;
+            }
+            const prompt = (blockComponent.prompt ?? '').toString();
+            if (prompt.trim() !== '') {
+                values.prompt = prompt;
+            }
+            const btnChoices = (blockComponent.button_choices ?? blockComponent.choices ?? '').toString().trim();
+            if (btnChoices !== '') {
+                // Interpreter accepts either `choices` or `button_choices`.
+                values.choices = btnChoices;
+            }
+            const btnHtml = (blockComponent.button_html ?? '').toString();
+            if (btnHtml.trim() !== '') {
+                values.button_html = btnHtml;
+            }
+        } else if (componentType === 'image-keyboard-response') {
+            const img = (blockComponent.stimulus_image ?? blockComponent.stimulus ?? '').toString().trim();
+            if (img !== '') {
+                values.stimulus_image = img;
+            }
+            const imgsRaw = (blockComponent.stimulus_images ?? '').toString();
+            if (imgsRaw.trim() !== '') {
+                values.stimulus_images = imgsRaw;
+            }
+            const prompt = (blockComponent.prompt ?? '').toString();
+            if (prompt.trim() !== '') {
+                values.prompt = prompt;
+            }
+            const choices = (blockComponent.choices ?? '').toString().trim();
+            if (choices !== '') {
+                values.choices = choices;
+            }
         }
 
         const out = {
@@ -8262,6 +8569,13 @@ class JsonBuilder {
                 this.showValidationResult('warning', `No token found for code ${naming.code} (${String(taskType).toUpperCase()}). Creating a new token...`);
                 record = await this.createTokenStoreConfig(baseUrl);
                 this.setTokenStoreRecordForCodeAndTask(naming.code, taskType, record, { filename: naming.filename });
+            }
+
+            // Rewrite bare filenames like "img1.png" to previously uploaded Token Store URLs (if available).
+            try {
+                config = this.rewriteBareAssetFilenamesToTokenStoreUrls(config, { code: naming.code, taskType });
+            } catch (e) {
+                console.warn('Bare-filename asset rewrite failed (continuing):', e);
             }
 
             // Upload cached assets referenced by asset://... and rewrite config to use unguessable Worker URLs.

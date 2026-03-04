@@ -94,6 +94,8 @@ class ComponentPreview {
             // Instructions component - show the actual stimulus text
             const stimulusText = componentData.stimulus || 'No instructions text provided';
             this.showInstructionsPreview(stimulusText, componentData);
+        } else if (componentType === 'html-button-response') {
+            this.showHtmlButtonResponsePreview(componentData);
         } else if (componentType === 'image-keyboard-response') {
             this.showImageKeyboardResponsePreview(componentData);
         } else if (componentType === 'visual-angle-calibration') {
@@ -880,9 +882,20 @@ class ComponentPreview {
     }
 
     resolveMaybeAssetUrl(raw) {
-        const s = (raw ?? '').toString();
+        const s = (raw ?? '').toString().trim();
+        if (!s) return '';
+
+        // Already-resolvable URL-like strings.
+        if (/^(https?:|data:|blob:)/i.test(s)) return s;
+
+        // Local cache placeholder: asset://<componentId>/<field>
         const m = /^asset:\/\/([^/]+)\/([^/]+)$/.exec(s);
-        if (!m) return s;
+        if (!m) {
+            // Token Store uploaded assets: allow referring to images by filename
+            // after using the Builder's "Upload Assets" (folder) feature.
+            const tokenUrl = this.resolveTokenStoreAssetUrlByFilename(s);
+            return tokenUrl || s;
+        }
 
         try {
             const cid = m[1];
@@ -893,6 +906,47 @@ class ComponentPreview {
             // ignore
         }
 
+        return '';
+    }
+
+    resolveTokenStoreAssetUrlByFilename(name) {
+        try {
+            const raw = (name ?? '').toString().trim();
+            if (!raw) return '';
+            if (/^(https?:|data:|blob:|asset:)/i.test(raw)) return '';
+
+            // Folder uploads store by File.name (basename). Accept paths by taking the basename.
+            const filename = raw.split(/[\\/]/).pop();
+            if (!filename) return '';
+
+            const code = (localStorage.getItem('cogflow_last_export_code') || localStorage.getItem('psychjson_last_export_code') || '').toString().trim();
+            if (!code) return '';
+
+            const taskTypeRaw = (document.getElementById('taskType')?.value || '').toString().trim().toLowerCase();
+            const taskType = taskTypeRaw || 'task';
+
+            const key = 'cogflow_token_store_asset_index_v1';
+            const legacyKey = 'psychjson_token_store_asset_index_v1';
+            const rawIndex = (localStorage.getItem(key) || localStorage.getItem(legacyKey) || '').toString();
+            const index = rawIndex ? JSON.parse(rawIndex) : {};
+            const byCode = (index && typeof index === 'object') ? index[code] : null;
+            const byTask = (byCode && typeof byCode === 'object' && byCode.by_task && typeof byCode.by_task === 'object') ? byCode.by_task : null;
+            if (!byTask) return '';
+
+            // Prefer current task type.
+            const entry = byTask?.[taskType]?.files?.[filename];
+            const url = entry?.url ? String(entry.url).trim() : '';
+            if (url) return url;
+
+            // Fallback: find the filename under any task bucket for this code.
+            for (const t of Object.keys(byTask)) {
+                const e = byTask?.[t]?.files?.[filename];
+                const u = e?.url ? String(e.url).trim() : '';
+                if (u) return u;
+            }
+        } catch {
+            // ignore
+        }
         return '';
     }
 
@@ -2175,7 +2229,60 @@ class ComponentPreview {
             return;
         }
 
+        if (baseType === 'html-keyboard-response') {
+            const stimulusText = (sampled.stimulus ?? sampled.stimulus_html ?? '').toString() || 'No HTML stimulus provided';
+            this.showInstructionsPreview(stimulusText, sampled);
+            return;
+        }
+
+        if (baseType === 'html-button-response') {
+            this.showHtmlButtonResponsePreview(sampled);
+            return;
+        }
+
+        if (baseType === 'image-keyboard-response') {
+            this.showImageKeyboardResponsePreview(sampled);
+            return;
+        }
+
         this.showRDMPreview(sampled);
+    }
+
+    showHtmlButtonResponsePreview(componentData) {
+        const previewModal = this.getPreviewModal();
+        if (!previewModal) return;
+        const { modalEl, modal } = previewModal;
+
+        const modalBody = modalEl.querySelector('.modal-body');
+        if (!modalBody) return;
+
+        const stimulus = (componentData?.stimulus ?? componentData?.stimulus_html ?? '').toString();
+        const prompt = (componentData?.prompt ?? '').toString();
+        const rawChoices = (componentData?.button_choices ?? componentData?.choices ?? 'Continue');
+
+        const labels = Array.isArray(rawChoices)
+            ? rawChoices.map(x => (x ?? '').toString()).filter(s => s.trim() !== '')
+            : rawChoices
+                .toString()
+                .split(/[\n,]+/)
+                .map(s => s.trim())
+                .filter(Boolean);
+
+        const btns = (labels.length > 0 ? labels : ['Continue']).slice(0, 8).map((label) => {
+            return `<button type="button" class="btn btn-outline-light" disabled>${label}</button>`;
+        }).join(' ');
+
+        const body = `
+            <h5 style="margin:0 0 10px 0;">HTML + Button Response</h5>
+            <div class="p-3 border rounded" style="background: rgba(255,255,255,0.06);">
+                <div>${stimulus || '<span class="text-warning">No HTML stimulus provided.</span>'}</div>
+                ${prompt ? `<div style="margin-top:12px; opacity:0.9;">${prompt}</div>` : ''}
+                <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">${btns}</div>
+            </div>
+        `;
+
+        modalBody.innerHTML = this.wrapCenteredPreview(body);
+        modal.show();
     }
 
     showNbackBlockGeneratorPreview(blockData) {
@@ -2868,6 +2975,35 @@ class ComponentPreview {
             if (stimMs !== null) sampled.stimulus_duration_ms = stimMs;
             const maskMs = randInt(blockData.gabor_mask_duration_min, blockData.gabor_mask_duration_max);
             if (maskMs !== null) sampled.mask_duration_ms = maskMs;
+        } else if (componentType === 'html-keyboard-response') {
+            const stim = (src?.stimulus_html ?? src?.stimulus ?? '').toString();
+            sampled.stimulus = stim || '<p>Press a key to continue.</p>';
+            sampled.prompt = (src?.prompt ?? '').toString();
+            sampled.choices = (src?.choices ?? 'ALL_KEYS');
+        } else if (componentType === 'html-button-response') {
+            const stim = (src?.stimulus_html ?? src?.stimulus ?? '').toString();
+            sampled.stimulus = stim || '<p>Click a button to continue.</p>';
+            sampled.prompt = (src?.prompt ?? '').toString();
+            // Builder exports button labels as a single string in `choices`.
+            sampled.choices = (src?.button_choices ?? src?.choices ?? 'Continue');
+            if (src?.button_html !== undefined) sampled.button_html = src.button_html;
+        } else if (componentType === 'image-keyboard-response') {
+            const listRaw = (src?.stimulus_images ?? '').toString();
+            const list = listRaw
+                ? listRaw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean)
+                : [];
+
+            const chosen = (list.length > 0)
+                ? pickFromList(list, '')
+                : (() => {
+                    const v = (src?.stimulus_image ?? src?.stimulus ?? '');
+                    if (Array.isArray(v)) return pickFromList(v, '');
+                    return (v ?? '').toString();
+                })();
+
+            sampled.stimulus = chosen;
+            sampled.prompt = (src?.prompt ?? '').toString();
+            sampled.choices = (src?.choices ?? 'ALL_KEYS');
         }
 
         return sampled;
