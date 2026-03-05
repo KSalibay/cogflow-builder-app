@@ -108,7 +108,7 @@ class ComponentPreview {
             this.showGaborPreview(componentData);
         } else if (componentType === 'sart-trial') {
             this.showSartPreview(componentData);
-        } else if (componentType === 'stroop-trial') {
+        } else if (componentType === 'stroop-trial' || componentType === 'emotional-stroop-trial') {
             this.showStroopPreview(componentData);
         } else if (componentType === 'simon-trial') {
             this.showSimonPreview(componentData);
@@ -1600,6 +1600,8 @@ class ComponentPreview {
 
         const isHex = (s) => typeof s === 'string' && /^#([0-9a-fA-F]{6})$/.test(s.trim());
 
+        const isEmotional = (componentData?.type === 'emotional-stroop-trial');
+
         const fallbackStimuli = (() => {
             try {
                 const list = window.jsonBuilderInstance?.getCurrentStroopStimuliFromUI?.();
@@ -1645,6 +1647,7 @@ class ComponentPreview {
         // current experiment-wide Stroop defaults in the Builder UI.
         const uiDefaults = (() => {
             try {
+                if (isEmotional) return window.jsonBuilderInstance?.getCurrentEmotionalStroopDefaults?.() || null;
                 return window.jsonBuilderInstance?.getCurrentStroopDefaults?.() || null;
             } catch {
                 return null;
@@ -1657,7 +1660,9 @@ class ComponentPreview {
                 ? uiDefaults.stroop_settings
                 : {};
 
-        const responseModeRaw = resolveInherit(componentData?.response_mode, defaults?.response_mode || uiDefaults?.response_mode || 'color_naming');
+        const responseModeRaw = isEmotional
+            ? 'color_naming'
+            : resolveInherit(componentData?.response_mode, defaults?.response_mode || uiDefaults?.response_mode || 'color_naming');
         const responseDevice = resolveInherit(componentData?.response_device, defaults?.response_device || uiDefaults?.response_device || 'keyboard');
         // Mouse mode always behaves like color naming (click the color); don't show keyboard-only congruency mapping.
         const responseMode = (responseDevice === 'mouse') ? 'color_naming' : responseModeRaw;
@@ -1699,7 +1704,7 @@ class ComponentPreview {
                 `;
             }
 
-            if (responseMode === 'congruency') {
+            if (!isEmotional && responseMode === 'congruency') {
                 return `
                     <div class="small text-muted">
                         <div><b>Keyboard:</b> <span class="badge bg-secondary">${escape(congruentKey)}</span> = Congruent</div>
@@ -1735,14 +1740,14 @@ class ComponentPreview {
             <div class="p-3">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
-                        <h5 class="mb-1">Stroop Preview</h5>
+                        <h5 class="mb-1">${isEmotional ? 'Emotional Stroop' : 'Stroop'} Preview</h5>
                         <div class="small text-muted">Lightweight renderer</div>
                         ${noteText ? `<div class="small text-muted">${escape(noteText)}</div>` : ''}
                     </div>
                     <div class="text-end small text-muted">
                         <div><strong>Word:</strong> ${escape(word)}</div>
                         <div><strong>Ink:</strong> ${escape(inkName)} <span style="display:inline-block; width:12px; height:12px; border-radius:3px; background:${escape(inkHex)}; border:1px solid rgba(255,255,255,0.18);"></span></div>
-                        <div><strong>Congruency:</strong> ${escape(congruencyLabel)}</div>
+                        ${isEmotional ? '' : `<div><strong>Congruency:</strong> ${escape(congruencyLabel)}</div>`}
                         <div><strong>Response:</strong> ${escape(responseMode)} (${escape(responseDevice)})</div>
                     </div>
                 </div>
@@ -2215,6 +2220,11 @@ class ComponentPreview {
         }
 
         if (baseType === 'stroop-trial') {
+            this.showStroopPreview(sampled);
+            return;
+        }
+
+        if (baseType === 'emotional-stroop-trial') {
             this.showStroopPreview(sampled);
             return;
         }
@@ -2901,15 +2911,37 @@ class ComponentPreview {
             const iti = randInt(src.pvt_iti_min, src.pvt_iti_max);
             if (iti !== null) sampled.iti_ms = iti;
         } else if (componentType === 'stroop-trial') {
-            const words = parseStringList(src.stroop_word_options);
-            const inksExplicit = parseStringList(src.stroop_ink_color_options);
+            const uiStimulusNames = (() => {
+                try {
+                    const list = window.jsonBuilderInstance?.getCurrentStroopStimuliFromUI?.();
+                    return (Array.isArray(list) ? list : [])
+                        .map(s => (s?.name ?? '').toString().trim())
+                        .filter(Boolean);
+                } catch {
+                    return [];
+                }
+            })();
+
+            const wordsRaw = parseStringList(src.stroop_word_options);
+            const words = (wordsRaw.length > 0) ? wordsRaw : uiStimulusNames;
+
+            const normalize = (s) => (s ?? '').toString().trim().toLowerCase();
+            const allowedInkSet = new Set((Array.isArray(words) ? words : []).map(normalize).filter(Boolean));
+
+            const inksExplicitRaw = parseStringList(src.stroop_ink_color_options);
+            const inksExplicitSanitized = (inksExplicitRaw.length > 0)
+                ? inksExplicitRaw.filter((n) => allowedInkSet.has(normalize(n)))
+                : [];
+
+            const inksExplicit = (inksExplicitSanitized.length > 0) ? inksExplicitSanitized : [];
             const inks = (inksExplicit.length > 0) ? inksExplicit : words;
 
-            const congruencyOptions = parseStringList(src.stroop_congruency_options);
+            const congruencyOptionsRaw = parseStringList(src.stroop_congruency_options);
+            const congruencyOptions = (congruencyOptionsRaw.length > 0) ? congruencyOptionsRaw : ['auto'];
             const congruency = pickFromList(congruencyOptions, 'auto');
 
-            const pickedWord = pickFromList(words, 'RED');
-            let pickedInk = pickFromList(inks, pickedWord);
+            const pickedWord = pickFromList(words, uiStimulusNames[0] || 'RED');
+            let pickedInk = pickFromList(inks, pickedWord || uiStimulusNames[0] || 'BLUE');
 
             if (congruency === 'congruent') {
                 pickedInk = pickedWord;
@@ -2937,6 +2969,79 @@ class ComponentPreview {
             if (trialMs !== null) sampled.trial_duration_ms = trialMs;
 
             const iti = randInt(src.stroop_iti_min, src.stroop_iti_max);
+            if (iti !== null) sampled.iti_ms = iti;
+        } else if (componentType === 'emotional-stroop-trial') {
+            const uiStimulusNames = (() => {
+                try {
+                    const list = window.jsonBuilderInstance?.getCurrentStroopStimuliFromUI?.();
+                    return (Array.isArray(list) ? list : [])
+                        .map(s => (s?.name ?? '').toString().trim())
+                        .filter(Boolean);
+                } catch {
+                    return [];
+                }
+            })();
+
+            const normalize = (s) => (s ?? '').toString().trim().toLowerCase();
+            const allowedInkSet = new Set(uiStimulusNames.map(normalize).filter(Boolean));
+
+            const countRaw = Number.parseInt((src.emostroop_word_list_count ?? '2').toString(), 10);
+            const count = Number.isFinite(countRaw) ? (countRaw === 3 ? 3 : 2) : 2;
+
+            const list1 = {
+                label: (src.emostroop_word_list_1_label ?? 'Neutral').toString().trim() || 'Neutral',
+                words: parseStringList(src.emostroop_word_list_1_words)
+            };
+            const list2 = {
+                label: (src.emostroop_word_list_2_label ?? 'Negative').toString().trim() || 'Negative',
+                words: parseStringList(src.emostroop_word_list_2_words)
+            };
+            const list3 = {
+                label: (src.emostroop_word_list_3_label ?? 'Positive').toString().trim() || 'Positive',
+                words: parseStringList(src.emostroop_word_list_3_words)
+            };
+
+            const wordLists = [list1, list2, ...(count === 3 ? [list3] : [])]
+                .map((l, i) => ({
+                    index: i + 1,
+                    label: (l.label || '').toString(),
+                    words: Array.isArray(l.words) ? l.words : []
+                }))
+                .filter(l => l.words.length > 0);
+
+            const legacyWordsRaw = parseStringList(src.emostroop_word_options);
+            const fallbackWords = (legacyWordsRaw.length > 0) ? legacyWordsRaw : ['HAPPY', 'SAD', 'ANGRY', 'CHAIR'];
+
+            const chosenList = (wordLists.length > 0)
+                ? pickFromList(wordLists, wordLists[0])
+                : null;
+
+            const words = chosenList ? chosenList.words : fallbackWords;
+
+            const inksRaw = parseStringList(src.emostroop_ink_color_options);
+            const inksSanitized = (inksRaw.length > 0)
+                ? inksRaw.filter((n) => allowedInkSet.size === 0 || allowedInkSet.has(normalize(n)))
+                : [];
+            const inks = (inksSanitized.length > 0) ? inksSanitized : (uiStimulusNames.length > 0 ? uiStimulusNames : ['RED', 'GREEN', 'BLUE', 'YELLOW']);
+
+            sampled.word = pickFromList(words, words[0] || 'HAPPY');
+            if (chosenList) {
+                sampled.word_list_label = chosenList.label;
+                sampled.word_list_index = chosenList.index;
+            }
+            sampled.ink_color_name = pickFromList(inks, inks[0] || 'BLUE');
+
+            sampled.response_mode = 'color_naming';
+            sampled.response_device = (src.emostroop_response_device || 'inherit').toString();
+            sampled.choice_keys = parseStringList(src.emostroop_choice_keys);
+
+            const stimMs = randInt(src.emostroop_stimulus_duration_min, src.emostroop_stimulus_duration_max);
+            if (stimMs !== null) sampled.stimulus_duration_ms = stimMs;
+
+            const trialMs = randInt(src.emostroop_trial_duration_min, src.emostroop_trial_duration_max);
+            if (trialMs !== null) sampled.trial_duration_ms = trialMs;
+
+            const iti = randInt(src.emostroop_iti_min, src.emostroop_iti_max);
             if (iti !== null) sampled.iti_ms = iti;
         } else if (componentType === 'gabor-trial' || componentType === 'gabor-quest') {
             const locs = parseStringList(blockData.gabor_target_location_options);

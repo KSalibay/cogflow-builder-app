@@ -172,7 +172,11 @@ class TimelineBuilder {
 
         // Prefer schema-driven editor when available.
         // Fall back to Builder component definitions when schema is missing (e.g., DRT Start/Stop).
-        const schema = this.jsonBuilder.schemaValidator.getPluginSchema(component.type);
+        // NOTE: Blocks are *task-scoped* in the Builder and have many task-specific fields.
+        // The generic plugin schema for `block` is intentionally minimal and can show the wrong
+        // defaults/options (e.g., RDM). Always use Builder component definitions for Blocks.
+        const forceComponentDefs = component.type === 'block';
+        const schema = forceComponentDefs ? null : this.jsonBuilder.schemaValidator.getPluginSchema(component.type);
         console.log('Schema found:', schema);
 
         modalBody.innerHTML = schema
@@ -1141,8 +1145,42 @@ class TimelineBuilder {
 
     generateParameterFormFromComponentDefinitions(component) {
         const type = (component?.type ?? '').toString();
+
+        const getBlockInnerType = (c) => {
+            try {
+                const inner = (c?.parameters && typeof c.parameters === 'object')
+                    ? (c.parameters.block_component_type ?? c.block_component_type)
+                    : c?.block_component_type;
+                return (inner ?? '').toString().trim();
+            } catch {
+                return '';
+            }
+        };
+
+        const inferTaskTypeOverrideForBlock = (c) => {
+            const inner = (c?.parameters && typeof c.parameters === 'object')
+                ? (c.parameters.block_component_type ?? c.block_component_type)
+                : c?.block_component_type;
+
+            const innerType = (inner ?? '').toString().trim();
+            if (!innerType) return null;
+
+            if (innerType.startsWith('rdm-')) return 'rdm';
+            if (innerType === 'stroop-trial') return 'stroop';
+            if (innerType === 'emotional-stroop-trial') return 'emotional-stroop';
+            if (innerType === 'simon-trial') return 'simon';
+            if (innerType === 'pvt-trial') return 'pvt';
+            if (innerType === 'flanker-trial') return 'flanker';
+            if (innerType === 'sart-trial') return 'sart';
+            if (innerType === 'nback-block') return 'nback';
+            if (innerType === 'gabor-trial' || innerType === 'gabor-quest') return 'gabor';
+            return null;
+        };
+
+        const taskTypeOverride = (type === 'block') ? inferTaskTypeOverrideForBlock(component) : null;
+
         const defs = (this.jsonBuilder && typeof this.jsonBuilder.getComponentDefinitions === 'function')
-            ? this.jsonBuilder.getComponentDefinitions()
+            ? this.jsonBuilder.getComponentDefinitions(taskTypeOverride ? { taskTypeOverride } : undefined)
             : [];
 
         const isDrtStart = (type === 'detection-response-task-start');
@@ -1175,6 +1213,70 @@ class TimelineBuilder {
         const parameters = def && def.parameters && typeof def.parameters === 'object' ? def.parameters : null;
         if (!parameters || Object.keys(parameters).length === 0) {
             return '<p class="text-muted">No editable parameters for this component.</p>';
+        }
+
+        // Robustness: ensure the block type dropdown always reflects the actual block.
+        // If the current value isn't in the option list, browsers will select the first option
+        // (often `rdm-trial`), which then cascades into Preview using the wrong task.
+        if (type === 'block' && parameters.block_component_type && typeof parameters.block_component_type === 'object') {
+            const innerType = getBlockInnerType(component);
+
+            const hasAnyKey = (obj, predicate) => {
+                try {
+                    if (!obj || typeof obj !== 'object') return false;
+                    return Object.keys(obj).some(predicate);
+                } catch {
+                    return false;
+                }
+            };
+
+            const paramKeyHint = (() => {
+                const keys = Object.keys(parameters);
+                if (keys.some(k => k.startsWith('emostroop_'))) return 'emotional-stroop';
+                if (keys.some(k => k.startsWith('stroop_'))) return 'stroop';
+                if (keys.some(k => k.startsWith('flanker_'))) return 'flanker';
+                if (keys.some(k => k.startsWith('sart_'))) return 'sart';
+                if (keys.some(k => k.startsWith('simon_'))) return 'simon';
+                if (keys.some(k => k.startsWith('pvt_'))) return 'pvt';
+                if (keys.some(k => k.startsWith('gabor_'))) return 'gabor';
+                if (keys.some(k => k.startsWith('nback_'))) return 'nback';
+                return null;
+            })();
+
+            const componentKeyHint = hasAnyKey(component?.parameters, (k) => k.startsWith('emostroop_'))
+                ? 'emotional-stroop'
+                : null;
+
+            const hintTask = (componentKeyHint || paramKeyHint || taskTypeOverride);
+
+            const genericOptions = ['html-button-response', 'html-keyboard-response', 'image-keyboard-response'];
+            const baseOptions = (hintTask === 'flanker')
+                ? ['flanker-trial']
+                : (hintTask === 'nback')
+                    ? ['nback-block']
+                : (hintTask === 'sart')
+                    ? ['sart-trial']
+                : (hintTask === 'simon')
+                    ? ['simon-trial']
+                : (hintTask === 'pvt')
+                    ? ['pvt-trial']
+                : (hintTask === 'gabor')
+                    ? ['gabor-trial', 'gabor-quest']
+                : (hintTask === 'stroop')
+                    ? ['stroop-trial']
+                : (hintTask === 'emotional-stroop')
+                    ? ['emotional-stroop-trial']
+                : ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups'];
+
+            let options = Array.from(new Set([...(baseOptions || []), ...genericOptions]));
+            if (innerType && !options.includes(innerType)) options = [innerType, ...options];
+
+            const original = parameters.block_component_type;
+            parameters.block_component_type = {
+                ...original,
+                options,
+                default: innerType || original.default || options[0] || 'rdm-trial'
+            };
         }
 
         let formHtml = '';
@@ -1576,6 +1678,28 @@ class TimelineBuilder {
             };
         }
 
+        // Emotional Stroop Block: hide list-3 fields when count = 2.
+        const emostroopCountEl = formContainer.querySelector('#param_emostroop_word_list_count');
+        const updateEmostroopWordListVisibility = () => {
+            if (!emostroopCountEl) return;
+            const count = Number.parseInt((emostroopCountEl.value ?? '2').toString(), 10);
+            const show3 = (Number.isFinite(count) ? count : 2) >= 3;
+
+            ['emostroop_word_list_3_label', 'emostroop_word_list_3_words'].forEach((paramName) => {
+                const row = formContainer.querySelector(`[data-param-name="${paramName}"]`);
+                if (!row) return;
+                row.style.display = show3 ? '' : 'none';
+                row.querySelectorAll('input, select, textarea').forEach((el) => {
+                    el.disabled = !show3;
+                });
+            });
+        };
+
+        if (emostroopCountEl) {
+            emostroopCountEl.addEventListener('change', updateEmostroopWordListVisibility);
+            updateEmostroopWordListVisibility();
+        }
+
         // Response override conditional fields (per-component)
         const responseDeviceEl = formContainer.querySelector('#param_response_device');
         const updateResponseVisibility = () => {
@@ -1873,7 +1997,22 @@ class TimelineBuilder {
 
         // Task-scoped block types (keep the library constrained per task)
         if (blockTypeEl) {
-            const currentTaskType = document.getElementById('taskType')?.value || 'rdm';
+            const currentTaskType = (document.getElementById('taskType')?.value || 'rdm').toString().trim();
+            const isEmostroopBlock = !!formContainer.querySelector('#param_emostroop_word_list_count');
+
+            // Try to recover the current inner type even if the edited component uses a legacy nested shape.
+            const desiredValue = (() => {
+                try {
+                    const direct = component?.parameters?.block_component_type ?? component?.block_component_type;
+                    if (direct !== undefined && direct !== null && String(direct).trim() !== '') return String(direct).trim();
+                    const nested = component?.parameters?.parameters?.block_component_type;
+                    if (nested !== undefined && nested !== null && String(nested).trim() !== '') return String(nested).trim();
+                } catch {
+                    // ignore
+                }
+                return '';
+            })();
+
             const baseAllowed = (currentTaskType === 'flanker')
                 ? ['flanker-trial']
                 : (currentTaskType === 'sart')
@@ -1884,6 +2023,8 @@ class TimelineBuilder {
                         ? ['pvt-trial']
                     : (currentTaskType === 'stroop')
                         ? ['stroop-trial']
+                    : (currentTaskType === 'emotional-stroop' || isEmostroopBlock)
+                        ? ['emotional-stroop-trial']
                     : (currentTaskType === 'nback')
                         ? ['nback-block']
                     : (currentTaskType === 'gabor')
@@ -1893,15 +2034,21 @@ class TimelineBuilder {
             // Always include generic jsPsych options for Block inner trials.
             // (These are schema-driven elsewhere; this allowlist rebuild must not strip them.)
             const generic = ['html-button-response', 'html-keyboard-response', 'image-keyboard-response'];
-            const allowed = Array.from(new Set([...(baseAllowed || []), ...generic]));
+            let allowed = Array.from(new Set([...(baseAllowed || []), ...generic]));
+
+            // Never drop the current value (prevents silent fallback to the first option).
+            const currentValue = blockTypeEl.value;
+            const keepValue = (desiredValue || currentValue || '').toString().trim();
+            if (keepValue && !allowed.includes(keepValue)) allowed = [keepValue, ...allowed];
 
             // Rebuild options if the schema contains extra entries.
-            const currentValue = blockTypeEl.value;
             blockTypeEl.innerHTML = allowed
                 .map(v => `<option value="${v}">${v}</option>`)
                 .join('');
 
-            if (allowed.includes(currentValue)) {
+            if (desiredValue && allowed.includes(desiredValue)) {
+                blockTypeEl.value = desiredValue;
+            } else if (allowed.includes(currentValue)) {
                 blockTypeEl.value = currentValue;
             } else {
                 blockTypeEl.value = allowed[0] || currentValue;

@@ -426,6 +426,43 @@ class JsonBuilder {
         this.applyStroopResponseVisibility();
     }
 
+    applyEmotionalStroopWordListVisibility() {
+        const countRaw = Number.parseInt(document.getElementById('emotionalStroopWordListCount')?.value || '2', 10);
+        const count = Number.isFinite(countRaw) ? (countRaw === 3 ? 3 : 2) : 2;
+        const g3 = document.getElementById('emotionalStroopWordList3Group');
+        if (g3) g3.style.display = (count === 3) ? '' : 'none';
+    }
+
+    bindEmotionalStroopWordListUI() {
+        // No-op unless the Emotional Stroop panel is currently rendered.
+        const countEl = document.getElementById('emotionalStroopWordListCount');
+        if (!countEl) return;
+
+        if (countEl.dataset.bound !== '1') {
+            countEl.dataset.bound = '1';
+            countEl.addEventListener('change', () => {
+                this.applyEmotionalStroopWordListVisibility();
+                this.updateJSON();
+            });
+        }
+
+        [
+            'emotionalStroopWordList1Label',
+            'emotionalStroopWordList1Words',
+            'emotionalStroopWordList2Label',
+            'emotionalStroopWordList2Words',
+            'emotionalStroopWordList3Label',
+            'emotionalStroopWordList3Words'
+        ].forEach((id) => {
+            const el = document.getElementById(id);
+            if (!el || el.dataset.bound === '1') return;
+            el.dataset.bound = '1';
+            el.addEventListener('input', () => this.updateJSON());
+        });
+
+        this.applyEmotionalStroopWordListVisibility();
+    }
+
     bindSimonSettingsUI() {
         const devEl = document.getElementById('simonDefaultResponseDevice');
         if (!devEl) return;
@@ -2007,7 +2044,7 @@ class JsonBuilder {
 
     maybeInsertStarterTimeline(taskType) {
         if (taskType === 'soc-dashboard' && this.experimentType !== 'continuous') return;
-        if (taskType !== 'flanker' && taskType !== 'sart' && taskType !== 'gabor' && taskType !== 'stroop' && taskType !== 'simon' && taskType !== 'pvt' && taskType !== 'soc-dashboard' && taskType !== 'nback') return;
+        if (taskType !== 'flanker' && taskType !== 'sart' && taskType !== 'gabor' && taskType !== 'stroop' && taskType !== 'emotional-stroop' && taskType !== 'simon' && taskType !== 'pvt' && taskType !== 'soc-dashboard' && taskType !== 'nback') return;
 
         const timelineContainer = document.getElementById('timelineComponents');
         if (!timelineContainer) return;
@@ -2027,6 +2064,8 @@ class JsonBuilder {
                     ? 'pvt-trial'
                 : (taskType === 'stroop')
                     ? 'stroop-trial'
+                : (taskType === 'emotional-stroop')
+                    ? 'emotional-stroop-trial'
                 : (taskType === 'nback')
                     ? 'nback-trial-sequence'
                 : (taskType === 'soc-dashboard')
@@ -2157,6 +2196,15 @@ class JsonBuilder {
             if (type === 'block') {
                 const innerType = getBlockInnerType();
                 return innerType === 'stroop-trial';
+            }
+            return false;
+        }
+
+        if (taskType === 'emotional-stroop') {
+            if (type === 'emotional-stroop-trial') return true;
+            if (type === 'block') {
+                const innerType = getBlockInnerType();
+                return innerType === 'emotional-stroop-trial';
             }
             return false;
         }
@@ -3092,6 +3140,117 @@ class JsonBuilder {
                 </div>
             </div>
             `
+            : (taskType === 'emotional-stroop')
+            ? `
+            <div class="parameter-group" id="emotionalStroopExperimentParameters">
+                <div class="group-title d-flex justify-content-between align-items-center">
+                    <div>
+                        <span>Emotional Stroop Experiment Settings</span>
+                        <small class="text-muted d-block">Default values for Emotional Stroop components</small>
+                    </div>
+                    <button class="btn btn-sm btn-info" id="previewTaskDefaultsBtn" onclick="window.componentPreview?.showPreview(window.jsonBuilderInstance?.getCurrentEmotionalStroopDefaults())">
+                        <i class="fas fa-eye"></i> Preview Defaults
+                    </button>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Word Lists:</label>
+                    <div class="d-flex gap-2 align-items-center" style="flex-wrap:wrap;">
+                        <select class="form-control parameter-input" id="emotionalStroopWordListCount" style="max-width: 180px;">
+                            <option value="2" selected>2 lists</option>
+                            <option value="3">3 lists</option>
+                        </select>
+                        <div class="parameter-help mb-0">Choose 2 or 3 labeled word pools (labels recorded in data)</div>
+                    </div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">List 1 Label:</label>
+                    <input type="text" class="form-control parameter-input" id="emotionalStroopWordList1Label" value="Neutral">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">List 1 Words:</label>
+                    <textarea class="form-control parameter-input" id="emotionalStroopWordList1Words" rows="2">CHAIR,TABLE,WINDOW</textarea>
+                    <div class="parameter-help">Comma-separated words in this list</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">List 2 Label:</label>
+                    <input type="text" class="form-control parameter-input" id="emotionalStroopWordList2Label" value="Negative">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">List 2 Words:</label>
+                    <textarea class="form-control parameter-input" id="emotionalStroopWordList2Words" rows="2">SAD,ANGRY,FEAR</textarea>
+                    <div class="parameter-help">Comma-separated words in this list</div>
+                </div>
+
+                <div id="emotionalStroopWordList3Group" style="display:none;">
+                    <div class="parameter-row">
+                        <label class="parameter-label">List 3 Label:</label>
+                        <input type="text" class="form-control parameter-input" id="emotionalStroopWordList3Label" value="Positive">
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">List 3 Words:</label>
+                        <textarea class="form-control parameter-input" id="emotionalStroopWordList3Words" rows="2">HAPPY,JOY,LOVE</textarea>
+                        <div class="parameter-help">Comma-separated words in this list</div>
+                    </div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label text-muted">Data Capture:</label>
+                    <div class="parameter-help">When trials are generated from Blocks, the selected list label is stored in <code>word_list_label</code> (and index in <code>word_list_index</code>).</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Ink Palette Size:</label>
+                    <input type="number" class="form-control parameter-input" id="stroopStimulusSetSize" value="4" min="2" max="7">
+                    <div class="parameter-help">Number of ink colors available for this task (2–7)</div>
+                </div>
+
+                <div id="stroopStimuliRows"></div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Default Response Device:</label>
+                    <select class="form-control parameter-input" id="stroopDefaultResponseDevice">
+                        <option value="keyboard" selected>Keyboard</option>
+                        <option value="mouse">Mouse</option>
+                    </select>
+                    <div class="parameter-help">Mouse mode shows on-screen buttons; keyboard uses keys below.</div>
+                </div>
+
+                <div class="parameter-row" id="stroopKeyboardOnlyNote" style="display:none;">
+                    <label class="parameter-label text-muted">Keyboard Mappings:</label>
+                    <div class="parameter-help text-muted">Key mappings are ignored when response device is Mouse.</div>
+                </div>
+
+                <div id="stroopColorNamingKeysGroup">
+                    <div class="parameter-row">
+                        <label class="parameter-label">Choice Keys:</label>
+                        <input type="text" class="form-control parameter-input" id="stroopChoiceKeys" value="1,2,3,4">
+                        <div class="parameter-help">Comma-separated keys mapped to Ink 1..N (e.g., 1,2,3,4)</div>
+                    </div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Font Size (px):</label>
+                    <input type="number" class="form-control parameter-input" id="stroopStimulusFontSizePx" value="64" min="10" max="200">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Stimulus Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="stroopStimulusDurationMs" value="0" min="0" max="10000">
+                    <div class="parameter-help">0 = show until response or trial duration</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Trial Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="stroopTrialDurationMs" value="2000" min="0" max="30000">
+                    <div class="parameter-help">0 = no timeout</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">ITI (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="stroopItiMs" value="500" min="0" max="10000">
+                </div>
+            </div>
+            `
             : (taskType === 'soc-dashboard')
             ? `
             <div class="parameter-group" id="socDashboardExperimentParameters">
@@ -3453,6 +3612,9 @@ class JsonBuilder {
 
         // Task-specific conditional UI (Stroop stimulus set + response mappings)
         this.bindStroopSettingsUI();
+
+        // Emotional Stroop: word-list UI (2 vs 3 lists)
+        this.bindEmotionalStroopWordListUI();
 
         // Task-specific conditional UI (Simon response device + keys)
         this.bindSimonSettingsUI();
@@ -4400,8 +4562,10 @@ class JsonBuilder {
     /**
      * Get component definitions based on experiment type and data collection
      */
-    getComponentDefinitions() {
-        const taskType = document.getElementById('taskType')?.value || 'rdm';
+    getComponentDefinitions(opts = {}) {
+        const taskType = (opts && typeof opts === 'object' && typeof opts.taskTypeOverride === 'string' && opts.taskTypeOverride.trim() !== '')
+            ? opts.taskTypeOverride.trim()
+            : (document.getElementById('taskType')?.value || 'rdm');
         const unitName = (this.experimentType === 'continuous') ? 'Frame' : 'Trial';
 
         const createComponentDefFromSchema = (schemaId, { name, icon, description, category } = {}) => {
@@ -4457,6 +4621,8 @@ class JsonBuilder {
                             ? 'Gabor Block'
                             : (currentTaskType === 'stroop')
                                 ? 'Stroop Block'
+                                : (currentTaskType === 'emotional-stroop')
+                                    ? 'Emotional Stroop Block'
                                 : 'Block';
 
             const baseOptions = (currentTaskType === 'flanker')
@@ -4471,6 +4637,8 @@ class JsonBuilder {
                         ? ['gabor-trial', 'gabor-quest']
                         : (currentTaskType === 'stroop')
                             ? ['stroop-trial']
+                            : (currentTaskType === 'emotional-stroop')
+                                ? ['emotional-stroop-trial']
                         : ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups'];
 
             // Always allow generic jsPsych trial types inside Blocks (across all tasks).
@@ -4598,6 +4766,38 @@ class JsonBuilder {
                 stroop_iti_max: { type: 'number', default: 500, min: 0, max: 10000 }
             };
 
+            const emotionalStroopOnlyParams = {
+                // Sampling: labeled word lists (2–3)
+                emostroop_word_list_count: { type: 'select', default: '2', options: ['2', '3'] },
+
+                emostroop_word_list_1_label: { type: 'string', default: 'Neutral' },
+                emostroop_word_list_1_words: { type: 'string', default: 'CHAIR,TABLE,WINDOW' },
+
+                emostroop_word_list_2_label: { type: 'string', default: 'Negative' },
+                emostroop_word_list_2_words: { type: 'string', default: 'SAD,ANGRY,FEAR' },
+
+                emostroop_word_list_3_label: { type: 'string', default: 'Positive' },
+                emostroop_word_list_3_words: { type: 'string', default: 'HAPPY,JOY,LOVE' },
+
+                // Back-compat: flattened word pool (ignored at runtime if word_lists present)
+                emostroop_word_options: { type: 'string', default: '' },
+
+                // Ink palette sampling
+                emostroop_ink_color_options: { type: 'string', default: 'RED,GREEN,BLUE,YELLOW' },
+
+                // Response overrides
+                emostroop_response_device: { type: 'select', default: 'inherit', options: ['inherit', 'keyboard', 'mouse'] },
+                emostroop_choice_keys: { type: 'string', default: '' },
+
+                // Timing windows
+                emostroop_stimulus_duration_min: { type: 'number', default: 0, min: 0, max: 10000 },
+                emostroop_stimulus_duration_max: { type: 'number', default: 0, min: 0, max: 10000 },
+                emostroop_trial_duration_min: { type: 'number', default: 2000, min: 0, max: 60000 },
+                emostroop_trial_duration_max: { type: 'number', default: 2000, min: 0, max: 60000 },
+                emostroop_iti_min: { type: 'number', default: 500, min: 0, max: 10000 },
+                emostroop_iti_max: { type: 'number', default: 500, min: 0, max: 10000 }
+            };
+
             const simonOnlyParams = {
                 // Sampling
                 simon_color_options: { type: 'string', default: 'BLUE,ORANGE' },
@@ -4705,6 +4905,8 @@ class JsonBuilder {
                         ? gaborOnlyParams
                         : (currentTaskType === 'stroop')
                             ? stroopOnlyParams
+                        : (currentTaskType === 'emotional-stroop')
+                            ? emotionalStroopOnlyParams
                         : rdmOnlyParams;
 
             return {
@@ -5020,7 +5222,7 @@ class JsonBuilder {
         }
 
         // For Flanker/SART/Simon/PVT/Gabor/Stroop/N-back, show only task-appropriate components.
-        if (taskType === 'flanker' || taskType === 'sart' || taskType === 'simon' || taskType === 'pvt' || taskType === 'gabor' || taskType === 'stroop' || taskType === 'nback') {
+        if (taskType === 'flanker' || taskType === 'sart' || taskType === 'simon' || taskType === 'pvt' || taskType === 'gabor' || taskType === 'stroop' || taskType === 'emotional-stroop' || taskType === 'nback') {
             if (taskType === 'flanker') {
                 baseComponents.push({
                     id: 'flanker-trial',
@@ -5164,6 +5366,30 @@ class JsonBuilder {
                         choice_keys: { type: 'array', default: ['1', '2', '3', '4'] },
                         congruent_key: { type: 'string', default: 'f' },
                         incongruent_key: { type: 'string', default: 'j' },
+
+                        stimulus_font_size_px: { type: 'number', default: 64, min: 12, max: 200 },
+                        stimulus_duration_ms: { type: 'number', default: 0, min: 0, max: 10000 },
+                        trial_duration_ms: { type: 'number', default: 2000, min: 0, max: 30000 },
+                        iti_ms: { type: 'number', default: 500, min: 0, max: 10000 }
+                    }
+                });
+            }
+
+            if (taskType === 'emotional-stroop') {
+                baseComponents.push({
+                    id: 'emotional-stroop-trial',
+                    name: `Emotional Stroop ${unitName}`,
+                    icon: 'fas fa-font',
+                    description: 'Emotional Stroop trial/frame (emotional word shown in ink color; respond by ink color)',
+                    category: 'task',
+                    parameters: {
+                        word: { type: 'string', default: 'HAPPY' },
+                        word_list_label: { type: 'string', default: 'Neutral' },
+                        word_list_index: { type: 'number', default: 1, min: 1, max: 3 },
+                        ink_color_name: { type: 'string', default: 'BLUE' },
+
+                        response_device: { type: 'select', default: 'inherit', options: ['inherit', 'keyboard', 'mouse'] },
+                        choice_keys: { type: 'array', default: ['1', '2', '3', '4'] },
 
                         stimulus_font_size_px: { type: 'number', default: 64, min: 12, max: 200 },
                         stimulus_duration_ms: { type: 'number', default: 0, min: 0, max: 10000 },
@@ -5632,6 +5858,10 @@ class JsonBuilder {
                 Object.assign(componentData, this.getStroopDefaultsForNewComponent());
             }
 
+            if (componentDef.id === 'emotional-stroop-trial') {
+                Object.assign(componentData, this.getEmotionalStroopDefaultsForNewComponent());
+            }
+
             if (componentDef.id === 'simon-trial') {
                 Object.assign(componentData, this.getSimonDefaultsForNewComponent());
             }
@@ -5659,6 +5889,9 @@ class JsonBuilder {
                 }
                 if (currentTaskType === 'stroop') {
                     Object.assign(componentData, this.getStroopDefaultsForNewBlock());
+                }
+                if (currentTaskType === 'emotional-stroop') {
+                    Object.assign(componentData, this.getEmotionalStroopDefaultsForNewBlock());
                 }
                 if (currentTaskType === 'simon') {
                     Object.assign(componentData, this.getSimonDefaultsForNewBlock());
@@ -6052,6 +6285,40 @@ class JsonBuilder {
             };
         }
 
+        if (taskType === 'emotional-stroop') {
+            const stimuli = this.getCurrentStroopStimuliFromUI();
+            const n = Array.isArray(stimuli) ? stimuli.length : 0;
+
+            const parsed = this.parseEmotionalStroopWordListsFromUI();
+            const wordListCount = (parsed?.word_list_count === 3 ? 3 : 2);
+            const wordLists = Array.isArray(parsed?.word_lists) ? parsed.word_lists : [];
+            const wordOptions = Array.isArray(parsed?.word_options) ? parsed.word_options : this.parseEmotionalStroopWordOptionsFromUI();
+            const responseDevice = (document.getElementById('stroopDefaultResponseDevice')?.value || 'keyboard').toString();
+            const choiceKeys = this.parseStroopChoiceKeysFromUI(Math.max(2, n));
+
+            const fontSizePx = Number.parseInt(document.getElementById('stroopStimulusFontSizePx')?.value || '64', 10);
+            const stimMs = Number.parseInt(document.getElementById('stroopStimulusDurationMs')?.value || '0', 10);
+            const trialMs = Number.parseInt(document.getElementById('stroopTrialDurationMs')?.value || '2000', 10);
+            const itiMs = Number.parseInt(document.getElementById('stroopItiMs')?.value || '500', 10);
+
+            config.emotional_stroop_settings = {
+                word_list_count: wordListCount,
+                word_lists: wordLists,
+                // Convenience / legacy shape
+                word_options: Array.isArray(wordOptions) ? wordOptions : [],
+                stimuli: Array.isArray(stimuli) ? stimuli : [],
+
+                response_mode: 'color_naming',
+                response_device: responseDevice,
+                choice_keys: choiceKeys,
+
+                stimulus_font_size_px: Number.isFinite(fontSizePx) ? fontSizePx : 64,
+                stimulus_duration_ms: Number.isFinite(stimMs) ? stimMs : 0,
+                trial_duration_ms: Number.isFinite(trialMs) ? trialMs : 2000,
+                iti_ms: Number.isFinite(itiMs) ? itiMs : 500
+            };
+        }
+
         if (taskType === 'simon') {
             const stimuli = this.getCurrentSimonStimuliFromUI();
 
@@ -6304,6 +6571,56 @@ class JsonBuilder {
         return out;
     }
 
+    parseEmotionalStroopWordOptionsFromUI() {
+        // Back-compat helper: return a single flattened list of all word lists.
+        // Prefer the word-list UI when present.
+        const parsed = this.parseEmotionalStroopWordListsFromUI();
+        if (parsed && Array.isArray(parsed.word_options)) return parsed.word_options;
+
+        const raw = document.getElementById('emotionalStroopWordList1Words')?.value;
+        return (raw ?? '')
+            .toString()
+            .split(',')
+            .map(s => s.trim())
+            .filter(Boolean);
+    }
+
+    parseEmotionalStroopWordListsFromUI() {
+        const parseList = (raw) => {
+            return (raw ?? '')
+                .toString()
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean);
+        };
+
+        const countRaw = Number.parseInt(document.getElementById('emotionalStroopWordListCount')?.value || '2', 10);
+        const count = Number.isFinite(countRaw) ? (countRaw === 3 ? 3 : 2) : 2;
+
+        const lists = [];
+        const l1Label = (document.getElementById('emotionalStroopWordList1Label')?.value || 'Neutral').toString().trim() || 'Neutral';
+        const l1Words = parseList(document.getElementById('emotionalStroopWordList1Words')?.value);
+        lists.push({ label: l1Label, words: l1Words });
+
+        const l2Label = (document.getElementById('emotionalStroopWordList2Label')?.value || 'Negative').toString().trim() || 'Negative';
+        const l2Words = parseList(document.getElementById('emotionalStroopWordList2Words')?.value);
+        lists.push({ label: l2Label, words: l2Words });
+
+        if (count === 3) {
+            const l3Label = (document.getElementById('emotionalStroopWordList3Label')?.value || 'Positive').toString().trim() || 'Positive';
+            const l3Words = parseList(document.getElementById('emotionalStroopWordList3Words')?.value);
+            lists.push({ label: l3Label, words: l3Words });
+        }
+
+        const wordOptions = lists.flatMap((l) => Array.isArray(l.words) ? l.words : []).filter(Boolean);
+
+        return {
+            word_list_count: count,
+            word_lists: lists,
+            word_options: Array.from(new Set(wordOptions))
+        };
+    }
+
     /**
      * Build a preview payload for the current Stroop defaults.
      */
@@ -6350,6 +6667,52 @@ class JsonBuilder {
                 choice_keys: choiceKeys,
                 congruent_key: congruentKey,
                 incongruent_key: incongruentKey
+            }
+        };
+    }
+
+    /**
+     * Build a preview payload for the current Emotional Stroop defaults.
+     */
+    getCurrentEmotionalStroopDefaults() {
+        const stimuli = this.getCurrentStroopStimuliFromUI();
+        const n = stimuli.length;
+        const listsParsed = this.parseEmotionalStroopWordListsFromUI();
+        const wordLists = listsParsed?.word_lists || [];
+        const words = listsParsed?.word_options || [];
+
+        const responseDevice = (document.getElementById('stroopDefaultResponseDevice')?.value || 'keyboard').toString();
+        const choiceKeys = this.parseStroopChoiceKeysFromUI(Math.max(2, n));
+
+        const fontSizePx = Number.parseInt(document.getElementById('stroopStimulusFontSizePx')?.value || '64', 10);
+        const stimMs = Number.parseInt(document.getElementById('stroopStimulusDurationMs')?.value || '0', 10);
+        const trialMs = Number.parseInt(document.getElementById('stroopTrialDurationMs')?.value || '2000', 10);
+        const itiMs = Number.parseInt(document.getElementById('stroopItiMs')?.value || '500', 10);
+
+        return {
+            type: 'emotional-stroop-trial',
+            name: 'Emotional Stroop Defaults',
+
+            word: (words[0] || 'HAPPY').toString(),
+            word_list_label: (wordLists[0]?.label || '').toString(),
+            word_list_index: 1,
+            ink_color_name: (stimuli[0]?.name || 'BLUE').toString(),
+
+            response_mode: 'color_naming',
+            response_device: responseDevice,
+            choice_keys: choiceKeys,
+
+            stimulus_font_size_px: Number.isFinite(fontSizePx) ? fontSizePx : 64,
+            stimulus_duration_ms: Number.isFinite(stimMs) ? stimMs : 0,
+            trial_duration_ms: Number.isFinite(trialMs) ? trialMs : 2000,
+            iti_ms: Number.isFinite(itiMs) ? itiMs : 500,
+
+            // Non-standard field: helps preview use ink palette context.
+            stroop_settings: {
+                stimuli,
+                response_mode: 'color_naming',
+                response_device: responseDevice,
+                choice_keys: choiceKeys
             }
         };
     }
@@ -6744,6 +7107,79 @@ class JsonBuilder {
             stroop_trial_duration_max: Number.isFinite(trialMs) ? trialMs : 2000,
             stroop_iti_min: Number.isFinite(itiMs) ? itiMs : 500,
             stroop_iti_max: Number.isFinite(itiMs) ? itiMs : 500
+        };
+    }
+
+    getEmotionalStroopDefaultsForNewComponent() {
+        const stimuli = this.getCurrentStroopStimuliFromUI();
+        const n = stimuli.length;
+        const choiceKeys = this.parseStroopChoiceKeysFromUI(Math.max(2, n));
+        const listsParsed = this.parseEmotionalStroopWordListsFromUI();
+        const words = listsParsed?.word_options || [];
+        const wordLists = listsParsed?.word_lists || [];
+
+        return {
+            word: (words[0] || 'HAPPY').toString(),
+            word_list_label: (wordLists[0]?.label || '').toString(),
+            word_list_index: 1,
+            ink_color_name: (stimuli[0]?.name || 'BLUE').toString(),
+
+            response_device: 'inherit',
+            choice_keys: choiceKeys,
+
+            stimulus_font_size_px: Number.parseInt(document.getElementById('stroopStimulusFontSizePx')?.value || '64', 10),
+            stimulus_duration_ms: Number.parseInt(document.getElementById('stroopStimulusDurationMs')?.value || '0', 10),
+            trial_duration_ms: Number.parseInt(document.getElementById('stroopTrialDurationMs')?.value || '2000', 10),
+            iti_ms: Number.parseInt(document.getElementById('stroopItiMs')?.value || '500', 10)
+        };
+    }
+
+    getEmotionalStroopDefaultsForNewBlock() {
+        const stimuli = this.getCurrentStroopStimuliFromUI();
+        const names = (Array.isArray(stimuli) ? stimuli : [])
+            .map(s => (s?.name ?? '').toString().trim())
+            .filter(Boolean);
+        const inkList = names.join(',');
+
+        const parsed = this.parseEmotionalStroopWordListsFromUI();
+        const lists = Array.isArray(parsed?.word_lists) ? parsed.word_lists : [];
+        const flattened = Array.isArray(parsed?.word_options) ? parsed.word_options : [];
+        const wordList = flattened.join(',');
+
+        const n = Math.max(2, names.length);
+        const choiceKeys = this.parseStroopChoiceKeysFromUI(n).join(',');
+
+        const stimMs = Number.parseInt(document.getElementById('stroopStimulusDurationMs')?.value || '0', 10);
+        const trialMs = Number.parseInt(document.getElementById('stroopTrialDurationMs')?.value || '2000', 10);
+        const itiMs = Number.parseInt(document.getElementById('stroopItiMs')?.value || '500', 10);
+
+        return {
+            block_component_type: 'emotional-stroop-trial',
+
+            emostroop_word_list_count: (parsed?.word_list_count === 3 ? 3 : 2),
+
+            emostroop_word_list_1_label: (lists[0]?.label || 'Neutral').toString(),
+            emostroop_word_list_1_words: (Array.isArray(lists[0]?.words) ? lists[0].words.join(',') : 'CHAIR,TABLE,WINDOW'),
+
+            emostroop_word_list_2_label: (lists[1]?.label || 'Negative').toString(),
+            emostroop_word_list_2_words: (Array.isArray(lists[1]?.words) ? lists[1].words.join(',') : 'SAD,ANGRY,FEAR'),
+
+            emostroop_word_list_3_label: (lists[2]?.label || 'Positive').toString(),
+            emostroop_word_list_3_words: (Array.isArray(lists[2]?.words) ? lists[2].words.join(',') : 'HAPPY,JOY,LOVE'),
+
+            // Back-compat / convenience: flattened pool (preview may still use it if needed)
+            emostroop_word_options: wordList || 'HAPPY,SAD,ANGRY,CHAIR',
+            emostroop_ink_color_options: inkList || 'RED,GREEN,BLUE,YELLOW',
+
+            emostroop_response_device: 'inherit',
+            emostroop_choice_keys: choiceKeys,
+
+            emostroop_stimulus_duration_min: Number.isFinite(stimMs) ? stimMs : 0,
+            emostroop_stimulus_duration_max: Number.isFinite(stimMs) ? stimMs : 0,
+            emostroop_trial_duration_min: Number.isFinite(trialMs) ? trialMs : 2000,
+            emostroop_trial_duration_max: Number.isFinite(trialMs) ? trialMs : 2000,
+            emostroop_iti_min: Number.isFinite(itiMs) ? itiMs : 500,
+            emostroop_iti_max: Number.isFinite(itiMs) ? itiMs : 500
         };
     }
 
@@ -7687,6 +8123,57 @@ class JsonBuilder {
             addWindow('stimulus_duration_ms', blockComponent.stroop_stimulus_duration_min, blockComponent.stroop_stimulus_duration_max);
             addWindow('trial_duration_ms', blockComponent.stroop_trial_duration_min, blockComponent.stroop_trial_duration_max);
             addWindow('iti_ms', blockComponent.stroop_iti_min, blockComponent.stroop_iti_max);
+        } else if (componentType === 'emotional-stroop-trial') {
+            const parseStringList = (raw) => {
+                if (raw === undefined || raw === null) return [];
+                return raw
+                    .toString()
+                    .split(',')
+                    .map(s => s.trim())
+                    .filter(Boolean);
+            };
+
+            const countRaw = Number.parseInt((blockComponent.emostroop_word_list_count ?? '2').toString(), 10);
+            const count = Number.isFinite(countRaw) ? (countRaw === 3 ? 3 : 2) : 2;
+
+            const lists = [];
+            const l1Label = (blockComponent.emostroop_word_list_1_label ?? 'Neutral').toString().trim() || 'Neutral';
+            const l1Words = parseStringList(blockComponent.emostroop_word_list_1_words);
+            lists.push({ label: l1Label, words: l1Words });
+
+            const l2Label = (blockComponent.emostroop_word_list_2_label ?? 'Negative').toString().trim() || 'Negative';
+            const l2Words = parseStringList(blockComponent.emostroop_word_list_2_words);
+            lists.push({ label: l2Label, words: l2Words });
+
+            if (count === 3) {
+                const l3Label = (blockComponent.emostroop_word_list_3_label ?? 'Positive').toString().trim() || 'Positive';
+                const l3Words = parseStringList(blockComponent.emostroop_word_list_3_words);
+                lists.push({ label: l3Label, words: l3Words });
+            }
+
+            values.word_lists = lists;
+
+            // Back-compat / convenience: also export a flattened pool
+            const wordsFlat = lists.flatMap((l) => Array.isArray(l.words) ? l.words : []);
+            const legacyWords = (wordsFlat.length > 0) ? wordsFlat : parseStringList(blockComponent.emostroop_word_options);
+            if (legacyWords.length > 0) values.word = Array.from(new Set(legacyWords));
+
+            // Ink colors are named entries from the experiment-wide ink palette.
+            const inks = parseStringList(blockComponent.emostroop_ink_color_options);
+            if (inks.length > 0) values.ink_color_name = Array.from(new Set(inks));
+
+            const dev = (blockComponent.emostroop_response_device ?? 'inherit').toString().trim();
+            if (dev && dev !== 'inherit') values.response_device = dev;
+
+            // Only export response mappings when the block explicitly overrides to keyboard.
+            if (dev === 'keyboard') {
+                const choiceKeys = parseStringList(blockComponent.emostroop_choice_keys);
+                if (choiceKeys.length > 0) values.choice_keys = choiceKeys;
+            }
+
+            addWindow('stimulus_duration_ms', blockComponent.emostroop_stimulus_duration_min, blockComponent.emostroop_stimulus_duration_max);
+            addWindow('trial_duration_ms', blockComponent.emostroop_trial_duration_min, blockComponent.emostroop_trial_duration_max);
+            addWindow('iti_ms', blockComponent.emostroop_iti_min, blockComponent.emostroop_iti_max);
         } else if (componentType === 'simon-trial') {
             const parseStringList = (raw) => {
                 if (raw === undefined || raw === null) return [];

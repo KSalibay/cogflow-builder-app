@@ -10,25 +10,38 @@ This app is plain HTML/CSS/JS loaded via classic `<script>` tags (globals; no `i
 
 ## Repositories
 
-- Builder repo: https://github.com/KSalibay/json-builder-app
-- Interpreter repo: https://github.com/KSalibay/json-interpreter-app
+- Builder repo: https://github.com/KSalibay/cogflow-builder-app
+- Interpreter repo: https://github.com/KSalibay/cogflow-interpreter-app
 
-## Recent highlights (Feb 2026)
+## What this app does
 
-- N-back task added end-to-end in the Builder (authoring + export), supporting both **trial-based** and **continuous** modes.
-- Fixation cross support added as an ITI visual marker via `show_fixation_cross_between_trials` (propagates through export and is rendered by the Interpreter).
-- UX overhaul (“CogFlow” rebrand): palette-driven theming (CSS variables), IBM Plex Sans typography, collapsible parameter groups for long defaults, and an app-shell layout to avoid whole-page scrolling.
-- Accessibility Mode toggle added (Atkinson Hyperlegible + higher contrast tokens), persisted locally.
-- New **JATOS Props** button generates a ready-to-paste JATOS **Component Properties** JSON bundle for Token Store exports (including **multi-config** bundles).
-- DRT (Detection Response Task) is ISO-compliant by default (timing/RT defaults) with an **Override ISO standard** toggle on `detection-response-task-start` for researchers who explicitly need to edit those values.
-- Blocks now support additional “generic jsPsych” inner types (`html-keyboard-response`, `html-button-response`, `image-keyboard-response`) with correct in-Builder previews. `image-keyboard-response` Blocks can optionally use `stimulus_images` (comma/newline list) to sample different images across trials.
+CogFlow Builder is a static authoring tool for generating **CogFlow JSON configs** (task defaults + a timeline of components/blocks) that the CogFlow Interpreter can run via **jsPsych** (often inside **JATOS**).
+
+Key features:
+
+- Task-scoped component library (so the timeline and Block editor show the correct task-specific fields/options)
+- Blocks: compact “generate many trials” representation with parameter windows/ranges and per-trial sampling
+- Live Preview for many components (including representative Block sampling)
+- Export paths:
+  - Local JSON download
+  - Token Store export (Cloudflare Worker; optional R2 assets) + **JATOS Props** bundle generation
+  - Optional Microsoft Graph / SharePoint export (advanced)
+- Asset handling:
+  - `asset://...` placeholders during authoring
+  - Upload assets during export (Token Store / SharePoint) and rewrite references to hosted URLs
+  - Optional “Upload Assets” folder tool to reference images by filename
+- Data-collection modalities and UI:
+  - reaction time / accuracy / correctness toggles
+  - optional eye tracking (WebGazer) + calibration-instructions helper component
+  - optional mouse tracking
+- UI theming + Accessibility Mode (persisted locally)
 
 ## Run locally
 
 - Use VS Code Live Server on [index.html](index.html)
 - If you hit caching issues, bump the `?v=...` cache-buster querystring on local `<script>` tags in [index.html](index.html)
 
-## Recommended workflow (Feb 2026): Token Store export + JATOS
+## Recommended workflow: Token Store export + JATOS
 
 The default “demo-ready” path avoids SharePoint/Graph setup and avoids relying on URL params inside JATOS:
 
@@ -245,37 +258,24 @@ Notes:
 - **Data collection** currently includes `reaction-time`, `accuracy`, `correctness` (online correctness computation toggle), and `eye-tracking`.
 - **Response modalities** (keyboard/mouse/touch/voice) are configured via the Default Response UI and exported under `response_parameters`.
 
-### Supported tasks (9)
+### Supported tasks
 
-The Builder currently supports nine task types via the **Task Type** dropdown:
+The Builder supports these task types via the **Task Type** dropdown:
 
 - `task_type: "rdm"` — Random Dot Motion (RDM)
-- `task_type: "nback"` — N-back task (**trial-based** and **continuous**)
-- `task_type: "gabor"` — Gabor Patch task
 - `task_type: "flanker"` — Flanker task
 - `task_type: "sart"` — Sustained Attention to Response Task (SART)
 - `task_type: "stroop"` — Stroop task
+- `task_type: "emotional-stroop"` — Emotional Stroop task (2–3 labeled word lists)
 - `task_type: "simon"` — Simon task
 - `task_type: "pvt"` — Psychomotor Vigilance Task (PVT)
+- `task_type: "gabor"` — Gabor Patch task
+- `task_type: "nback"` — N-back task (**trial-based** and **continuous**)
 - `task_type: "soc-dashboard"` — multi-window SOC desktop session (continuous-mode only)
 
 There is also a `task_type: "custom"` option intended for advanced/manual use (no task-specific components; generic components + tracking only).
 
-### Session updates (Feb 2026)
-
-- Eye-tracking support in the Builder now includes a dedicated **Calibration Instructions** component (shown only when the Eye Tracking modality is enabled).
-  - This exports as a normal `html-keyboard-response` trial, but is tagged with `data.plugin_type = "eye-tracking-calibration-instructions"` so the interpreter can reposition it to the correct place (between the camera-permission screen and calibration dots).
-  - Timeline card title/icon also stays in sync so calibration prefaces remain visually distinct from generic Instructions.
-- Response-modality parameters are now conditionally shown/disabled in the UI.
-  - Disabled fields are not saved/exported (prevents exporting irrelevant voice/mouse/touch settings when not in use).
-- Instructions authoring now supports rich text (WYSIWYG) for instruction-like components.
-  - The editor stores HTML in the config, and the JSON preview escapes `<`/`>` so tags display literally.
-- Continuous-mode defaults were expanded to include aperture outline controls so continuous exports match the interpreter’s rendering expectations.
-- Added an experiment-wide **Theme** dropdown (Dark/Light) exported as `ui_settings.theme`.
-- Added trial-based tasks: **Stroop**, **Simon**, and **PVT** end-to-end (authoring UI defaults, timeline components, Block support, and Component Preview renderers).
-- Added a new SOC Dashboard subtask: `soc-subtask-pvt-like` (PVT-inspired vigilance window; interactive preview).
-
-### SOC Dashboard release (Feb 2026)
+### SOC Dashboard
 
 The Builder includes a **SOC Dashboard** task type for “multi-tasking” paradigms presented inside a single, realistic SOC desktop.
 
@@ -358,7 +358,7 @@ The timeline is authored in the UI and serialized from DOM `dataset.componentDat
 - `rdm-practice`
 - `rdm-adaptive`
 - `rdm-dot-groups`
-- `block` (component_type can be `rdm-trial`, `rdm-practice`, `rdm-adaptive`, `rdm-dot-groups`, `html-keyboard-response`, `html-button-response`, or `image-keyboard-response`)
+- `block` (block_component_type can be `rdm-trial`, `rdm-practice`, `rdm-adaptive`, `rdm-dot-groups`, `html-keyboard-response`, `html-button-response`, or `image-keyboard-response`)
   - For `image-keyboard-response` blocks, you can provide `stimulus_images` as a comma/newline-separated list to sample from across generated trials.
 - `html-button-response` (generic button-response screen; available in RDM mode)
 
@@ -370,32 +370,38 @@ The timeline is authored in the UI and serialized from DOM `dataset.componentDat
   - `patch_border_width_px`
   - `patch_border_color`
   - `patch_border_opacity`
-- `block` (component_type can be `gabor-trial` or `gabor-quest`)
+- `block` (block_component_type can be `gabor-trial` or `gabor-quest`)
 
 ### Flanker components (`task_type: "flanker"`)
 
 - `flanker-trial`
-- `block` (component_type can be `flanker-trial`)
+- `block` (block_component_type can be `flanker-trial`)
 
 ### SART components (`task_type: "sart"`)
 
 - `sart-trial`
-- `block` (component_type can be `sart-trial`)
+- `block` (block_component_type can be `sart-trial`)
 
 ### Stroop components (`task_type: "stroop"`)
 
 - `stroop-trial`
-- `block` (component_type can be `stroop-trial`)
+- `block` (block_component_type can be `stroop-trial`)
+
+### Emotional Stroop components (`task_type: "emotional-stroop"`)
+
+- `emotional-stroop-trial`
+- `block` (block_component_type can be `emotional-stroop-trial`)
+  - Blocks can export structured `word_lists` and record the selected list in per-trial fields `word_list_label` / `word_list_index`.
 
 ### Simon components (`task_type: "simon"`)
 
 - `simon-trial`
-- `block` (component_type can be `simon-trial`)
+- `block` (block_component_type can be `simon-trial`)
 
 ### PVT components (`task_type: "pvt"`)
 
 - `pvt-trial`
-- `block` (component_type can be `pvt-trial`)
+- `block` (block_component_type can be `pvt-trial`)
 
 ### N-back components (`task_type: "nback"`)
 
@@ -404,7 +410,7 @@ The timeline is authored in the UI and serialized from DOM `dataset.componentDat
   - Continuous: compiled into a continuous N-back stream (Interpreter plugin `nback-continuous`).
 - `nback-block`
   - Trial-based N-back trial item (usually generated from a sequence/block).
-- `block` (component_type can be `nback-block`)
+- `block` (block_component_type can be `nback-block`)
   - Acts as an N-back generator with a `block_length` and `parameter_values` (advanced authoring).
 
 ### SOC Dashboard components (`task_type: "soc-dashboard"`)
@@ -456,8 +462,8 @@ Blocks let you represent many trials without expanding them into a long explicit
 ```json
 {
   "type": "block",
-  "component_type": "rdm-trial",
-  "length": 100,
+  "block_component_type": "rdm-trial",
+  "block_length": 100,
   "sampling_mode": "per-trial",
   "parameter_windows": [
     { "parameter": "coherence", "min": 0.2, "max": 0.8 },
@@ -471,6 +477,11 @@ Blocks let you represent many trials without expanding them into a long explicit
 ```
 
 In Preview, blocks are shown by sampling a representative trial from their parameter windows.
+
+Notes:
+
+- The Interpreter also accepts legacy keys like `component_type` and `length`, but `block_component_type` / `block_length` is the preferred shape.
+- For Emotional Stroop Blocks, the Builder can export structured `word_lists` and per-trial metadata fields `word_list_label` / `word_list_index`.
 
 ## Response defaults and per-component overrides
 
