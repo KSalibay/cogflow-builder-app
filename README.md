@@ -269,6 +269,7 @@ The Builder supports these task types via the **Task Type** dropdown:
 - `task_type: "emotional-stroop"` — Emotional Stroop task (2–3 labeled word lists)
 - `task_type: "simon"` — Simon task
 - `task_type: "pvt"` — Psychomotor Vigilance Task (PVT)
+- `task_type: "task-switching"` — Task Switching (letters/numbers or custom token sets; explicit/position/color cueing)
 - `task_type: "gabor"` — Gabor Patch task
 - `task_type: "nback"` — N-back task (**trial-based** and **continuous**)
 - `task_type: "soc-dashboard"` — multi-window SOC desktop session (continuous-mode only)
@@ -402,6 +403,41 @@ The timeline is authored in the UI and serialized from DOM `dataset.componentDat
 
 - `pvt-trial`
 - `block` (block_component_type can be `pvt-trial`)
+
+### Task Switching components (`task_type: "task-switching"`)
+
+- `task-switching-trial`
+- `block` (block_component_type can be `task-switching-trial`)
+
+Task Switching authoring model:
+
+- The **Experiment Settings** panel for Task Switching defines experiment-wide defaults exported under `task_switching_settings`.
+  - Stimulus set:
+    - `letters_numbers`: built-in vowel/consonant and odd/even scoring
+    - `custom`: two per-task 2AFC token sets (`tasks[0]` + `tasks[1]`), each with `category_a_tokens` / `category_b_tokens`
+  - Cueing:
+    - `cue_type: explicit | position | color`
+    - Explicit cue fields: `task_1_cue_text`, `task_2_cue_text`, `cue_font_size_px`, `cue_duration_ms`, `cue_gap_ms`, `cue_color_hex`
+    - Position cue fields: `task_1_position`, `task_2_position`
+    - Color cue fields: `task_1_color_hex`, `task_2_color_hex`
+
+- Creating a new Task Switching **Block** uses those experiment-wide cueing defaults to seed the block-level `ts_*` parameters.
+
+Block parameters (Task Switching):
+
+- Structural:
+  - `ts_trial_type: switch | single`
+  - `ts_single_task_index: 1 | 2` (used when `ts_trial_type` is `single`)
+- Cueing:
+  - `ts_cue_type` and the corresponding `ts_task_1_*` / `ts_task_2_*` / `ts_cue_*` fields
+- Appearance/response/timing defaults:
+  - `ts_stimulus_position`, `ts_border_enabled`, `ts_left_key`, `ts_right_key`
+  - `ts_stimulus_duration_min/max`, `ts_trial_duration_min/max`, `ts_iti_min/max`
+
+Runtime behavior notes (Interpreter):
+
+- The runtime displays a **combined stimulus** (task-1 token + task-2 token, e.g. `A 2`) on every trial.
+- Correctness uses the **task-relevant token** (letters task uses the letter; numbers task uses the number) and your configured token sets / keys.
 
 ### N-back components (`task_type: "nback"`)
 

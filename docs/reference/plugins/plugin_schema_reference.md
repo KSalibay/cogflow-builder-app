@@ -2,7 +2,7 @@
 
 Generated from `src/schemas/JSPsychSchemas.js`.
 
-Generated at: 2026-03-05T19:19:28Z
+Generated at: 2026-03-06T19:52:34Z
 
 ---
 
@@ -24,7 +24,7 @@ Generate many trials from parameter windows/ranges (compact representation for l
 | adaptive_target_performance | FLOAT | 0.82 | RDM Adaptive: target performance (fixed) | blockTarget: rdm-adaptive |
 | aperture_outline_color | COLOR | #FFFFFF | Outline color when overriding outline visibility | blockTarget: rdm-* |
 | aperture_outline_width | FLOAT | 2 | Outline width (px) when overriding outline visibility | blockTarget: rdm-* |
-| block_component_type | SELECT | rdm-trial | What component type this block generates | options: rdm-trial, rdm-practice, rdm-adaptive, rdm-dot-groups, flanker-trial, sart-trial, simon-trial, pvt-trial, stroop-trial, emotional-stroop-trial, gabor-trial, gabor-quest, nback-block, html-button-response, html-keyboard-response, image-keyboard-response \| required |
+| block_component_type | SELECT | rdm-trial | What component type this block generates | options: rdm-trial, rdm-practice, rdm-adaptive, rdm-dot-groups, flanker-trial, sart-trial, simon-trial, pvt-trial, task-switching-trial, stroop-trial, emotional-stroop-trial, gabor-trial, gabor-quest, nback-block, html-button-response, html-keyboard-response, image-keyboard-response \| required |
 | block_length | INT | 100 | Number of trials/frames this block represents | required |
 | button_choices | STRING | Continue | Button labels (comma/newline separated) | blockTarget: html-button-response |
 | button_html | HTML_STRING |  | Optional custom button HTML template (advanced) | blockTarget: html-button-response |
@@ -772,6 +772,47 @@ Collect survey/questionnaire responses in a single HTML form
 | submit_label | STRING | Continue | Submit button text |  |
 | timeout_ms | INT | null | Optional timeout in ms for auto-continue (null/omitted = off) |  |
 | title | STRING | Survey | Survey title/header |  |
+
+---
+
+## task-switching-trial
+
+**Type:** `task-switching-trial`
+
+Task Switching trial (combined stimulus for two tasks; cueing can be explicit/position/color; scoring implemented by interpreter)
+
+### Parameters
+
+| Name | Type | Default | Description | Notes |
+|---|---|---|---|---|
+| border_enabled | BOOL | False | Whether to draw a border around the stimulus |  |
+| cue_color_hex | COLOR | #FFFFFF | Explicit cue color (hex) |  |
+| cue_duration_ms | INT | 0 | Explicit cue duration in ms (0 = stays visible) | min: 0 \| max: 10000 |
+| cue_font_size_px | INT | 28 | Explicit cue font size (px) | min: 8 \| max: 200 |
+| cue_gap_ms | INT | 0 | Optional delay between cue and stimulus (ms; if supported by the runtime) | min: 0 \| max: 10000 |
+| cue_text | STRING |  | Optional explicit cue override text (if blank, uses task_1_cue_text/task_2_cue_text) |  |
+| cue_type | SELECT | explicit | Cueing mode: explicit text, position mapping, or color mapping | options: explicit, position, color |
+| iti_ms | INT | 500 | Inter-trial interval (ms) | min: 0 \| max: 30000 |
+| left_key | KEY | f | Left/category A response key |  |
+| right_key | KEY | j | Right/category B response key |  |
+| single_task_index | INT | 1 | When trial_type=single, which task index is used (1 or 2) | min: 1 \| max: 2 |
+| stimulus | STRING | A 1 | Combined stimulus string (e.g., "A 2"). The interpreter also supports stimulus_task_1/stimulus_task_2 fields. |  |
+| stimulus_color_hex | COLOR | #FFFFFF | Stimulus color when cue_type is not color (hex) |  |
+| stimulus_duration_ms | INT | 0 | Stimulus display duration (ms). 0 = show until response or trial duration | min: 0 \| max: 60000 |
+| stimulus_position | SELECT | top | Stimulus position when cue_type is not position | options: left, right, top, bottom |
+| stimulus_set_mode | SELECT | letters_numbers | Built-in scoring vs custom token sets | options: letters_numbers, custom |
+| stimulus_task_1 | STRING | A | Task 1 token (letters task by default) |  |
+| stimulus_task_2 | STRING | 1 | Task 2 token (numbers task by default) |  |
+| task_1_color_hex | COLOR | #FFFFFF | Color cue: stimulus color when Task 1 is active (hex) |  |
+| task_1_cue_text | STRING | LETTERS | Default explicit cue label for Task 1 |  |
+| task_1_position | SELECT | left | Position cue: stimulus position when Task 1 is active | options: left, right, top, bottom |
+| task_2_color_hex | COLOR | #FFFFFF | Color cue: stimulus color when Task 2 is active (hex) |  |
+| task_2_cue_text | STRING | NUMBERS | Default explicit cue label for Task 2 |  |
+| task_2_position | SELECT | right | Position cue: stimulus position when Task 2 is active | options: left, right, top, bottom |
+| task_index | INT | 1 | Which task is currently active (1 or 2) | min: 1 \| max: 2 |
+| tasks | COMPLEX | [] | Custom mode: tasks[0] and tasks[1] each define category_a_tokens/category_b_tokens arrays |  |
+| trial_duration_ms | INT | 2000 | Total trial duration (ms). 0 = no timeout. | min: 0 \| max: 60000 |
+| trial_type | SELECT | switch | Single-task vs task-switching sequence (used by block generation; explicit trials can ignore) | options: single, switch |
 
 ---
 

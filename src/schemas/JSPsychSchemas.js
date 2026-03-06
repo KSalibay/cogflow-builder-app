@@ -1331,6 +1331,184 @@ class JSPsychSchemas {
                 }
             },
 
+            'task-switching-trial': {
+                name: 'task-switching-trial',
+                description: 'Task Switching trial (combined stimulus for two tasks; cueing can be explicit/position/color; scoring implemented by interpreter)',
+                parameters: {
+                    task_index: {
+                        type: this.parameterTypes.INT,
+                        default: 1,
+                        min: 1,
+                        max: 2,
+                        description: 'Which task is currently active (1 or 2)'
+                    },
+                    stimulus: {
+                        type: this.parameterTypes.STRING,
+                        default: 'A 1',
+                        description: 'Combined stimulus string (e.g., "A 2"). The interpreter also supports stimulus_task_1/stimulus_task_2 fields.'
+                    },
+                    stimulus_task_1: {
+                        type: this.parameterTypes.STRING,
+                        default: 'A',
+                        description: 'Task 1 token (letters task by default)'
+                    },
+                    stimulus_task_2: {
+                        type: this.parameterTypes.STRING,
+                        default: '1',
+                        description: 'Task 2 token (numbers task by default)'
+                    },
+
+                    trial_type: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'switch',
+                        options: ['single', 'switch'],
+                        description: 'Single-task vs task-switching sequence (used by block generation; explicit trials can ignore)'
+                    },
+                    single_task_index: {
+                        type: this.parameterTypes.INT,
+                        default: 1,
+                        min: 1,
+                        max: 2,
+                        description: 'When trial_type=single, which task index is used (1 or 2)'
+                    },
+
+                    cue_type: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'explicit',
+                        options: ['explicit', 'position', 'color'],
+                        description: 'Cueing mode: explicit text, position mapping, or color mapping'
+                    },
+                    cue_text: {
+                        type: this.parameterTypes.STRING,
+                        default: '',
+                        description: 'Optional explicit cue override text (if blank, uses task_1_cue_text/task_2_cue_text)'
+                    },
+                    cue_font_size_px: {
+                        type: this.parameterTypes.INT,
+                        default: 28,
+                        min: 8,
+                        max: 200,
+                        description: 'Explicit cue font size (px)'
+                    },
+                    cue_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        min: 0,
+                        max: 10000,
+                        description: 'Explicit cue duration in ms (0 = stays visible)'
+                    },
+                    cue_gap_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        min: 0,
+                        max: 10000,
+                        description: 'Optional delay between cue and stimulus (ms; if supported by the runtime)'
+                    },
+                    cue_color_hex: {
+                        type: this.parameterTypes.COLOR,
+                        default: '#FFFFFF',
+                        description: 'Explicit cue color (hex)'
+                    },
+
+                    task_1_cue_text: {
+                        type: this.parameterTypes.STRING,
+                        default: 'LETTERS',
+                        description: 'Default explicit cue label for Task 1'
+                    },
+                    task_2_cue_text: {
+                        type: this.parameterTypes.STRING,
+                        default: 'NUMBERS',
+                        description: 'Default explicit cue label for Task 2'
+                    },
+
+                    task_1_position: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'left',
+                        options: ['left', 'right', 'top', 'bottom'],
+                        description: 'Position cue: stimulus position when Task 1 is active'
+                    },
+                    task_2_position: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'right',
+                        options: ['left', 'right', 'top', 'bottom'],
+                        description: 'Position cue: stimulus position when Task 2 is active'
+                    },
+
+                    task_1_color_hex: {
+                        type: this.parameterTypes.COLOR,
+                        default: '#FFFFFF',
+                        description: 'Color cue: stimulus color when Task 1 is active (hex)'
+                    },
+                    task_2_color_hex: {
+                        type: this.parameterTypes.COLOR,
+                        default: '#FFFFFF',
+                        description: 'Color cue: stimulus color when Task 2 is active (hex)'
+                    },
+                    stimulus_color_hex: {
+                        type: this.parameterTypes.COLOR,
+                        default: '#FFFFFF',
+                        description: 'Stimulus color when cue_type is not color (hex)'
+                    },
+
+                    stimulus_position: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'top',
+                        options: ['left', 'right', 'top', 'bottom'],
+                        description: 'Stimulus position when cue_type is not position'
+                    },
+                    border_enabled: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        description: 'Whether to draw a border around the stimulus'
+                    },
+
+                    left_key: {
+                        type: this.parameterTypes.KEY,
+                        default: 'f',
+                        description: 'Left/category A response key'
+                    },
+                    right_key: {
+                        type: this.parameterTypes.KEY,
+                        default: 'j',
+                        description: 'Right/category B response key'
+                    },
+
+                    stimulus_set_mode: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'letters_numbers',
+                        options: ['letters_numbers', 'custom'],
+                        description: 'Built-in scoring vs custom token sets'
+                    },
+                    tasks: {
+                        type: this.parameterTypes.COMPLEX,
+                        default: [],
+                        description: 'Custom mode: tasks[0] and tasks[1] each define category_a_tokens/category_b_tokens arrays'
+                    },
+
+                    stimulus_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        min: 0,
+                        max: 60000,
+                        description: 'Stimulus display duration (ms). 0 = show until response or trial duration'
+                    },
+                    trial_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 2000,
+                        min: 0,
+                        max: 60000,
+                        description: 'Total trial duration (ms). 0 = no timeout.'
+                    },
+                    iti_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 500,
+                        min: 0,
+                        max: 30000,
+                        description: 'Inter-trial interval (ms)'
+                    }
+                }
+            },
+
             'stroop-trial': {
                 name: 'stroop-trial',
                 description: 'Stroop trial (word shown in ink color; response/scoring implemented by interpreter)',
@@ -1682,7 +1860,7 @@ class JSPsychSchemas {
                     block_component_type: {
                         type: this.parameterTypes.SELECT,
                         default: 'rdm-trial',
-                        options: ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups', 'flanker-trial', 'sart-trial', 'simon-trial', 'pvt-trial', 'stroop-trial', 'emotional-stroop-trial', 'gabor-trial', 'gabor-quest', 'nback-block', 'html-button-response', 'html-keyboard-response', 'image-keyboard-response'],
+                        options: ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups', 'flanker-trial', 'sart-trial', 'simon-trial', 'pvt-trial', 'task-switching-trial', 'stroop-trial', 'emotional-stroop-trial', 'gabor-trial', 'gabor-quest', 'nback-block', 'html-button-response', 'html-keyboard-response', 'image-keyboard-response'],
                         required: true,
                         description: 'What component type this block generates'
                     },

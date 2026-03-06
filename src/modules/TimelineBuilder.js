@@ -1170,6 +1170,7 @@ class TimelineBuilder {
             if (innerType === 'emotional-stroop-trial') return 'emotional-stroop';
             if (innerType === 'simon-trial') return 'simon';
             if (innerType === 'pvt-trial') return 'pvt';
+            if (innerType === 'task-switching-trial') return 'task-switching';
             if (innerType === 'flanker-trial') return 'flanker';
             if (innerType === 'sart-trial') return 'sart';
             if (innerType === 'nback-block') return 'nback';
@@ -1260,6 +1261,8 @@ class TimelineBuilder {
                     ? ['simon-trial']
                 : (hintTask === 'pvt')
                     ? ['pvt-trial']
+                : (hintTask === 'task-switching')
+                    ? ['task-switching-trial']
                 : (hintTask === 'gabor')
                     ? ['gabor-trial', 'gabor-quest']
                 : (hintTask === 'stroop')
@@ -2021,6 +2024,8 @@ class TimelineBuilder {
                         ? ['simon-trial']
                     : (currentTaskType === 'pvt')
                         ? ['pvt-trial']
+                    : (currentTaskType === 'task-switching')
+                        ? ['task-switching-trial']
                     : (currentTaskType === 'stroop')
                         ? ['stroop-trial']
                     : (currentTaskType === 'emotional-stroop' || isEmostroopBlock)
@@ -2058,6 +2063,7 @@ class TimelineBuilder {
         const setParamVisible = (paramName, visible) => {
             const row = formContainer.querySelector(`[data-param-name="${paramName}"]`);
             if (!row) return;
+            row.classList.toggle('d-none', !visible);
             row.style.display = visible ? '' : 'none';
             row.querySelectorAll('input, select, textarea').forEach(i => {
                 i.disabled = !visible;
@@ -2174,6 +2180,72 @@ class TimelineBuilder {
             setParamVisible('gabor_value_cue_probability', valueEnabled);
         };
 
+        const updateTaskSwitchingBlockVisibility = () => {
+            if (!blockTypeEl) return;
+            const selected = blockTypeEl.value;
+
+            const allTsFields = [
+                'ts_trial_type',
+                'ts_single_task_index',
+                'ts_cue_type',
+                'ts_task_1_position',
+                'ts_task_2_position',
+                'ts_task_1_color_hex',
+                'ts_task_2_color_hex',
+                'ts_task_1_cue_text',
+                'ts_task_2_cue_text',
+                'ts_cue_font_size_px',
+                'ts_cue_duration_ms',
+                'ts_cue_gap_ms',
+                'ts_cue_color_hex',
+                'ts_stimulus_position',
+                'ts_stimulus_color_hex',
+                'ts_border_enabled',
+                'ts_left_key',
+                'ts_right_key',
+                'ts_stimulus_duration_min',
+                'ts_stimulus_duration_max',
+                'ts_trial_duration_min',
+                'ts_trial_duration_max',
+                'ts_iti_min',
+                'ts_iti_max'
+            ];
+
+            const isTs = selected === 'task-switching-trial';
+            allTsFields.forEach(p => setParamVisible(p, isTs));
+            if (!isTs) return;
+
+            const trialTypeEl = formContainer.querySelector('#param_ts_trial_type');
+            const trialType = (trialTypeEl ? trialTypeEl.value : 'switch').toString().trim().toLowerCase();
+            setParamVisible('ts_single_task_index', trialType === 'single');
+
+            const cueTypeEl = formContainer.querySelector('#param_ts_cue_type');
+            const cueType = (cueTypeEl ? cueTypeEl.value : 'explicit').toString().trim().toLowerCase();
+
+            const showPosition = cueType === 'position';
+            const showColor = cueType === 'color';
+            const showExplicit = cueType === 'explicit';
+
+            setParamVisible('ts_task_1_position', showPosition);
+            setParamVisible('ts_task_2_position', showPosition);
+
+            setParamVisible('ts_task_1_color_hex', showColor);
+            setParamVisible('ts_task_2_color_hex', showColor);
+
+            setParamVisible('ts_task_1_cue_text', showExplicit);
+            setParamVisible('ts_task_2_cue_text', showExplicit);
+            setParamVisible('ts_cue_font_size_px', showExplicit);
+            setParamVisible('ts_cue_duration_ms', showExplicit);
+            setParamVisible('ts_cue_gap_ms', showExplicit);
+            setParamVisible('ts_cue_color_hex', showExplicit);
+
+            // In position cueing, task_*_position controls location.
+            setParamVisible('ts_stimulus_position', !showPosition);
+
+            // In color cueing, task colors control stimulus color.
+            setParamVisible('ts_stimulus_color_hex', !showColor);
+        };
+
         const updateBlockVisibility = () => {
             if (!blockTypeEl) return;
             const selected = blockTypeEl.value;
@@ -2225,6 +2297,9 @@ class TimelineBuilder {
                 updateGaborCueVisibility();
             }
 
+            // Task Switching block: cue + trial type conditional fields.
+            updateTaskSwitchingBlockVisibility();
+
             // Stroop block: hide keyboard-only fields when mouse is effective, and
             // toggle between color-naming (choice keys) vs congruency (two keys).
             if (selected === 'stroop-trial') {
@@ -2275,6 +2350,17 @@ class TimelineBuilder {
         if (blockTypeEl) {
             blockTypeEl.addEventListener('change', updateBlockVisibility);
             updateBlockVisibility();
+
+            // Task Switching block: cue/trial-type changes should update visibility.
+            const tsTrialTypeEl = formContainer.querySelector('#param_ts_trial_type');
+            if (tsTrialTypeEl) {
+                tsTrialTypeEl.addEventListener('change', updateTaskSwitchingBlockVisibility);
+            }
+            const tsCueTypeEl = formContainer.querySelector('#param_ts_cue_type');
+            if (tsCueTypeEl) {
+                tsCueTypeEl.addEventListener('change', updateTaskSwitchingBlockVisibility);
+            }
+            updateTaskSwitchingBlockVisibility();
 
             // When editing a Flanker block, stimulus type changes should re-evaluate visibility.
             const stimTypeEl = formContainer.querySelector('#param_flanker_stimulus_type');

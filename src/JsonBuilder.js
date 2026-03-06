@@ -492,6 +492,107 @@ class JsonBuilder {
         this.applySimonResponseVisibility();
     }
 
+    applyTaskSwitchingCustomSetVisibility() {
+        const mode = (document.getElementById('taskSwitchingStimulusSetMode')?.value || 'letters_numbers').toString();
+        const customRoot = document.getElementById('taskSwitchingCustomSets');
+        if (!customRoot) return;
+
+        const show = mode === 'custom';
+        customRoot.style.display = show ? '' : 'none';
+        customRoot.querySelectorAll('input, select, textarea').forEach((el) => {
+            el.disabled = !show;
+        });
+    }
+
+    applyTaskSwitchingCueVisibility() {
+        const cueType = (document.getElementById('taskSwitchingCueType')?.value || 'explicit').toString();
+        const explicitRoot = document.getElementById('taskSwitchingCueExplicitGroup');
+        const positionRoot = document.getElementById('taskSwitchingCuePositionGroup');
+        const colorRoot = document.getElementById('taskSwitchingCueColorGroup');
+
+        const showExplicit = cueType === 'explicit';
+        const showPosition = cueType === 'position';
+        const showColor = cueType === 'color';
+
+        if (explicitRoot) {
+            explicitRoot.style.display = showExplicit ? '' : 'none';
+            explicitRoot.querySelectorAll('input, select, textarea').forEach((el) => {
+                el.disabled = !showExplicit;
+            });
+        }
+
+        if (positionRoot) {
+            positionRoot.style.display = showPosition ? '' : 'none';
+            positionRoot.querySelectorAll('input, select, textarea').forEach((el) => {
+                el.disabled = !showPosition;
+            });
+        }
+
+        if (colorRoot) {
+            colorRoot.style.display = showColor ? '' : 'none';
+            colorRoot.querySelectorAll('input, select, textarea').forEach((el) => {
+                el.disabled = !showColor;
+            });
+        }
+    }
+
+    bindTaskSwitchingSettingsUI() {
+        const modeEl = document.getElementById('taskSwitchingStimulusSetMode');
+        if (!modeEl) return;
+
+        if (modeEl.dataset.bound === '1') {
+            this.applyTaskSwitchingCustomSetVisibility();
+            this.applyTaskSwitchingCueVisibility();
+            return;
+        }
+
+        modeEl.dataset.bound = '1';
+        modeEl.addEventListener('change', () => {
+            this.applyTaskSwitchingCustomSetVisibility();
+            this.updateJSON();
+        });
+
+        const cueTypeEl = document.getElementById('taskSwitchingCueType');
+        if (cueTypeEl && cueTypeEl.dataset.bound !== '1') {
+            cueTypeEl.dataset.bound = '1';
+            cueTypeEl.addEventListener('change', () => {
+                this.applyTaskSwitchingCueVisibility();
+                this.updateJSON();
+            });
+        }
+
+        [
+            'taskSwitchingStimulusPosition',
+            'taskSwitchingBorderEnabled',
+            'taskSwitchingLeftKey',
+            'taskSwitchingRightKey',
+            'taskSwitchingCueType',
+            'taskSwitchingTask1CueText',
+            'taskSwitchingTask2CueText',
+            'taskSwitchingCueFontSizePx',
+            'taskSwitchingCueDurationMs',
+            'taskSwitchingCueGapMs',
+            'taskSwitchingCueColorHex',
+            'taskSwitchingTask1Position',
+            'taskSwitchingTask2Position',
+            'taskSwitchingTask1ColorHex',
+            'taskSwitchingTask2ColorHex',
+            'taskSwitchingTask1CategoryA',
+            'taskSwitchingTask1CategoryB',
+            'taskSwitchingTask2CategoryA',
+            'taskSwitchingTask2CategoryB'
+        ].forEach((id) => {
+            const el = document.getElementById(id);
+            if (!el || el.dataset.bound === '1') return;
+            el.dataset.bound = '1';
+            el.addEventListener('change', () => this.updateJSON());
+            el.addEventListener('input', () => this.updateJSON());
+        });
+
+        this.applyTaskSwitchingCustomSetVisibility();
+        this.applyTaskSwitchingCueVisibility();
+    }
+
     bindPvtSettingsUI() {
         const devEl = document.getElementById('pvtDefaultResponseDevice');
         if (!devEl) return;
@@ -2044,7 +2145,7 @@ class JsonBuilder {
 
     maybeInsertStarterTimeline(taskType) {
         if (taskType === 'soc-dashboard' && this.experimentType !== 'continuous') return;
-        if (taskType !== 'flanker' && taskType !== 'sart' && taskType !== 'gabor' && taskType !== 'stroop' && taskType !== 'emotional-stroop' && taskType !== 'simon' && taskType !== 'pvt' && taskType !== 'soc-dashboard' && taskType !== 'nback') return;
+        if (taskType !== 'flanker' && taskType !== 'sart' && taskType !== 'gabor' && taskType !== 'stroop' && taskType !== 'emotional-stroop' && taskType !== 'simon' && taskType !== 'task-switching' && taskType !== 'pvt' && taskType !== 'soc-dashboard' && taskType !== 'nback') return;
 
         const timelineContainer = document.getElementById('timelineComponents');
         if (!timelineContainer) return;
@@ -2060,6 +2161,8 @@ class JsonBuilder {
                 ? 'sart-trial'
                 : (taskType === 'simon')
                     ? 'simon-trial'
+                : (taskType === 'task-switching')
+                    ? 'task-switching-trial'
                 : (taskType === 'pvt')
                     ? 'pvt-trial'
                 : (taskType === 'stroop')
@@ -2214,6 +2317,15 @@ class JsonBuilder {
             if (type === 'block') {
                 const innerType = getBlockInnerType();
                 return innerType === 'simon-trial';
+            }
+            return false;
+        }
+
+        if (taskType === 'task-switching') {
+            if (type === 'task-switching-trial') return true;
+            if (type === 'block') {
+                const innerType = getBlockInnerType();
+                return innerType === 'task-switching-trial';
             }
             return false;
         }
@@ -2781,6 +2893,157 @@ class JsonBuilder {
                 <div class="parameter-row">
                     <label class="parameter-label">ITI (ms):</label>
                     <input type="number" class="form-control parameter-input" id="simonItiMs" value="500" min="0" max="10000">
+                </div>
+            </div>
+            `
+            : (taskType === 'task-switching')
+            ? `
+            <div class="parameter-group" id="taskSwitchingExperimentParameters">
+                <div class="group-title d-flex justify-content-between align-items-center">
+                    <div>
+                        <span>Task Switching Experiment Settings</span>
+                        <small class="text-muted d-block">Default values for Task Switching components</small>
+                    </div>
+                    <button class="btn btn-sm btn-info" id="previewTaskDefaultsBtn" onclick="window.componentPreview?.showPreview(window.jsonBuilderInstance?.getCurrentTaskSwitchingDefaults())">
+                        <i class="fas fa-eye"></i> Preview Defaults
+                    </button>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Stimulus Set:</label>
+                    <select class="form-control parameter-input" id="taskSwitchingStimulusSetMode">
+                        <option value="letters_numbers" selected>Letters + Numbers (Vowel/Consonant; Odd/Even)</option>
+                        <option value="custom">Custom (two 2AFC token sets)</option>
+                    </select>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Stimulus Position:</label>
+                    <select class="form-control parameter-input" id="taskSwitchingStimulusPosition">
+                        <option value="left">Left</option>
+                        <option value="right">Right</option>
+                        <option value="top" selected>Top</option>
+                        <option value="bottom">Bottom</option>
+                    </select>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Stimulus Border:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="taskSwitchingBorderEnabled">
+                            <label class="form-check-label" for="taskSwitchingBorderEnabled">Draw a border around the stimulus</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Left Key:</label>
+                    <input type="text" class="form-control parameter-input" id="taskSwitchingLeftKey" value="f">
+                    <div class="parameter-help">Default key for Category A / LEFT responses</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Right Key:</label>
+                    <input type="text" class="form-control parameter-input" id="taskSwitchingRightKey" value="j">
+                    <div class="parameter-help">Default key for Category B / RIGHT responses</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Cue Type:</label>
+                    <select class="form-control parameter-input" id="taskSwitchingCueType">
+                        <option value="explicit" selected>Explicit text cue</option>
+                        <option value="position">Position cue (stimulus position by task)</option>
+                        <option value="color">Color cue (stimulus color by task)</option>
+                    </select>
+                    <div class="parameter-help">Controls how the task is cued during Task Switching trials.</div>
+                </div>
+
+                <div id="taskSwitchingCueExplicitGroup">
+                    <div class="parameter-row">
+                        <label class="parameter-label">Task A Cue Text:</label>
+                        <input type="text" class="form-control parameter-input" id="taskSwitchingTask1CueText" value="LETTERS">
+                        <div class="parameter-help">Shown when Task A is active (explicit cue type)</div>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Task B Cue Text:</label>
+                        <input type="text" class="form-control parameter-input" id="taskSwitchingTask2CueText" value="NUMBERS">
+                        <div class="parameter-help">Shown when Task B is active (explicit cue type)</div>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Cue Font Size (px):</label>
+                        <input type="number" class="form-control parameter-input" id="taskSwitchingCueFontSizePx" value="28" min="8" max="200">
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Cue Duration (ms):</label>
+                        <input type="number" class="form-control parameter-input" id="taskSwitchingCueDurationMs" value="0" min="0" max="10000">
+                        <div class="parameter-help">0 = cue remains visible throughout the trial</div>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Cue Gap (ms):</label>
+                        <input type="number" class="form-control parameter-input" id="taskSwitchingCueGapMs" value="0" min="0" max="10000">
+                        <div class="parameter-help">Optional delay between cue and stimulus (if supported by the runtime)</div>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Cue Color:</label>
+                        <input type="color" class="form-control form-control-color parameter-input" id="taskSwitchingCueColorHex" value="#FFFFFF">
+                    </div>
+                </div>
+
+                <div id="taskSwitchingCuePositionGroup" style="display:none;">
+                    <div class="parameter-row">
+                        <label class="parameter-label">Task A Position:</label>
+                        <select class="form-control parameter-input" id="taskSwitchingTask1Position">
+                            <option value="left" selected>Left</option>
+                            <option value="right">Right</option>
+                            <option value="top">Top</option>
+                            <option value="bottom">Bottom</option>
+                        </select>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Task B Position:</label>
+                        <select class="form-control parameter-input" id="taskSwitchingTask2Position">
+                            <option value="left">Left</option>
+                            <option value="right" selected>Right</option>
+                            <option value="top">Top</option>
+                            <option value="bottom">Bottom</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="taskSwitchingCueColorGroup" style="display:none;">
+                    <div class="parameter-row">
+                        <label class="parameter-label">Task A Color:</label>
+                        <input type="color" class="form-control form-control-color parameter-input" id="taskSwitchingTask1ColorHex" value="#FFFFFF">
+                        <div class="parameter-help">Stimulus color when Task A is active (color cue type)</div>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Task B Color:</label>
+                        <input type="color" class="form-control form-control-color parameter-input" id="taskSwitchingTask2ColorHex" value="#FFFFFF">
+                        <div class="parameter-help">Stimulus color when Task B is active (color cue type)</div>
+                    </div>
+                </div>
+
+                <div id="taskSwitchingCustomSets" style="display:none;">
+                    <div class="parameter-row">
+                        <label class="parameter-label">Task A Tokens (Category A):</label>
+                        <textarea class="form-control parameter-input" id="taskSwitchingTask1CategoryA" rows="2" placeholder="e.g., A,E,I,O,U"></textarea>
+                        <div class="parameter-help">Comma-separated tokens mapped to LEFT key</div>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Task A Tokens (Category B):</label>
+                        <textarea class="form-control parameter-input" id="taskSwitchingTask1CategoryB" rows="2" placeholder="e.g., B,C,D,F,G"></textarea>
+                        <div class="parameter-help">Comma-separated tokens mapped to RIGHT key</div>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Task B Tokens (Category A):</label>
+                        <textarea class="form-control parameter-input" id="taskSwitchingTask2CategoryA" rows="2" placeholder="e.g., 1,3,5,7,9"></textarea>
+                        <div class="parameter-help">Comma-separated tokens mapped to LEFT key</div>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Task B Tokens (Category B):</label>
+                        <textarea class="form-control parameter-input" id="taskSwitchingTask2CategoryB" rows="2" placeholder="e.g., 2,4,6,8"></textarea>
+                        <div class="parameter-help">Comma-separated tokens mapped to RIGHT key</div>
+                    </div>
                 </div>
             </div>
             `
@@ -3618,6 +3881,9 @@ class JsonBuilder {
 
         // Task-specific conditional UI (Simon response device + keys)
         this.bindSimonSettingsUI();
+
+        // Task-specific conditional UI (Task Switching custom stimulus sets)
+        this.bindTaskSwitchingSettingsUI();
 
         // Reduce default scrolling: collapse long experiment-default sections.
         this.wrapParameterFormsInCollapsibles();
@@ -4817,6 +5083,60 @@ class JsonBuilder {
                 simon_iti_max: { type: 'number', default: 500, min: 0, max: 10000 }
             };
 
+            const taskSwitchingOnlyParams = {
+                // Core block mode
+                ts_trial_type: {
+                    type: 'select',
+                    default: 'switch',
+                    options: ['switch', 'single'],
+                    description: 'Switching alternates tasks; single fixes one task for the whole block.'
+                },
+                ts_single_task_index: {
+                    type: 'select',
+                    default: 1,
+                    options: [1, 2],
+                    description: 'Used only when Trial type = single.'
+                },
+
+                // Cueing
+                ts_cue_type: {
+                    type: 'select',
+                    default: 'explicit',
+                    options: ['position', 'color', 'explicit']
+                },
+
+                // Position cue params
+                ts_task_1_position: { type: 'select', default: 'left', options: ['left', 'right', 'top', 'bottom'] },
+                ts_task_2_position: { type: 'select', default: 'right', options: ['left', 'right', 'top', 'bottom'] },
+
+                // Color cue params
+                ts_task_1_color_hex: { type: 'COLOR', default: '#FFFFFF' },
+                ts_task_2_color_hex: { type: 'COLOR', default: '#FFFFFF' },
+
+                // Explicit cue params
+                ts_task_1_cue_text: { type: 'string', default: 'LETTERS' },
+                ts_task_2_cue_text: { type: 'string', default: 'NUMBERS' },
+                ts_cue_font_size_px: { type: 'number', default: 28, min: 8, max: 96 },
+                ts_cue_duration_ms: { type: 'number', default: 0, min: 0, max: 5000 },
+                ts_cue_gap_ms: { type: 'number', default: 0, min: 0, max: 5000 },
+                ts_cue_color_hex: { type: 'COLOR', default: '#FFFFFF' },
+
+                // Stimulus appearance / response
+                ts_stimulus_position: { type: 'select', default: 'top', options: ['left', 'right', 'top', 'bottom'] },
+                ts_stimulus_color_hex: { type: 'COLOR', default: '#FFFFFF' },
+                ts_border_enabled: { type: 'boolean', default: false },
+                ts_left_key: { type: 'string', default: '' },
+                ts_right_key: { type: 'string', default: '' },
+
+                // Timing windows
+                ts_stimulus_duration_min: { type: 'number', default: 0, min: 0, max: 10000 },
+                ts_stimulus_duration_max: { type: 'number', default: 0, min: 0, max: 10000 },
+                ts_trial_duration_min: { type: 'number', default: 2000, min: 0, max: 60000 },
+                ts_trial_duration_max: { type: 'number', default: 2000, min: 0, max: 60000 },
+                ts_iti_min: { type: 'number', default: 500, min: 0, max: 10000 },
+                ts_iti_max: { type: 'number', default: 500, min: 0, max: 10000 }
+            };
+
             const pvtOnlyParams = {
                 // Response overrides
                 pvt_response_device: { type: 'select', default: 'inherit', options: ['inherit', 'keyboard', 'mouse', 'both'] },
@@ -4899,6 +5219,8 @@ class JsonBuilder {
                     ? sartOnlyParams
                     : (currentTaskType === 'simon')
                         ? simonOnlyParams
+                    : (currentTaskType === 'task-switching')
+                        ? taskSwitchingOnlyParams
                     : (currentTaskType === 'pvt')
                         ? pvtOnlyParams
                     : (currentTaskType === 'gabor')
@@ -5221,8 +5543,8 @@ class JsonBuilder {
             return baseComponents;
         }
 
-        // For Flanker/SART/Simon/PVT/Gabor/Stroop/N-back, show only task-appropriate components.
-        if (taskType === 'flanker' || taskType === 'sart' || taskType === 'simon' || taskType === 'pvt' || taskType === 'gabor' || taskType === 'stroop' || taskType === 'emotional-stroop' || taskType === 'nback') {
+        // For Flanker/SART/Simon/Task Switching/PVT/Gabor/Stroop/N-back, show only task-appropriate components.
+        if (taskType === 'flanker' || taskType === 'sart' || taskType === 'simon' || taskType === 'task-switching' || taskType === 'pvt' || taskType === 'gabor' || taskType === 'stroop' || taskType === 'emotional-stroop' || taskType === 'nback') {
             if (taskType === 'flanker') {
                 baseComponents.push({
                     id: 'flanker-trial',
@@ -5286,6 +5608,27 @@ class JsonBuilder {
 
                         stimulus_duration_ms: { type: 'number', default: 0, min: 0, max: 10000 },
                         trial_duration_ms: { type: 'number', default: 1500, min: 0, max: 30000 },
+                        iti_ms: { type: 'number', default: 500, min: 0, max: 10000 }
+                    }
+                });
+            }
+
+            if (taskType === 'task-switching') {
+                baseComponents.push({
+                    id: 'task-switching-trial',
+                    name: `Task Switching ${unitName}`,
+                    icon: 'fas fa-random',
+                    description: 'Task switching trial/frame (2AFC per task; interpreter implements stimulus + scoring)',
+                    category: 'task',
+                    parameters: {
+                        task_index: { type: 'select', default: 1, options: [1, 2] },
+                        stimulus: { type: 'string', default: 'A' },
+                        stimulus_position: { type: 'select', default: 'top', options: ['left', 'right', 'top', 'bottom'] },
+                        border_enabled: { type: 'boolean', default: false },
+                        left_key: { type: 'string', default: 'f' },
+                        right_key: { type: 'string', default: 'j' },
+                        stimulus_duration_ms: { type: 'number', default: 0, min: 0, max: 10000 },
+                        trial_duration_ms: { type: 'number', default: 2000, min: 0, max: 30000 },
                         iti_ms: { type: 'number', default: 500, min: 0, max: 10000 }
                     }
                 });
@@ -5866,6 +6209,10 @@ class JsonBuilder {
                 Object.assign(componentData, this.getSimonDefaultsForNewComponent());
             }
 
+            if (componentDef.id === 'task-switching-trial') {
+                Object.assign(componentData, this.getTaskSwitchingDefaultsForNewComponent());
+            }
+
             if (componentDef.id === 'pvt-trial') {
                 Object.assign(componentData, this.getPvtDefaultsForNewComponent());
             }
@@ -5895,6 +6242,9 @@ class JsonBuilder {
                 }
                 if (currentTaskType === 'simon') {
                     Object.assign(componentData, this.getSimonDefaultsForNewBlock());
+                }
+                if (currentTaskType === 'task-switching') {
+                    Object.assign(componentData, this.getTaskSwitchingDefaultsForNewBlock());
                 }
                 if (currentTaskType === 'pvt') {
                     Object.assign(componentData, this.getPvtDefaultsForNewBlock());
@@ -6341,6 +6691,72 @@ class JsonBuilder {
                 stimulus_duration_ms: Number.isFinite(stimMs) ? stimMs : 0,
                 trial_duration_ms: Number.isFinite(trialMs) ? trialMs : 1500,
                 iti_ms: Number.isFinite(itiMs) ? itiMs : 500
+            };
+        }
+
+        if (taskType === 'task-switching') {
+            const parseStringList = (raw) => {
+                return (raw ?? '')
+                    .toString()
+                    .split(',')
+                    .map(s => s.trim())
+                    .filter(Boolean);
+            };
+
+            const safeInt = (raw, fallback) => {
+                const v = Number.parseInt(raw, 10);
+                return Number.isFinite(v) ? v : fallback;
+            };
+
+            const mode = (document.getElementById('taskSwitchingStimulusSetMode')?.value || 'letters_numbers').toString();
+            const leftKey = (document.getElementById('taskSwitchingLeftKey')?.value || 'f').toString();
+            const rightKey = (document.getElementById('taskSwitchingRightKey')?.value || 'j').toString();
+            const position = (document.getElementById('taskSwitchingStimulusPosition')?.value || 'top').toString();
+            const borderEnabled = !!document.getElementById('taskSwitchingBorderEnabled')?.checked;
+
+            const cueTypeRaw = (document.getElementById('taskSwitchingCueType')?.value || 'explicit').toString().trim();
+            const cueType = (cueTypeRaw === 'position' || cueTypeRaw === 'color' || cueTypeRaw === 'explicit') ? cueTypeRaw : 'explicit';
+            const task1CueText = (document.getElementById('taskSwitchingTask1CueText')?.value || 'LETTERS').toString();
+            const task2CueText = (document.getElementById('taskSwitchingTask2CueText')?.value || 'NUMBERS').toString();
+            const cueFontSizePx = safeInt(document.getElementById('taskSwitchingCueFontSizePx')?.value, 28);
+            const cueDurationMs = safeInt(document.getElementById('taskSwitchingCueDurationMs')?.value, 0);
+            const cueGapMs = safeInt(document.getElementById('taskSwitchingCueGapMs')?.value, 0);
+            const cueColorHex = (document.getElementById('taskSwitchingCueColorHex')?.value || '#FFFFFF').toString();
+
+            const task1Pos = (document.getElementById('taskSwitchingTask1Position')?.value || 'left').toString();
+            const task2Pos = (document.getElementById('taskSwitchingTask2Position')?.value || 'right').toString();
+            const task1ColorHex = (document.getElementById('taskSwitchingTask1ColorHex')?.value || '#FFFFFF').toString();
+            const task2ColorHex = (document.getElementById('taskSwitchingTask2ColorHex')?.value || '#FFFFFF').toString();
+
+            const task1A = parseStringList(document.getElementById('taskSwitchingTask1CategoryA')?.value);
+            const task1B = parseStringList(document.getElementById('taskSwitchingTask1CategoryB')?.value);
+            const task2A = parseStringList(document.getElementById('taskSwitchingTask2CategoryA')?.value);
+            const task2B = parseStringList(document.getElementById('taskSwitchingTask2CategoryB')?.value);
+
+            config.task_switching_settings = {
+                stimulus_set_mode: (mode === 'custom') ? 'custom' : 'letters_numbers',
+                stimulus_position: position,
+                border_enabled: borderEnabled,
+                left_key: leftKey,
+                right_key: rightKey,
+
+                cue_type: cueType,
+                task_1_cue_text: task1CueText,
+                task_2_cue_text: task2CueText,
+                cue_font_size_px: cueFontSizePx,
+                cue_duration_ms: cueDurationMs,
+                cue_gap_ms: cueGapMs,
+                cue_color_hex: cueColorHex,
+
+                task_1_position: task1Pos,
+                task_2_position: task2Pos,
+                task_1_color_hex: task1ColorHex,
+                task_2_color_hex: task2ColorHex,
+
+                tasks: [
+                    { category_a_tokens: task1A, category_b_tokens: task1B },
+                    { category_a_tokens: task2A, category_b_tokens: task2B }
+                ]
             };
         }
 
@@ -7050,6 +7466,191 @@ class JsonBuilder {
             simon_trial_duration_max: Number.isFinite(trialMs) ? trialMs : 1500,
             simon_iti_min: Number.isFinite(itiMs) ? itiMs : 500,
             simon_iti_max: Number.isFinite(itiMs) ? itiMs : 500
+        };
+    }
+
+    sampleTaskSwitchingStimulusPairFromUI() {
+        const parseStringList = (raw) => {
+            return (raw ?? '')
+                .toString()
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean);
+        };
+
+        const pick = (arr, fallback) => {
+            if (!Array.isArray(arr) || arr.length === 0) return fallback;
+            const idx = Math.floor(Math.random() * arr.length);
+            return (arr[Math.max(0, Math.min(arr.length - 1, idx))] ?? fallback);
+        };
+
+        const mode = (document.getElementById('taskSwitchingStimulusSetMode')?.value || 'letters_numbers').toString();
+
+        const builtIn = {
+            task1A: ['A', 'E', 'I', 'O', 'U'],
+            task1B: ['B', 'C', 'D', 'F', 'G', 'H', 'J', 'K'],
+            task2A: ['1', '3', '5', '7', '9'],
+            task2B: ['2', '4', '6', '8']
+        };
+
+        const tokens = (() => {
+            if (mode !== 'custom') return builtIn;
+
+            const task1A = parseStringList(document.getElementById('taskSwitchingTask1CategoryA')?.value);
+            const task1B = parseStringList(document.getElementById('taskSwitchingTask1CategoryB')?.value);
+            const task2A = parseStringList(document.getElementById('taskSwitchingTask2CategoryA')?.value);
+            const task2B = parseStringList(document.getElementById('taskSwitchingTask2CategoryB')?.value);
+
+            return {
+                task1A: (task1A.length > 0) ? task1A : builtIn.task1A,
+                task1B: (task1B.length > 0) ? task1B : builtIn.task1B,
+                task2A: (task2A.length > 0) ? task2A : builtIn.task2A,
+                task2B: (task2B.length > 0) ? task2B : builtIn.task2B
+            };
+        })();
+
+        const task1Pool = [...(tokens.task1A || []), ...(tokens.task1B || [])].filter(Boolean);
+        const task2Pool = [...(tokens.task2A || []), ...(tokens.task2B || [])].filter(Boolean);
+
+        const stimulusTask1 = (pick(task1Pool, 'A') ?? 'A').toString();
+        const stimulusTask2 = (pick(task2Pool, '1') ?? '1').toString();
+        const combined = `${stimulusTask1} ${stimulusTask2}`.trim();
+
+        return {
+            stimulus_task_1: stimulusTask1,
+            stimulus_task_2: stimulusTask2,
+            stimulus: combined
+        };
+    }
+
+    getTaskSwitchingDefaultsForNewComponent() {
+        const pair = this.sampleTaskSwitchingStimulusPairFromUI();
+
+        const cueTypeRaw = (document.getElementById('taskSwitchingCueType')?.value || 'explicit').toString().trim();
+        const cueType = (cueTypeRaw === 'position' || cueTypeRaw === 'color' || cueTypeRaw === 'explicit') ? cueTypeRaw : 'explicit';
+
+        return {
+            task_index: 1,
+            ...pair,
+            stimulus_position: (document.getElementById('taskSwitchingStimulusPosition')?.value || 'top').toString(),
+            border_enabled: !!document.getElementById('taskSwitchingBorderEnabled')?.checked,
+            left_key: (document.getElementById('taskSwitchingLeftKey')?.value || 'f').toString(),
+            right_key: (document.getElementById('taskSwitchingRightKey')?.value || 'j').toString(),
+
+            cue_type: cueType,
+            task_1_position: (document.getElementById('taskSwitchingTask1Position')?.value || 'left').toString(),
+            task_2_position: (document.getElementById('taskSwitchingTask2Position')?.value || 'right').toString(),
+            task_1_color_hex: (document.getElementById('taskSwitchingTask1ColorHex')?.value || '#FFFFFF').toString(),
+            task_2_color_hex: (document.getElementById('taskSwitchingTask2ColorHex')?.value || '#FFFFFF').toString(),
+            stimulus_color_hex: '#FFFFFF',
+            task_1_cue_text: (document.getElementById('taskSwitchingTask1CueText')?.value || 'LETTERS').toString(),
+            task_2_cue_text: (document.getElementById('taskSwitchingTask2CueText')?.value || 'NUMBERS').toString(),
+            cue_font_size_px: Number.parseInt(document.getElementById('taskSwitchingCueFontSizePx')?.value || '28', 10),
+            cue_duration_ms: Number.parseInt(document.getElementById('taskSwitchingCueDurationMs')?.value || '0', 10),
+            cue_gap_ms: Number.parseInt(document.getElementById('taskSwitchingCueGapMs')?.value || '0', 10),
+            cue_color_hex: (document.getElementById('taskSwitchingCueColorHex')?.value || '#FFFFFF').toString(),
+
+            stimulus_duration_ms: 0,
+            trial_duration_ms: 2000,
+            iti_ms: 500
+        };
+    }
+
+    getTaskSwitchingDefaultsForNewBlock() {
+        const cap = this.getExperimentWideLengthCapForBlocks();
+        const defaultLen = this.getExperimentWideBlockLengthDefault();
+
+        const safeInt = (raw, fallback) => {
+            const v = Number.parseInt(raw, 10);
+            return Number.isFinite(v) ? v : fallback;
+        };
+
+        const blockLen = (() => {
+            const raw = safeInt(defaultLen, 40);
+            const len = Number.isFinite(raw) ? Math.max(1, raw) : 40;
+            if (Number.isFinite(cap) && cap > 0) return Math.min(len, cap);
+            return len;
+        })();
+
+        return {
+            block_component_type: 'task-switching-trial',
+            block_length: blockLen,
+            seed: '',
+
+            // New block-level task switching controls
+            ts_trial_type: 'switch',
+            ts_single_task_index: 1,
+            ts_cue_type: (() => {
+                const raw = (document.getElementById('taskSwitchingCueType')?.value || 'explicit').toString().trim();
+                return (raw === 'position' || raw === 'color' || raw === 'explicit') ? raw : 'explicit';
+            })(),
+
+            ts_task_1_position: (document.getElementById('taskSwitchingTask1Position')?.value || 'left').toString(),
+            ts_task_2_position: (document.getElementById('taskSwitchingTask2Position')?.value || 'right').toString(),
+            ts_task_1_color_hex: (document.getElementById('taskSwitchingTask1ColorHex')?.value || '#FFFFFF').toString(),
+            ts_task_2_color_hex: (document.getElementById('taskSwitchingTask2ColorHex')?.value || '#FFFFFF').toString(),
+            ts_task_1_cue_text: (document.getElementById('taskSwitchingTask1CueText')?.value || 'LETTERS').toString(),
+            ts_task_2_cue_text: (document.getElementById('taskSwitchingTask2CueText')?.value || 'NUMBERS').toString(),
+            ts_cue_font_size_px: safeInt(document.getElementById('taskSwitchingCueFontSizePx')?.value, 28),
+            ts_cue_duration_ms: safeInt(document.getElementById('taskSwitchingCueDurationMs')?.value, 0),
+            ts_cue_gap_ms: safeInt(document.getElementById('taskSwitchingCueGapMs')?.value, 0),
+            ts_cue_color_hex: (document.getElementById('taskSwitchingCueColorHex')?.value || '#FFFFFF').toString(),
+
+            // Appearance/response defaults seeded from the Task Switching defaults panel
+            ts_stimulus_position: (document.getElementById('taskSwitchingStimulusPosition')?.value || 'top').toString(),
+            ts_stimulus_color_hex: '#FFFFFF',
+            ts_border_enabled: !!document.getElementById('taskSwitchingBorderEnabled')?.checked,
+            ts_left_key: (document.getElementById('taskSwitchingLeftKey')?.value || 'f').toString(),
+            ts_right_key: (document.getElementById('taskSwitchingRightKey')?.value || 'j').toString(),
+
+            // Timing windows seeded from defaults panel
+            ts_stimulus_duration_min: 0,
+            ts_stimulus_duration_max: 0,
+            ts_trial_duration_min: 2000,
+            ts_trial_duration_max: 2000,
+            ts_iti_min: 500,
+            ts_iti_max: 500
+        };
+    }
+
+    getCurrentTaskSwitchingDefaults() {
+        const position = (document.getElementById('taskSwitchingStimulusPosition')?.value || 'top').toString();
+        const borderEnabled = !!document.getElementById('taskSwitchingBorderEnabled')?.checked;
+        const leftKey = (document.getElementById('taskSwitchingLeftKey')?.value || 'f').toString();
+        const rightKey = (document.getElementById('taskSwitchingRightKey')?.value || 'j').toString();
+
+        const cueTypeRaw = (document.getElementById('taskSwitchingCueType')?.value || 'explicit').toString().trim();
+        const cueType = (cueTypeRaw === 'position' || cueTypeRaw === 'color' || cueTypeRaw === 'explicit') ? cueTypeRaw : 'explicit';
+
+        const pair = this.sampleTaskSwitchingStimulusPairFromUI();
+
+        return {
+            type: 'task-switching-trial',
+            name: 'Task Switching Defaults',
+
+            task_index: 1,
+            ...pair,
+            stimulus_position: position,
+            border_enabled: borderEnabled,
+            left_key: leftKey,
+            right_key: rightKey,
+
+            cue_type: cueType,
+            task_1_position: (document.getElementById('taskSwitchingTask1Position')?.value || 'left').toString(),
+            task_2_position: (document.getElementById('taskSwitchingTask2Position')?.value || 'right').toString(),
+            task_1_color_hex: (document.getElementById('taskSwitchingTask1ColorHex')?.value || '#FFFFFF').toString(),
+            task_2_color_hex: (document.getElementById('taskSwitchingTask2ColorHex')?.value || '#FFFFFF').toString(),
+            stimulus_color_hex: '#FFFFFF',
+            task_1_cue_text: (document.getElementById('taskSwitchingTask1CueText')?.value || 'LETTERS').toString(),
+            task_2_cue_text: (document.getElementById('taskSwitchingTask2CueText')?.value || 'NUMBERS').toString(),
+            cue_font_size_px: Number.parseInt(document.getElementById('taskSwitchingCueFontSizePx')?.value || '28', 10),
+            cue_duration_ms: Number.parseInt(document.getElementById('taskSwitchingCueDurationMs')?.value || '0', 10),
+            cue_gap_ms: Number.parseInt(document.getElementById('taskSwitchingCueGapMs')?.value || '0', 10),
+            cue_color_hex: (document.getElementById('taskSwitchingCueColorHex')?.value || '#FFFFFF').toString(),
+
+            stimulus_duration_ms: 0,
+            trial_duration_ms: 2000,
+            iti_ms: 500
         };
     }
 
@@ -8204,6 +8805,69 @@ class JsonBuilder {
             addWindow('stimulus_duration_ms', blockComponent.simon_stimulus_duration_min, blockComponent.simon_stimulus_duration_max);
             addWindow('trial_duration_ms', blockComponent.simon_trial_duration_min, blockComponent.simon_trial_duration_max);
             addWindow('iti_ms', blockComponent.simon_iti_min, blockComponent.simon_iti_max);
+        } else if (componentType === 'task-switching-trial') {
+            const trialType = (blockComponent.ts_trial_type ?? '').toString().trim();
+            if (trialType) {
+                const tt = trialType.toLowerCase();
+                values.trial_type = (tt === 'single') ? 'single' : 'switch';
+            }
+
+            const singleTaskIndex = Number.parseInt(blockComponent.ts_single_task_index, 10);
+            if (Number.isFinite(singleTaskIndex)) {
+                values.single_task_index = (singleTaskIndex === 2) ? 2 : 1;
+            }
+
+            const cueType = (blockComponent.ts_cue_type ?? '').toString().trim();
+            if (cueType) {
+                const ct = cueType.toLowerCase();
+                values.cue_type = (ct === 'position' || ct === 'color' || ct === 'explicit') ? ct : 'explicit';
+            }
+
+            const t1Pos = (blockComponent.ts_task_1_position ?? '').toString().trim();
+            const t2Pos = (blockComponent.ts_task_2_position ?? '').toString().trim();
+            if (t1Pos) values.task_1_position = t1Pos;
+            if (t2Pos) values.task_2_position = t2Pos;
+
+            const t1Color = (blockComponent.ts_task_1_color_hex ?? '').toString().trim();
+            const t2Color = (blockComponent.ts_task_2_color_hex ?? '').toString().trim();
+            if (t1Color) values.task_1_color_hex = t1Color;
+            if (t2Color) values.task_2_color_hex = t2Color;
+
+            const t1Cue = (blockComponent.ts_task_1_cue_text ?? '').toString();
+            const t2Cue = (blockComponent.ts_task_2_cue_text ?? '').toString();
+            if (t1Cue.trim() !== '') values.task_1_cue_text = t1Cue;
+            if (t2Cue.trim() !== '') values.task_2_cue_text = t2Cue;
+
+            const cueFont = Number.parseInt(blockComponent.ts_cue_font_size_px, 10);
+            if (Number.isFinite(cueFont)) values.cue_font_size_px = Math.max(8, Math.min(96, cueFont));
+
+            const cueDur = Number.parseInt(blockComponent.ts_cue_duration_ms, 10);
+            if (Number.isFinite(cueDur)) values.cue_duration_ms = Math.max(0, cueDur);
+
+            const cueGap = Number.parseInt(blockComponent.ts_cue_gap_ms, 10);
+            if (Number.isFinite(cueGap)) values.cue_gap_ms = Math.max(0, cueGap);
+
+            const cueColor = (blockComponent.ts_cue_color_hex ?? '').toString().trim();
+            if (cueColor) values.cue_color_hex = cueColor;
+
+            const stimPos = (blockComponent.ts_stimulus_position ?? '').toString().trim();
+            if (stimPos) values.stimulus_position = stimPos;
+
+            const stimColor = (blockComponent.ts_stimulus_color_hex ?? '').toString().trim();
+            if (stimColor) values.stimulus_color_hex = stimColor;
+
+            if (blockComponent.ts_border_enabled !== undefined) {
+                values.border_enabled = !!blockComponent.ts_border_enabled;
+            }
+
+            const lk = (blockComponent.ts_left_key ?? '').toString().trim();
+            const rk = (blockComponent.ts_right_key ?? '').toString().trim();
+            if (lk) values.left_key = lk;
+            if (rk) values.right_key = rk;
+
+            addWindow('stimulus_duration_ms', blockComponent.ts_stimulus_duration_min, blockComponent.ts_stimulus_duration_max);
+            addWindow('trial_duration_ms', blockComponent.ts_trial_duration_min, blockComponent.ts_trial_duration_max);
+            addWindow('iti_ms', blockComponent.ts_iti_min, blockComponent.ts_iti_max);
         } else if (componentType === 'pvt-trial') {
             const dev = (blockComponent.pvt_response_device ?? 'inherit').toString().trim();
             if (dev && dev !== 'inherit') values.response_device = dev;

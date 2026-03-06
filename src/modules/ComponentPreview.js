@@ -112,6 +112,8 @@ class ComponentPreview {
             this.showStroopPreview(componentData);
         } else if (componentType === 'simon-trial') {
             this.showSimonPreview(componentData);
+        } else if (componentType === 'task-switching-trial') {
+            this.showTaskSwitchingPreview(componentData);
         } else if (componentType === 'pvt-trial') {
             this.showPvtPreview(componentData);
         } else if (componentType === 'nback-trial-sequence') {
@@ -328,7 +330,7 @@ class ComponentPreview {
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;')
-                .replace(/\"/g, '&quot;')
+                .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#39;');
         };
 
@@ -596,6 +598,98 @@ class ComponentPreview {
                     sampled._previewContextNote = `Block sample → ${baseType} (length ${length}, ${sampling})`;
                     sampled._blockPreviewSource = componentData._blockPreviewSource;
                     this.showSimonPreview(sampled);
+                };
+            }
+        }
+
+        modal.show();
+    }
+
+    showTaskSwitchingPreview(componentData) {
+        const previewModal = this.getPreviewModal();
+        if (!previewModal) return;
+        const { modalEl, modal } = previewModal;
+
+        const modalBody = modalEl.querySelector('.modal-body');
+        if (!modalBody) return;
+
+        const escape = (s) => {
+            return (s ?? '')
+                .toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        };
+
+        const stim1 = (componentData?.stimulus_task_1 ?? '').toString().trim();
+        const stim2 = (componentData?.stimulus_task_2 ?? '').toString().trim();
+        const fallbackStimulus = (componentData?.stimulus ?? 'A').toString();
+        const stimulus = (stim1 && stim2) ? `${stim1} ${stim2}` : fallbackStimulus;
+        const position = (componentData?.stimulus_position ?? 'top').toString();
+        const borderEnabled = !!componentData?.border_enabled;
+        const leftKey = (componentData?.left_key ?? 'f').toString();
+        const rightKey = (componentData?.right_key ?? 'j').toString();
+        const taskIndex = Number.isFinite(Number(componentData?.task_index)) ? Number(componentData.task_index) : 1;
+
+        const noteText = (componentData?._previewContextNote ?? '').toString();
+        const hasBlockSource = !!componentData?._blockPreviewSource;
+
+        const posCss = (() => {
+            const m = 18;
+            if (position === 'left') return `left:${m}px; top:50%; transform:translateY(-50%);`;
+            if (position === 'right') return `right:${m}px; top:50%; transform:translateY(-50%);`;
+            if (position === 'bottom') return `left:50%; bottom:${m}px; transform:translateX(-50%);`;
+            return `left:50%; top:${m}px; transform:translateX(-50%);`;
+        })();
+
+        modalBody.innerHTML = `
+            <div class="p-3">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h5 class="mb-1">Task Switching Preview</h5>
+                        <div class="small text-muted">Lightweight renderer</div>
+                        ${noteText ? `<div class="small text-muted">${escape(noteText)}</div>` : ''}
+                    </div>
+                    <div class="text-end small text-muted">
+                        <div><strong>Task:</strong> ${escape(taskIndex)}</div>
+                        <div><strong>Position:</strong> ${escape(position)}</div>
+                    </div>
+                </div>
+
+                <div class="border rounded mt-3 p-4 position-relative" style="background:#111; color:#fff; min-height: 260px;">
+                    <div class="position-absolute" style="${posCss}">
+                        <div style="min-width:72px; min-height:72px; display:flex; align-items:center; justify-content:center; font-size:56px; font-weight:700; ${borderEnabled ? 'border:2px solid rgba(255,255,255,0.35); border-radius:12px; padding:8px 12px;' : ''}">
+                            ${escape(stimulus)}
+                        </div>
+                    </div>
+
+                    <div class="small text-muted position-absolute" style="left:18px; bottom:18px;">
+                        Keys: <span class="badge bg-secondary">${escape(leftKey)}</span> / <span class="badge bg-secondary">${escape(rightKey)}</span>
+                    </div>
+                </div>
+
+                <div class="mt-2 small text-muted">Static preview (runtime determines correctness based on configured task rule).</div>
+
+                <div class="mt-3 small text-muted d-flex justify-content-between align-items-center">
+                    <div></div>
+                    ${hasBlockSource ? `<button type="button" class="btn btn-sm btn-outline-secondary" id="taskSwitchingResampleBtn"><i class="fas fa-dice"></i> Resample</button>` : ''}
+                </div>
+            </div>
+        `;
+
+        if (hasBlockSource) {
+            const btn = modalBody.querySelector('#taskSwitchingResampleBtn');
+            if (btn) {
+                btn.onclick = () => {
+                    const sampled = this.sampleComponentFromBlock(componentData._blockPreviewSource);
+                    const baseType = componentData._blockPreviewSource.block_component_type || componentData._blockPreviewSource.component_type || 'task-switching-trial';
+                    const length = componentData._blockPreviewSource.block_length ?? componentData._blockPreviewSource.length ?? 0;
+                    const sampling = componentData._blockPreviewSource.sampling_mode || 'per-trial';
+                    sampled._previewContextNote = `Block sample → ${baseType} (length ${length}, ${sampling})`;
+                    sampled._blockPreviewSource = componentData._blockPreviewSource;
+                    this.showTaskSwitchingPreview(sampled);
                 };
             }
         }
@@ -2234,6 +2328,11 @@ class ComponentPreview {
             return;
         }
 
+        if (baseType === 'task-switching-trial') {
+            this.showTaskSwitchingPreview(sampled);
+            return;
+        }
+
         if (baseType === 'pvt-trial') {
             this.showPvtPreview(sampled);
             return;
@@ -3080,6 +3179,93 @@ class ComponentPreview {
             if (stimMs !== null) sampled.stimulus_duration_ms = stimMs;
             const maskMs = randInt(blockData.gabor_mask_duration_min, blockData.gabor_mask_duration_max);
             if (maskMs !== null) sampled.mask_duration_ms = maskMs;
+        } else if (componentType === 'task-switching-trial') {
+            const trialType = (src?.ts_trial_type ?? src?.trial_type ?? 'switch').toString().trim().toLowerCase();
+            const cueType = (src?.ts_cue_type ?? src?.cue_type ?? 'explicit').toString().trim().toLowerCase();
+
+            const normalizePos = (raw, fallback) => {
+                const s = (raw ?? '').toString().trim().toLowerCase();
+                if (s === 'left' || s === 'right' || s === 'top' || s === 'bottom') return s;
+                return fallback;
+            };
+
+            const taskIndex = (() => {
+                if (trialType === 'single') {
+                    const raw = Number.parseInt((src?.ts_single_task_index ?? src?.single_task_index ?? 1).toString(), 10);
+                    return (raw === 2) ? 2 : 1;
+                }
+                return (rng() < 0.5) ? 1 : 2;
+            })();
+            sampled.task_index = taskIndex;
+
+            const parseUiList = (id) => {
+                try {
+                    return (document.getElementById(id)?.value ?? '')
+                        .toString()
+                        .split(',')
+                        .map(s => s.trim())
+                        .filter(Boolean);
+                } catch {
+                    return [];
+                }
+            };
+
+            const uiMode = (document.getElementById('taskSwitchingStimulusSetMode')?.value || 'letters_numbers').toString();
+            const builtIn = {
+                task1: ['A', 'B', 'C', 'D', 'E', 'F', 'G'],
+                task2: ['1', '2', '3', '4', '5', '6', '7', '8', '9']
+            };
+
+            const t1Pool = (() => {
+                if (uiMode !== 'custom') return builtIn.task1;
+                const a = parseUiList('taskSwitchingTask1CategoryA');
+                const b = parseUiList('taskSwitchingTask1CategoryB');
+                const pool = [...a, ...b].filter(Boolean);
+                return (pool.length > 0) ? pool : builtIn.task1;
+            })();
+
+            const t2Pool = (() => {
+                if (uiMode !== 'custom') return builtIn.task2;
+                const a = parseUiList('taskSwitchingTask2CategoryA');
+                const b = parseUiList('taskSwitchingTask2CategoryB');
+                const pool = [...a, ...b].filter(Boolean);
+                return (pool.length > 0) ? pool : builtIn.task2;
+            })();
+
+            const stimulusTask1 = (pickFromList(t1Pool, 'A') ?? 'A').toString();
+            const stimulusTask2 = (pickFromList(t2Pool, '1') ?? '1').toString();
+
+            sampled.stimulus_task_1 = stimulusTask1;
+            sampled.stimulus_task_2 = stimulusTask2;
+            sampled.stimulus = `${stimulusTask1} ${stimulusTask2}`.trim();
+
+            if (cueType === 'position') {
+                const p1 = normalizePos(src?.ts_task_1_position ?? src?.task_1_position, 'left');
+                const p2 = normalizePos(src?.ts_task_2_position ?? src?.task_2_position, 'right');
+                sampled.stimulus_position = (taskIndex === 2) ? p2 : p1;
+            } else {
+                sampled.stimulus_position = normalizePos(src?.ts_stimulus_position ?? src?.stimulus_position, 'top');
+            }
+
+            sampled.border_enabled = !!(src?.ts_border_enabled ?? src?.border_enabled ?? false);
+            sampled.left_key = (src?.ts_left_key ?? src?.left_key ?? 'f').toString();
+            sampled.right_key = (src?.ts_right_key ?? src?.right_key ?? 'j').toString();
+
+            if (cueType === 'color') {
+                const c1 = (src?.ts_task_1_color_hex ?? src?.task_1_color_hex ?? '').toString().trim();
+                const c2 = (src?.ts_task_2_color_hex ?? src?.task_2_color_hex ?? '').toString().trim();
+                sampled.stimulus_color_hex = (taskIndex === 2) ? (c2 || '#FFFFFF') : (c1 || '#FFFFFF');
+            } else {
+                const c = (src?.ts_stimulus_color_hex ?? src?.stimulus_color_hex ?? '').toString().trim();
+                if (c) sampled.stimulus_color_hex = c;
+            }
+
+            const stimMs = randInt(src?.ts_stimulus_duration_min ?? src?.stimulus_duration_min, src?.ts_stimulus_duration_max ?? src?.stimulus_duration_max);
+            if (stimMs !== null) sampled.stimulus_duration_ms = stimMs;
+            const trialMs = randInt(src?.ts_trial_duration_min ?? src?.trial_duration_min, src?.ts_trial_duration_max ?? src?.trial_duration_max);
+            if (trialMs !== null) sampled.trial_duration_ms = trialMs;
+            const iti = randInt(src?.ts_iti_min ?? src?.iti_min, src?.ts_iti_max ?? src?.iti_max);
+            if (iti !== null) sampled.iti_ms = iti;
         } else if (componentType === 'html-keyboard-response') {
             const stim = (src?.stimulus_html ?? src?.stimulus ?? '').toString();
             sampled.stimulus = stim || '<p>Press a key to continue.</p>';
