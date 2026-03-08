@@ -149,6 +149,34 @@ The **Upload Assets** button uploads a local folder to the Token Store and saves
 
 Note: the filename→URL mapping is stored locally in the browser. If you clear site data or switch browsers, you’ll need to re-run **Upload Assets**.
 
+## Continuous Image Presentation (CIP)
+
+CogFlow supports a continuous image paradigm via a Block whose inner component type is:
+
+- `continuous-image-presentation`
+
+### CIP assets and required exported fields
+
+Unlike simple image components (which can reference a single `stimulus_image_url`), CIP is **asset-backed**: the Interpreter needs fully-resolved, per-image URLs and transition sprite URLs.
+
+The Builder’s CIP block editor stores researcher-facing inputs (asset code + filenames + mask/transition parameters) and, after generating/applying assets, persists the resolved URL lists directly on the Block.
+
+On export / JSON Preview, the Builder emits the following CIP fields under the block’s `parameter_values`:
+
+- `cip_image_urls` (newline-separated list; required)
+- `cip_mask_to_image_sprite_urls` (newline-separated list; recommended)
+- `cip_image_to_mask_sprite_urls` (newline-separated list; recommended)
+
+Plus supporting settings (also in `parameter_values`):
+
+- `cip_asset_code`, `cip_asset_filenames`
+- `cip_mask_type`, `cip_mask_noise_amp`, `cip_mask_block_size`
+- `cip_repeat_mode`, `cip_images_per_block`
+- `cip_image_duration_ms`, `cip_transition_duration_ms`, `cip_transition_frames`
+- `cip_choice_keys`
+
+If `cip_image_urls` is empty at runtime, the Interpreter will block with a clear error (see Interpreter README).
+
 ## JATOS
 
 This repo includes a JATOS entry wrapper: `index_jatos.html`.

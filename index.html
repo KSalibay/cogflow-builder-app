@@ -110,6 +110,7 @@
                                 <option value="gabor">Gabor Patch Task</option>
                                 <option value="flanker">Flanker Task</option>
                                 <option value="sart">SART</option>
+                                <option value="continuous-image">Continuous Image Presentation</option>
                                 <option value="soc-dashboard">SOC Dashboard</option>
                                 <option value="custom">Custom Task</option>
                             </select>
@@ -373,10 +374,10 @@
     </script>
 
     <!-- Cache-bust local scripts -->
-    <script src="src/JsonBuilder.js?v=20260305-2"></script>
+    <script src="src/JsonBuilder.js?v=20260309-1"></script>
     <script src="src/modules/DataCollectionModules.js?v=20260114-1"></script>
     <script src="src/modules/TrialManager.js?v=20260113-10"></script>
-    <script src="src/modules/TimelineBuilder.js?v=20260305-5"></script>
+    <script src="src/modules/TimelineBuilder.js?v=20260309-1"></script>
     <script src="src/modules/SocDashboardPreview.js?v=20260218-1"></script>
     <script src="src/modules/ComponentPreview.js?v=20260305-4"></script>
     <script src="src/schemas/RDMTaskSchema.js?v=20260113-10"></script>
@@ -1133,7 +1134,23 @@
             // Setup save handler
             const saveBtn = document.getElementById('saveParametersBtn');
             if (saveBtn) {
+                // Preserve the existing handler so we can restore it when closing.
+                // The default is set by JsonBuilder.initializeEventListeners().
+                const prevOnclick = saveBtn.onclick;
                 saveBtn.onclick = saveInstructionsComponent;
+
+                // Restore handlers/state after closing the modal so other component
+                // editors (e.g., survey-response) can save normally.
+                try {
+                    const restore = () => {
+                        try { saveBtn.onclick = prevOnclick; } catch { /* ignore */ }
+                        try { window.editingInstructionsComponent = null; } catch { /* ignore */ }
+                        try { modal.removeEventListener('hidden.bs.modal', restore); } catch { /* ignore */ }
+                    };
+                    modal.addEventListener('hidden.bs.modal', restore);
+                } catch {
+                    // ignore
+                }
             }
             
             // Show modal

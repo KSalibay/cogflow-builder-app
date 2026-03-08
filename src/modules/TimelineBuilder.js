@@ -143,6 +143,18 @@ class TimelineBuilder {
         const modalBody = document.getElementById('parameterModalBody');
         const modalTitle = document.getElementById('parameterModalTitle');
 
+        // The Instructions editor overrides the modal Save button onclick handler.
+        // Ensure any subsequent component edit resets the Save handler back to the
+        // schema-driven save path.
+        try {
+            const saveBtn = document.getElementById('saveParametersBtn');
+            if (saveBtn) {
+                saveBtn.onclick = () => this.saveComponentParameters();
+            }
+        } catch {
+            // ignore
+        }
+
         if (!modal || !modalBody || !modalTitle) {
             console.error('Parameter modal elements not found');
             console.log('modal:', modal, 'modalBody:', modalBody, 'modalTitle:', modalTitle);
@@ -1175,6 +1187,7 @@ class TimelineBuilder {
             if (innerType === 'sart-trial') return 'sart';
             if (innerType === 'nback-block') return 'nback';
             if (innerType === 'gabor-trial' || innerType === 'gabor-quest') return 'gabor';
+            if (innerType === 'continuous-image-presentation') return 'continuous-image';
             return null;
         };
 
@@ -1265,6 +1278,8 @@ class TimelineBuilder {
                     ? ['task-switching-trial']
                 : (hintTask === 'gabor')
                     ? ['gabor-trial', 'gabor-quest']
+                : (hintTask === 'continuous-image')
+                    ? ['continuous-image-presentation']
                 : (hintTask === 'stroop')
                     ? ['stroop-trial']
                 : (hintTask === 'emotional-stroop')
@@ -1351,6 +1366,11 @@ class TimelineBuilder {
             const maxAttr = (def.max !== undefined && def.max !== null) ? ` max="${this.escapeHtmlAttr(String(def.max))}"` : '';
             const stepAttr = (def.step !== undefined && def.step !== null) ? ` step="${this.escapeHtmlAttr(String(def.step))}"` : '';
             return `<input type="number" class="form-control" id="${this.escapeHtmlAttr(inputId)}" value="${this.escapeHtmlAttr(String(safeVal))}"${minAttr}${maxAttr}${stepAttr} ${disabledAttr}>`;
+        }
+
+        if (t === 'textarea') {
+            const rows = Number.isFinite(Number(def.rows)) ? Math.max(2, Math.min(40, Number(def.rows))) : 6;
+            return `<textarea class="form-control" id="${this.escapeHtmlAttr(inputId)}" rows="${this.escapeHtmlAttr(String(rows))}" ${disabledAttr}>${this.escapeHtml(String(safeVal))}</textarea>`;
         }
 
         if (t === 'COLOR') {
@@ -2034,6 +2054,8 @@ class TimelineBuilder {
                         ? ['nback-block']
                     : (currentTaskType === 'gabor')
                         ? ['gabor-trial', 'gabor-quest']
+                    : (currentTaskType === 'continuous-image')
+                        ? ['continuous-image-presentation']
                     : ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups'];
 
             // Always include generic jsPsych options for Block inner trials.
@@ -2403,6 +2425,1074 @@ class TimelineBuilder {
                 stroopModeEl.addEventListener('change', updateStroopBlockResponseVisibility);
             }
             updateStroopBlockResponseVisibility();
+        }
+
+        // Continuous Image Presentation (Block helper UI)
+        try {
+            const isCipBlock = () => {
+                if (!blockTypeEl) return false;
+                const selected = (blockTypeEl.value || '').toString().trim();
+                return selected === 'continuous-image-presentation';
+            };
+
+            const hideButPersist = (paramName, hidden) => {
+                const row = formContainer.querySelector(`[data-param-name="${paramName}"]`);
+                if (!row) return;
+                row.classList.toggle('d-none', !!hidden);
+                // Do NOT disable: hidden fields must still be persisted by saveComponentParameters.
+                row.style.display = hidden ? 'none' : '';
+            };
+
+            const stripExt = (filename) => {
+                const s = (filename ?? '').toString();
+                const i = s.lastIndexOf('.');
+                return (i > 0) ? s.slice(0, i) : s;
+            };
+
+            const isImageFilename = (name) => {
+                const s = (name ?? '').toString().trim().toLowerCase();
+                return s.endsWith('.png') || s.endsWith('.jpg') || s.endsWith('.jpeg') || s.endsWith('.gif') || s.endsWith('.webp');
+            };
+
+            const parseLines = (raw) => (raw ?? '')
+                .toString()
+                .split(/\r?\n/g)
+                .map(x => x.trim())
+                .filter(Boolean);
+
+            const toPngBlob = (canvas) => new Promise((resolve, reject) => {
+                try {
+                    canvas.toBlob((blob) => {
+                        if (!blob) reject(new Error('Failed to encode PNG')); else resolve(blob);
+                    }, 'image/png');
+                } catch (e) {
+                    reject(e);
+                }
+            });
+
+            const loadImageBitmap = async (url) => {
+                const res = await fetch(url, { cache: 'no-store' });
+                if (!res.ok) throw new Error(`Failed to fetch image (${res.status})`);
+                const blob = await res.blob();
+
+                if (typeof createImageBitmap === 'function') {
+                    return await createImageBitmap(blob);
+                }
+
+                // Fallback: HTMLImageElement
+                const objectUrl = URL.createObjectURL(blob);
+                try {
+                    const img = new Image();
+                    img.decoding = 'async';
+                    img.src = objectUrl;
+                    await new Promise((resolve, reject) => {
+                        img.onload = () => resolve();
+                        img.onerror = () => reject(new Error('Failed to decode image'));
+                    });
+                    return img;
+                } finally {
+                    try { URL.revokeObjectURL(objectUrl); } catch { /* ignore */ }
+                }
+            };
+
+            const buildAverageMaskCanvasFromUrls = async ({ urls, width, height, onProgress }) => {
+                const w = Math.max(1, Math.floor(Number(width) || 0));
+                const h = Math.max(1, Math.floor(Number(height) || 0));
+                if (!(w > 0) || !(h > 0)) throw new Error('Invalid mask dimensions');
+
+                const tmpCanvas = document.createElement('canvas');
+                tmpCanvas.width = w;
+                tmpCanvas.height = h;
+                const tctx = tmpCanvas.getContext('2d', { willReadFrequently: true });
+                if (!tctx) throw new Error('Failed to create 2D context for mask averaging');
+
+                const sums = new Uint32Array(w * h * 4);
+                let used = 0;
+
+                const list = Array.isArray(urls) ? urls.filter(Boolean) : [];
+                for (let idx = 0; idx < list.length; idx++) {
+                    const url = String(list[idx] || '').trim();
+                    if (!url) continue;
+
+                    if (typeof onProgress === 'function') {
+                        try { onProgress(idx + 1, list.length); } catch { /* ignore */ }
+                    }
+
+                    let bitmap = null;
+                    try {
+                        bitmap = await loadImageBitmap(url);
+                        tctx.globalAlpha = 1;
+                        tctx.clearRect(0, 0, w, h);
+                        tctx.drawImage(bitmap, 0, 0, w, h);
+
+                        const imageData = tctx.getImageData(0, 0, w, h);
+                        const data = imageData.data;
+                        for (let i = 0; i < data.length; i++) {
+                            sums[i] += data[i];
+                        }
+                        used += 1;
+                    } catch {
+                        // Skip unreadable images.
+                    } finally {
+                        try { bitmap?.close?.(); } catch { /* ignore */ }
+                    }
+                }
+
+                if (used <= 0) throw new Error('Could not load any images to compute average mask');
+
+                const out = new Uint8ClampedArray(w * h * 4);
+                for (let i = 0; i < out.length; i += 4) {
+                    out[i] = Math.round(sums[i] / used);
+                    out[i + 1] = Math.round(sums[i + 1] / used);
+                    out[i + 2] = Math.round(sums[i + 2] / used);
+                    out[i + 3] = 255;
+                }
+
+                const maskCanvas = document.createElement('canvas');
+                maskCanvas.width = w;
+                maskCanvas.height = h;
+                const mctx = maskCanvas.getContext('2d', { willReadFrequently: true });
+                if (!mctx) throw new Error('Failed to create 2D context for average mask');
+                mctx.putImageData(new ImageData(out, w, h), 0, 0);
+                return maskCanvas;
+            };
+
+            const normalizeCipMaskType = (raw) => {
+                const t0 = (raw ?? '').toString().trim();
+                const t = t0.toLowerCase();
+
+                // New UI values
+                if (t === 'pure_noise') return 'pure_noise';
+                if (t === 'noise_and_shuffle') return 'noise_and_shuffle';
+                if (t === 'advanced_transform') return 'advanced_transform';
+
+                // Friendly labels (if ever used)
+                if (t === 'pure noise') return 'pure_noise';
+                if (t === 'noise and shuffle') return 'noise_and_shuffle';
+                if (t === 'advanced transform') return 'advanced_transform';
+
+                // Legacy values (keep old configs usable)
+                if (t === 'noise') return 'noise_and_shuffle';
+                if (t === 'sprite') return 'pure_noise';
+                if (t === 'blank') return 'pure_noise';
+
+                return 'noise_and_shuffle';
+            };
+
+            const clamp255 = (x) => (x < 0 ? 0 : (x > 255 ? 255 : x));
+
+            const nextPow2 = (n) => {
+                let p = 1;
+                while (p < n) p <<= 1;
+                return p;
+            };
+
+            // In-place radix-2 FFT (complex), iterative Cooley-Tukey.
+            // real[] and imag[] must be Float32Array of length N (power of 2).
+            const fft1d = (real, imag, inverse = false) => {
+                const n = real.length;
+                if (n <= 1) return;
+
+                // Bit-reversal permutation
+                let j = 0;
+                for (let i = 1; i < n; i++) {
+                    let bit = n >> 1;
+                    for (; j & bit; bit >>= 1) j ^= bit;
+                    j ^= bit;
+                    if (i < j) {
+                        const tr = real[i]; real[i] = real[j]; real[j] = tr;
+                        const ti = imag[i]; imag[i] = imag[j]; imag[j] = ti;
+                    }
+                }
+
+                for (let len = 2; len <= n; len <<= 1) {
+                    const ang = (inverse ? 2 : -2) * Math.PI / len;
+                    const wlenR = Math.cos(ang);
+                    const wlenI = Math.sin(ang);
+                    for (let i = 0; i < n; i += len) {
+                        let wr = 1;
+                        let wi = 0;
+                        const half = len >> 1;
+                        for (let k = 0; k < half; k++) {
+                            const uR = real[i + k];
+                            const uI = imag[i + k];
+                            const vR = real[i + k + half] * wr - imag[i + k + half] * wi;
+                            const vI = real[i + k + half] * wi + imag[i + k + half] * wr;
+                            real[i + k] = uR + vR;
+                            imag[i + k] = uI + vI;
+                            real[i + k + half] = uR - vR;
+                            imag[i + k + half] = uI - vI;
+
+                            const nwr = wr * wlenR - wi * wlenI;
+                            wi = wr * wlenI + wi * wlenR;
+                            wr = nwr;
+                        }
+                    }
+                }
+
+                if (inverse) {
+                    for (let i = 0; i < n; i++) {
+                        real[i] /= n;
+                        imag[i] /= n;
+                    }
+                }
+            };
+
+            const fft2d = (real, imag, width, height, inverse = false) => {
+                // Rows
+                const rowR = new Float32Array(width);
+                const rowI = new Float32Array(width);
+                for (let y = 0; y < height; y++) {
+                    const off = y * width;
+                    for (let x = 0; x < width; x++) {
+                        rowR[x] = real[off + x];
+                        rowI[x] = imag[off + x];
+                    }
+                    fft1d(rowR, rowI, inverse);
+                    for (let x = 0; x < width; x++) {
+                        real[off + x] = rowR[x];
+                        imag[off + x] = rowI[x];
+                    }
+                }
+
+                // Cols
+                const colR = new Float32Array(height);
+                const colI = new Float32Array(height);
+                for (let x = 0; x < width; x++) {
+                    for (let y = 0; y < height; y++) {
+                        const idx = y * width + x;
+                        colR[y] = real[idx];
+                        colI[y] = imag[idx];
+                    }
+                    fft1d(colR, colI, inverse);
+                    for (let y = 0; y < height; y++) {
+                        const idx = y * width + x;
+                        real[idx] = colR[y];
+                        imag[idx] = colI[y];
+                    }
+                }
+            };
+
+            const buildPhaseScrambledMaskCanvasFromAverage = ({ averageCanvas, outWidth, outHeight, noiseAmp }) => {
+                const w0 = averageCanvas?.width || 0;
+                const h0 = averageCanvas?.height || 0;
+                if (!(w0 > 0) || !(h0 > 0)) throw new Error('Average canvas is empty');
+
+                const maxSide = 256; // perf guard: phase scrambling is expensive at large resolutions
+                const scale = Math.min(1, maxSide / Math.max(w0, h0));
+                const w = Math.max(8, Math.floor(w0 * scale));
+                const h = Math.max(8, Math.floor(h0 * scale));
+
+                const smallCanvas = document.createElement('canvas');
+                smallCanvas.width = w;
+                smallCanvas.height = h;
+                const sctx = smallCanvas.getContext('2d', { willReadFrequently: true });
+                if (!sctx) throw new Error('Failed to create 2D context for phase mask');
+                sctx.imageSmoothingEnabled = true;
+                sctx.drawImage(averageCanvas, 0, 0, w, h);
+
+                const imgData = sctx.getImageData(0, 0, w, h);
+                const d = imgData.data;
+
+                const W = nextPow2(w);
+                const H = nextPow2(h);
+                const size = W * H;
+                const real = new Float32Array(size);
+                const imag = new Float32Array(size);
+
+                // Luminance into padded grid
+                for (let y = 0; y < h; y++) {
+                    for (let x = 0; x < w; x++) {
+                        const si = (y * w + x) * 4;
+                        const lum = 0.2126 * d[si] + 0.7152 * d[si + 1] + 0.0722 * d[si + 2];
+                        real[y * W + x] = lum;
+                    }
+                }
+
+                // Forward FFT
+                fft2d(real, imag, W, H, false);
+
+                // Phase randomization with conjugate symmetry enforcement
+                for (let v = 0; v < H; v++) {
+                    for (let u = 0; u < W; u++) {
+                        const u2 = (W - u) % W;
+                        const v2 = (H - v) % H;
+                        // process each pair once
+                        if (v > v2) continue;
+                        if (v === v2 && u > u2) continue;
+
+                        const idx = v * W + u;
+                        const idx2 = v2 * W + u2;
+
+                        const re = real[idx];
+                        const im = imag[idx];
+                        const amp = Math.hypot(re, im);
+
+                        // Self-symmetric bins must stay real (imag=0) to preserve real-valued inverse.
+                        const self = (idx === idx2);
+                        if (self) {
+                            real[idx] = amp;
+                            imag[idx] = 0;
+                            continue;
+                        }
+
+                        const phi = (Math.random() * 2 - 1) * Math.PI;
+                        const nr = amp * Math.cos(phi);
+                        const ni = amp * Math.sin(phi);
+                        real[idx] = nr;
+                        imag[idx] = ni;
+                        real[idx2] = nr;
+                        imag[idx2] = -ni;
+                    }
+                }
+
+                // Inverse FFT
+                fft2d(real, imag, W, H, true);
+
+                // Crop back, normalize to 0..255
+                let mn = Infinity;
+                let mx = -Infinity;
+                for (let y = 0; y < h; y++) {
+                    for (let x = 0; x < w; x++) {
+                        const v = real[y * W + x];
+                        if (v < mn) mn = v;
+                        if (v > mx) mx = v;
+                    }
+                }
+                const denom = (mx - mn) > 1e-6 ? (mx - mn) : 1;
+
+                const outSmall = new ImageData(w, h);
+                const od = outSmall.data;
+                for (let y = 0; y < h; y++) {
+                    for (let x = 0; x < w; x++) {
+                        const v = (real[y * W + x] - mn) / denom;
+                        const g = clamp255(Math.round(v * 255));
+                        const i = (y * w + x) * 4;
+                        od[i] = g;
+                        od[i + 1] = g;
+                        od[i + 2] = g;
+                        od[i + 3] = 255;
+                    }
+                }
+
+                if (Number.isFinite(Number(noiseAmp)) && Number(noiseAmp) > 0) {
+                    const ampN = Math.max(0, Math.min(128, Math.floor(Number(noiseAmp))));
+                    for (let i = 0; i < od.length; i += 4) {
+                        const n = (Math.random() * 2 - 1) * ampN;
+                        const g = clamp255(Math.round(od[i] + n));
+                        od[i] = g;
+                        od[i + 1] = g;
+                        od[i + 2] = g;
+                    }
+                }
+
+                sctx.putImageData(outSmall, 0, 0);
+
+                const outCanvas = document.createElement('canvas');
+                outCanvas.width = outWidth;
+                outCanvas.height = outHeight;
+                const octx = outCanvas.getContext('2d', { willReadFrequently: true });
+                if (!octx) throw new Error('Failed to create 2D context for phase mask output');
+                octx.imageSmoothingEnabled = true;
+                octx.drawImage(smallCanvas, 0, 0, outWidth, outHeight);
+                return outCanvas;
+            };
+
+            const buildSharedMaskFromAverage = ({ averageCanvas, maskType, noiseAmp, blockSizePx }) => {
+                const normalized = normalizeCipMaskType(maskType);
+                const w = averageCanvas?.width || 0;
+                const h = averageCanvas?.height || 0;
+                if (!(w > 0) || !(h > 0)) throw new Error('Average canvas is empty');
+
+                if (normalized === 'advanced_transform') {
+                    return buildPhaseScrambledMaskCanvasFromAverage({
+                        averageCanvas,
+                        outWidth: w,
+                        outHeight: h,
+                        noiseAmp
+                    });
+                }
+
+                const outCanvas = document.createElement('canvas');
+                outCanvas.width = w;
+                outCanvas.height = h;
+                const octx = outCanvas.getContext('2d', { willReadFrequently: true });
+                if (!octx) throw new Error('Failed to create 2D context for shared mask');
+
+                // pure_noise / noise_and_shuffle: start from the average image then add per-pixel noise.
+                octx.drawImage(averageCanvas, 0, 0);
+                const imageData = octx.getImageData(0, 0, w, h);
+                const d = imageData.data;
+
+                const amplitude = Math.max(0, Math.min(128, Math.floor(Number(noiseAmp ?? 24))));
+                for (let i = 0; i < d.length; i += 4) {
+                    const n = (Math.random() * 2 - 1) * amplitude;
+                    d[i] = clamp255(Math.round(d[i] + n));
+                    d[i + 1] = clamp255(Math.round(d[i + 1] + n));
+                    d[i + 2] = clamp255(Math.round(d[i + 2] + n));
+                    d[i + 3] = 255;
+                }
+
+                if (normalized === 'pure_noise') {
+                    octx.putImageData(imageData, 0, 0);
+                    return outCanvas;
+                }
+
+                // Add a pixelated + shuffled structure so images can "disintegrate" into the mask.
+                const blockSize = Math.max(1, Math.floor(Number(blockSizePx) || 12));
+                const blocksX = Math.ceil(w / blockSize);
+                const blocksY = Math.ceil(h / blockSize);
+                const totalBlocks = Math.max(1, blocksX * blocksY);
+
+                const blockColors = new Uint8ClampedArray(totalBlocks * 3);
+                for (let by = 0; by < blocksY; by++) {
+                    for (let bx = 0; bx < blocksX; bx++) {
+                        const x0 = bx * blockSize;
+                        const y0 = by * blockSize;
+                        const x1 = Math.min(w, x0 + blockSize);
+                        const y1 = Math.min(h, y0 + blockSize);
+
+                        let r = 0;
+                        let g = 0;
+                        let b = 0;
+                        let count = 0;
+                        for (let y = y0; y < y1; y++) {
+                            for (let x = x0; x < x1; x++) {
+                                const idx = (y * w + x) * 4;
+                                r += d[idx];
+                                g += d[idx + 1];
+                                b += d[idx + 2];
+                                count += 1;
+                            }
+                        }
+
+                        const bi = (by * blocksX + bx) * 3;
+                        const denom = Math.max(1, count);
+                        blockColors[bi] = Math.round(r / denom);
+                        blockColors[bi + 1] = Math.round(g / denom);
+                        blockColors[bi + 2] = Math.round(b / denom);
+                    }
+                }
+
+                const perm = new Uint32Array(totalBlocks);
+                for (let i = 0; i < totalBlocks; i++) perm[i] = i;
+                for (let i = totalBlocks - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    const tmp = perm[i];
+                    perm[i] = perm[j];
+                    perm[j] = tmp;
+                }
+
+                const out = new Uint8ClampedArray(w * h * 4);
+                for (let by = 0; by < blocksY; by++) {
+                    for (let bx = 0; bx < blocksX; bx++) {
+                        const blockIndex = by * blocksX + bx;
+                        const srcIndex = perm[blockIndex];
+                        const ci = srcIndex * 3;
+                        const cr = blockColors[ci];
+                        const cg = blockColors[ci + 1];
+                        const cb = blockColors[ci + 2];
+
+                        const x0 = bx * blockSize;
+                        const y0 = by * blockSize;
+                        const x1 = Math.min(w, x0 + blockSize);
+                        const y1 = Math.min(h, y0 + blockSize);
+                        for (let y = y0; y < y1; y++) {
+                            for (let x = x0; x < x1; x++) {
+                                const idx = (y * w + x) * 4;
+                                out[idx] = cr;
+                                out[idx + 1] = cg;
+                                out[idx + 2] = cb;
+                                out[idx + 3] = 255;
+                            }
+                        }
+                    }
+                }
+
+                octx.putImageData(new ImageData(out, w, h), 0, 0);
+                return outCanvas;
+            };
+
+            const buildPixelatedGrayMaskCanvas = (sourceBitmap, width, height) => {
+                const maskCanvas = document.createElement('canvas');
+                maskCanvas.width = width;
+                maskCanvas.height = height;
+                const mctx = maskCanvas.getContext('2d', { willReadFrequently: true });
+                mctx.drawImage(sourceBitmap, 0, 0, width, height);
+
+                const imageData = mctx.getImageData(0, 0, width, height);
+                const data = imageData.data;
+
+                const block = Math.max(4, Math.round(Math.min(width, height) / 40));
+                for (let y = 0; y < height; y += block) {
+                    for (let x = 0; x < width; x += block) {
+                        const x2 = Math.min(width, x + block);
+                        const y2 = Math.min(height, y + block);
+
+                        let sum = 0;
+                        let count = 0;
+                        for (let yy = y; yy < y2; yy++) {
+                            for (let xx = x; xx < x2; xx++) {
+                                const idx = (yy * width + xx) * 4;
+                                // Simple luminance proxy
+                                sum += (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+                                count += 1;
+                            }
+                        }
+                        const g = Math.max(0, Math.min(255, Math.round(sum / Math.max(1, count))));
+                        for (let yy = y; yy < y2; yy++) {
+                            for (let xx = x; xx < x2; xx++) {
+                                const idx = (yy * width + xx) * 4;
+                                data[idx] = g;
+                                data[idx + 1] = g;
+                                data[idx + 2] = g;
+                                data[idx + 3] = 255;
+                            }
+                        }
+                    }
+                }
+
+                mctx.putImageData(imageData, 0, 0);
+                return maskCanvas;
+            };
+
+            const buildTransitionSpriteSheet = async ({ imageBitmap, maskCanvas, frames, direction, blockSizePx }) => {
+                const width = maskCanvas.width;
+                const height = maskCanvas.height;
+                const f = Math.max(2, Number.parseInt(frames, 10) || 8);
+
+                const imageCanvas = document.createElement('canvas');
+                imageCanvas.width = width;
+                imageCanvas.height = height;
+                const ictx = imageCanvas.getContext('2d', { willReadFrequently: true });
+                if (!ictx) throw new Error('Failed to create image canvas context');
+                ictx.drawImage(imageBitmap, 0, 0, width, height);
+
+                const mctx = maskCanvas.getContext('2d', { willReadFrequently: true });
+                if (!mctx) throw new Error('Failed to read mask canvas');
+
+                const imageData = ictx.getImageData(0, 0, width, height);
+                const maskData = mctx.getImageData(0, 0, width, height);
+                const img = imageData.data;
+                const mask = maskData.data;
+
+                // Pixelation + shuffle + morph:
+                // - Image->Mask: blocks start as image, then "disintegrate" by briefly pulling
+                //   pixels from shuffled locations while easing their colors into the shared mask.
+                // - Mask->Image: reverse process (mask -> shuffled hints -> correct image).
+                const clamp01 = (x) => (x < 0 ? 0 : (x > 1 ? 1 : x));
+                const smoothstep = (x) => x * x * (3 - 2 * x);
+
+                const blockSize = Math.max(1, Math.floor(Number(blockSizePx) || Math.max(2, Math.round(Math.min(width, height) / 200))));
+                const blocksX = Math.ceil(width / blockSize);
+                const blocksY = Math.ceil(height / blockSize);
+                const totalBlocks = Math.max(1, blocksX * blocksY);
+
+                const makePermutation = () => {
+                    const order = new Uint32Array(totalBlocks);
+                    for (let i = 0; i < totalBlocks; i++) order[i] = i;
+                    for (let i = totalBlocks - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        const tmp = order[i];
+                        order[i] = order[j];
+                        order[j] = tmp;
+                    }
+                    return order;
+                };
+
+                const revealOrder = makePermutation();
+                const shuffleMap = makePermutation();
+                const revealRank = new Float32Array(totalBlocks);
+                for (let i = 0; i < totalBlocks; i++) {
+                    revealRank[revealOrder[i]] = (totalBlocks <= 1) ? 1 : (i / (totalBlocks - 1));
+                }
+
+                const window = Math.min(0.35, Math.max(0.12, 2 / f));
+
+                const frameCanvas = document.createElement('canvas');
+                frameCanvas.width = width;
+                frameCanvas.height = height;
+                const fctx = frameCanvas.getContext('2d', { willReadFrequently: true });
+                if (!fctx) throw new Error('Failed to create frame canvas');
+
+                const out = new Uint8ClampedArray(width * height * 4);
+                const outImageData = new ImageData(out, width, height);
+
+                const sheet = document.createElement('canvas');
+                sheet.width = width * f;
+                sheet.height = height;
+                const sctx = sheet.getContext('2d', { willReadFrequently: true });
+                if (!sctx) throw new Error('Failed to create sheet canvas');
+
+                const writeBlock = ({ blockIndex, mix }) => {
+                    const bx = blockIndex % blocksX;
+                    const by = Math.floor(blockIndex / blocksX);
+                    const x0 = bx * blockSize;
+                    const y0 = by * blockSize;
+                    const x1 = Math.min(width, x0 + blockSize);
+                    const y1 = Math.min(height, y0 + blockSize);
+
+                    const srcBlockIndex = shuffleMap[blockIndex];
+                    const sbx = srcBlockIndex % blocksX;
+                    const sby = Math.floor(srcBlockIndex / blocksX);
+                    const sx0 = sbx * blockSize;
+                    const sy0 = sby * blockSize;
+
+                    const s = mix;
+                    const inv = 1 - s;
+
+                    for (let y = y0; y < y1; y++) {
+                        for (let x = x0; x < x1; x++) {
+                            const di = (y * width + x) * 4;
+
+                            const rx = x - x0;
+                            const ry = y - y0;
+                            const sx = Math.min(width - 1, sx0 + rx);
+                            const sy = Math.min(height - 1, sy0 + ry);
+                            const si = (sy * width + sx) * 4;
+
+                            const mr = mask[di];
+                            const mg = mask[di + 1];
+                            const mb = mask[di + 2];
+
+                            const cr = img[di];
+                            const cg = img[di + 1];
+                            const cb = img[di + 2];
+
+                            const sr = img[si];
+                            const sg = img[si + 1];
+                            const sb = img[si + 2];
+
+                            if (direction === 'mask_to_image') {
+                                // mask -> (shuffled hint) -> correct image
+                                const midR = sr * inv + cr * s;
+                                const midG = sg * inv + cg * s;
+                                const midB = sb * inv + cb * s;
+                                out[di] = Math.round(mr * inv + midR * s);
+                                out[di + 1] = Math.round(mg * inv + midG * s);
+                                out[di + 2] = Math.round(mb * inv + midB * s);
+                                out[di + 3] = 255;
+                            } else {
+                                // image -> (shuffled jitter) -> mask
+                                const midR = sr * inv + mr * s;
+                                const midG = sg * inv + mg * s;
+                                const midB = sb * inv + mb * s;
+                                out[di] = Math.round(cr * inv + midR * s);
+                                out[di + 1] = Math.round(cg * inv + midG * s);
+                                out[di + 2] = Math.round(cb * inv + midB * s);
+                                out[di + 3] = 255;
+                            }
+                        }
+                    }
+                };
+
+                for (let frameIdx = 0; frameIdx < f; frameIdx++) {
+                    const t = (f <= 1) ? 1 : (frameIdx / (f - 1));
+                    out.set(direction === 'mask_to_image' ? mask : img);
+
+                    for (let blockIndex = 0; blockIndex < totalBlocks; blockIndex++) {
+                        const r = revealRank[blockIndex];
+                        const v = clamp01((t - (r - window)) / (2 * window));
+                        const s = smoothstep(v);
+                        if (s <= 0) continue;
+                        writeBlock({ blockIndex, mix: s });
+                    }
+
+                    fctx.putImageData(outImageData, 0, 0);
+                    sctx.drawImage(frameCanvas, frameIdx * width, 0);
+                }
+
+                return sheet;
+            };
+
+            const maskTypeEl = formContainer.querySelector('#param_cip_mask_type');
+            const noiseAmpEl = formContainer.querySelector('#param_cip_mask_noise_amp');
+            const blockSizeEl = formContainer.querySelector('#param_cip_mask_block_size');
+            const codeEl = formContainer.querySelector('#param_cip_asset_code');
+            const filenamesEl = formContainer.querySelector('#param_cip_asset_filenames');
+            const urlsEl = formContainer.querySelector('#param_cip_image_urls');
+            const m2iUrlsEl = formContainer.querySelector('#param_cip_mask_to_image_sprite_urls');
+            const i2mUrlsEl = formContainer.querySelector('#param_cip_image_to_mask_sprite_urls');
+            const framesEl = formContainer.querySelector('#param_cip_transition_frames');
+
+            // Hide persisted URL fields unless this is a CIP block.
+            const applyCipFieldVisibility = () => {
+                const show = isCipBlock();
+                hideButPersist('cip_image_urls', !show);
+                hideButPersist('cip_mask_to_image_sprite_urls', !show);
+                hideButPersist('cip_image_to_mask_sprite_urls', !show);
+                hideButPersist('cip_transition_frames', !show);
+            };
+
+            // Panel: only meaningful for CIP blocks.
+            const anchorRow =
+                formContainer.querySelector('[data-param-name="cip_mask_block_size"]')
+                || formContainer.querySelector('[data-param-name="cip_mask_noise_amp"]')
+                || formContainer.querySelector('[data-param-name="cip_mask_type"]')
+                || formContainer.querySelector('[data-param-name="cip_asset_code"]');
+            const panelId = 'cip_assets_panel';
+            let panel = formContainer.querySelector(`#${CSS.escape(panelId)}`);
+
+            if (anchorRow && panel && panel.previousElementSibling !== anchorRow) {
+                anchorRow.insertAdjacentElement('afterend', panel);
+            }
+
+            if (anchorRow && !panel) {
+                panel = document.createElement('div');
+                panel.id = panelId;
+                panel.className = 'mt-2';
+                panel.innerHTML = `
+                    <div class="d-flex flex-wrap gap-2 mb-2">
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="cip_load_assets_btn">Load assets</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="cip_upload_assets_btn">Upload assets directory</button>
+                        <button type="button" class="btn btn-outline-success btn-sm" id="cip_generate_half_frames_btn">Generate half-frames for transitions</button>
+                    </div>
+                    <div class="form-text" id="cip_assets_status"></div>
+                `;
+                anchorRow.insertAdjacentElement('afterend', panel);
+            }
+
+            const loadBtn = panel ? panel.querySelector('#cip_load_assets_btn') : null;
+            const uploadBtn = panel ? panel.querySelector('#cip_upload_assets_btn') : null;
+            const genBtn = panel ? panel.querySelector('#cip_generate_half_frames_btn') : null;
+            const statusEl = panel ? panel.querySelector('#cip_assets_status') : null;
+
+            let lastAssetsMap = null;
+            let lastAssetsTaskType = null;
+
+            const recomputeListsFromFilenames = () => {
+                if (!filenamesEl || !urlsEl) return;
+                const names = parseLines(filenamesEl.value).filter(isImageFilename);
+                const map = (lastAssetsMap && typeof lastAssetsMap === 'object') ? lastAssetsMap : null;
+                const maskKey = normalizeCipMaskType(maskTypeEl ? maskTypeEl.value : 'noise_and_shuffle');
+                const urls = [];
+                const m2i = [];
+                const i2m = [];
+
+                for (const name of names) {
+                    const u = map && map[name] && map[name].url ? String(map[name].url) : '';
+                    urls.push(u);
+
+                    const base = stripExt(name);
+                    const m2iName = `${base}__cip_${maskKey}_m2i.png`;
+                    const i2mName = `${base}__cip_${maskKey}_i2m.png`;
+                    const m2iUrl = map && map[m2iName] && map[m2iName].url ? String(map[m2iName].url) : '';
+                    const i2mUrl = map && map[i2mName] && map[i2mName].url ? String(map[i2mName].url) : '';
+                    m2i.push(m2iUrl);
+                    i2m.push(i2mUrl);
+                }
+
+                urlsEl.value = urls.join('\n');
+                if (m2iUrlsEl) m2iUrlsEl.value = m2i.join('\n');
+                if (i2mUrlsEl) i2mUrlsEl.value = i2m.join('\n');
+            };
+
+            const loadAssetsFromIndex = async () => {
+                const code = (codeEl ? codeEl.value : '').toString().trim();
+                if (!code) {
+                    if (statusEl) statusEl.textContent = 'Enter an export code first.';
+                    lastAssetsMap = null;
+                    return;
+                }
+
+                const taskType = this.jsonBuilder.normalizeTokenStoreTaskType(document.getElementById('taskType')?.value || 'task');
+                lastAssetsTaskType = taskType;
+
+                const filesMap = this.jsonBuilder.getTokenStoreAssetMapForCodeAndTask(code, taskType);
+                lastAssetsMap = filesMap;
+
+                if (!filesMap) {
+                    if (statusEl) statusEl.textContent = `No Token Store assets index found for code ${code} (${String(taskType).toUpperCase()}).`;
+                    return;
+                }
+
+                const filenames = Object.keys(filesMap)
+                    .filter(isImageFilename)
+                    .sort((a, b) => a.localeCompare(b));
+
+                if (filenamesEl) {
+                    filenamesEl.value = filenames.join('\n');
+                }
+
+                recomputeListsFromFilenames();
+
+                const haveTransitions = (() => {
+                    const m2i = parseLines(m2iUrlsEl ? m2iUrlsEl.value : '');
+                    const i2m = parseLines(i2mUrlsEl ? i2mUrlsEl.value : '');
+                    return m2i.some(Boolean) || i2m.some(Boolean);
+                })();
+
+                if (statusEl) {
+                    statusEl.textContent = `Loaded ${filenames.length} image(s) from Token Store assets index for code ${code} (${String(taskType).toUpperCase()}).${haveTransitions ? ' (Some transitions found.)' : ''}`;
+                }
+            };
+
+            const generateTransitions = async () => {
+                const code = (codeEl ? codeEl.value : '').toString().trim();
+                if (!code) {
+                    if (statusEl) statusEl.textContent = 'Enter an export code first.';
+                    return;
+                }
+
+                const taskType = lastAssetsTaskType || this.jsonBuilder.normalizeTokenStoreTaskType(document.getElementById('taskType')?.value || 'task');
+
+                const filesMap = this.jsonBuilder.getTokenStoreAssetMapForCodeAndTask(code, taskType);
+                if (!filesMap) {
+                    if (statusEl) statusEl.textContent = `No Token Store assets index found for code ${code} (${String(taskType).toUpperCase()}). Upload assets first.`;
+                    return;
+                }
+
+                const filenames = parseLines(filenamesEl ? filenamesEl.value : '').filter(isImageFilename);
+                if (filenames.length === 0) {
+                    if (statusEl) statusEl.textContent = 'No image filenames listed. Load assets first.';
+                    return;
+                }
+
+                // Ensure Token Store connection + record
+                let baseUrl = this.jsonBuilder.peekTokenStoreBaseUrl?.();
+                if (!baseUrl) {
+                    baseUrl = this.jsonBuilder.getTokenStoreBaseUrl?.();
+                }
+                if (!baseUrl) return;
+
+                let record = this.jsonBuilder.getTokenStoreRecordForCodeAndTask(code, taskType);
+                if (!record) {
+                    if (statusEl) statusEl.textContent = `No token found for code ${code} (${String(taskType).toUpperCase()}). Creating a new token...`;
+                    record = await this.jsonBuilder.createTokenStoreConfig(baseUrl);
+                    this.jsonBuilder.setTokenStoreRecordForCodeAndTask(code, taskType, record, { filename: null });
+                }
+
+                const frames = Math.max(2, Number.parseInt((framesEl ? framesEl.value : '8').toString(), 10) || 8);
+                const maskType = normalizeCipMaskType(maskTypeEl ? maskTypeEl.value : 'noise_and_shuffle');
+                const noiseAmp = Math.max(0, Math.min(128, Number.parseInt((noiseAmpEl ? noiseAmpEl.value : '24').toString(), 10) || 0));
+                const blockSizePx = Math.max(1, Number.parseInt((blockSizeEl ? blockSizeEl.value : '12').toString(), 10) || 12);
+                const nextMap = { ...filesMap };
+
+                // Token Store quota guard: the Token Store enforces a per-config total assets cap (e.g., 100MB).
+                // When generating many CIP transition sheets, we can hit that cap. In that case, roll over to a
+                // fresh Token Store config for the same code+task and continue uploading.
+                let didRolloverRecordForQuota = false;
+                const isQuotaExceededError = (e) => {
+                    const msg = (e && e.message) ? String(e.message) : String(e || '');
+                    return /\b413\b/.test(msg) && /(quota|exceed)/i.test(msg);
+                };
+                const maybeRolloverRecord = async () => {
+                    if (didRolloverRecordForQuota) return false;
+                    didRolloverRecordForQuota = true;
+                    const ok = confirm(
+                        'Token Store asset quota exceeded for this config (HTTP 413).\n\n' +
+                        'Create a NEW Token Store config bucket for this same export code and task, and continue uploading the generated CIP transition sprites?\n\n' +
+                        'This does not delete any existing assets; it simply starts a fresh bucket to avoid the size cap.'
+                    );
+                    if (!ok) return false;
+                    if (statusEl) statusEl.textContent = 'Token Store quota exceeded. Creating a new token bucket and retrying uploads...';
+                    record = await this.jsonBuilder.createTokenStoreConfig(baseUrl);
+                    this.jsonBuilder.setTokenStoreRecordForCodeAndTask(code, taskType, record, { filename: null });
+                    return true;
+                };
+                const uploadWithQuotaRollover = async (file, outName) => {
+                    try {
+                        return await this.jsonBuilder.uploadAssetToTokenStore(baseUrl, record, file, outName);
+                    } catch (e) {
+                        if (isQuotaExceededError(e)) {
+                            const rolled = await maybeRolloverRecord();
+                            if (rolled) {
+                                return await this.jsonBuilder.uploadAssetToTokenStore(baseUrl, record, file, outName);
+                            }
+                        }
+                        throw e;
+                    }
+                };
+
+                // Cache-bust regenerated sprite sheets so browsers/JATOS don't keep showing old PNGs.
+                const cacheBust = Date.now().toString(36);
+                const withCacheBust = (rawUrl) => {
+                    const u = (rawUrl ?? '').toString().trim();
+                    if (!u) return '';
+                    try {
+                        const urlObj = new URL(u, window.location.href);
+                        urlObj.searchParams.set('cb', cacheBust);
+                        return urlObj.toString();
+                    } catch {
+                        // Fallback for odd/partial URLs
+                        const sep = u.includes('?') ? '&' : '?';
+                        return `${u}${sep}cb=${encodeURIComponent(cacheBust)}`;
+                    }
+                };
+
+                if (genBtn) genBtn.disabled = true;
+                if (loadBtn) loadBtn.disabled = true;
+                if (uploadBtn) uploadBtn.disabled = true;
+
+                try {
+                    if (statusEl) statusEl.textContent = `Computing shared average mask for ${filenames.length} image(s)...`;
+
+                    const urlsForMask = filenames
+                        .map((fn) => {
+                            const u = filesMap[fn] && filesMap[fn].url ? String(filesMap[fn].url) : '';
+                            return u || '';
+                        })
+                        .filter(Boolean);
+
+                    let baseWidth = 0;
+                    let baseHeight = 0;
+                    for (const u of urlsForMask) {
+                        try {
+                            const firstBitmap = await loadImageBitmap(u);
+                            try {
+                                baseWidth = firstBitmap.width || firstBitmap.naturalWidth;
+                                baseHeight = firstBitmap.height || firstBitmap.naturalHeight;
+                            } finally {
+                                try { firstBitmap?.close?.(); } catch { /* ignore */ }
+                            }
+                            if (baseWidth > 0 && baseHeight > 0) break;
+                        } catch {
+                            // try next
+                        }
+                    }
+
+                    if (!(baseWidth > 0) || !(baseHeight > 0)) {
+                        if (statusEl) statusEl.textContent = 'Failed to determine image dimensions for mask averaging.';
+                        return;
+                    }
+
+                    let sharedMaskBaseCanvas = null;
+                    try {
+                        const avgCanvas = await buildAverageMaskCanvasFromUrls({
+                            urls: urlsForMask,
+                            width: baseWidth,
+                            height: baseHeight,
+                            onProgress: (i, total) => {
+                                if (!statusEl) return;
+                                if (i % 3 === 0 || i === total) statusEl.textContent = `Computing shared average mask... (${i}/${total})`;
+                            }
+                        });
+
+                        if (statusEl) statusEl.textContent = `Building shared mask (${maskType}) from averaged set...`;
+                        sharedMaskBaseCanvas = buildSharedMaskFromAverage({ averageCanvas: avgCanvas, maskType, noiseAmp, blockSizePx });
+                    } catch (e) {
+                        if (statusEl) statusEl.textContent = `Failed to compute average mask: ${e && e.message ? e.message : String(e)}`;
+                        return;
+                    }
+
+                    if (statusEl) statusEl.textContent = `Generating and uploading transition sprites for ${filenames.length} image(s)...`;
+
+                    let done = 0;
+                    for (const filename of filenames) {
+                        const url = filesMap[filename] && filesMap[filename].url ? String(filesMap[filename].url) : '';
+                        if (!url) {
+                            done += 1;
+                            continue;
+                        }
+
+                        const bitmap = await loadImageBitmap(url);
+                        const width = bitmap.width || bitmap.naturalWidth;
+                        const height = bitmap.height || bitmap.naturalHeight;
+                        if (!width || !height) {
+                            done += 1;
+                            continue;
+                        }
+
+                        const maskCanvas = (() => {
+                            if (sharedMaskBaseCanvas.width === width && sharedMaskBaseCanvas.height === height) {
+                                return sharedMaskBaseCanvas;
+                            }
+                            const c = document.createElement('canvas');
+                            c.width = width;
+                            c.height = height;
+                            const cctx = c.getContext('2d', { willReadFrequently: true });
+                            if (cctx) {
+                                cctx.globalAlpha = 1;
+                                cctx.drawImage(sharedMaskBaseCanvas, 0, 0, width, height);
+                            }
+                            return c;
+                        })();
+                        const m2iSheet = await buildTransitionSpriteSheet({ imageBitmap: bitmap, maskCanvas, frames, direction: 'mask_to_image', blockSizePx });
+                        const i2mSheet = await buildTransitionSpriteSheet({ imageBitmap: bitmap, maskCanvas, frames, direction: 'image_to_mask', blockSizePx });
+
+                        const base = stripExt(filename);
+                        const maskKey = normalizeCipMaskType(maskType);
+                        const m2iName = `${base}__cip_${maskKey}_m2i.png`;
+                        const i2mName = `${base}__cip_${maskKey}_i2m.png`;
+
+                        const m2iBlob = await toPngBlob(m2iSheet);
+                        const i2mBlob = await toPngBlob(i2mSheet);
+
+                        const m2iFile = new File([m2iBlob], m2iName, { type: 'image/png' });
+                        const i2mFile = new File([i2mBlob], i2mName, { type: 'image/png' });
+
+                        let m2iUp;
+                        let i2mUp;
+                        try {
+                            m2iUp = await uploadWithQuotaRollover(m2iFile, m2iName);
+                            i2mUp = await uploadWithQuotaRollover(i2mFile, i2mName);
+                        } catch (e) {
+                            const msg = (e && e.message) ? e.message : String(e || '');
+                            if (statusEl) {
+                                statusEl.textContent = `Failed to upload CIP transition sprites (${filename}): ${msg}`;
+                            }
+                            return;
+                        }
+
+                        nextMap[m2iName] = { url: withCacheBust(m2iUp.url) };
+                        nextMap[i2mName] = { url: withCacheBust(i2mUp.url) };
+
+                        done += 1;
+                        if (statusEl && (done % 3 === 0 || done === filenames.length)) {
+                            statusEl.textContent = `Generating and uploading... (${done}/${filenames.length})`;
+                        }
+                    }
+
+                    this.jsonBuilder.setTokenStoreAssetMapForCodeAndTask(code, taskType, nextMap);
+                    lastAssetsMap = nextMap;
+
+                    // Refresh URL lists (will pick up newly-created sprite URLs)
+                    recomputeListsFromFilenames();
+
+                    if (statusEl) statusEl.textContent = `Generated and uploaded transition sprites for code ${code} (${String(taskType).toUpperCase()}).`;
+                } finally {
+                    if (genBtn) genBtn.disabled = false;
+                    if (loadBtn) loadBtn.disabled = false;
+                    if (uploadBtn) uploadBtn.disabled = false;
+                }
+            };
+
+            const updatePanelVisibility = () => {
+                const show = isCipBlock();
+                applyCipFieldVisibility();
+                if (panel) panel.classList.toggle('d-none', !show);
+            };
+
+            if (loadBtn) loadBtn.addEventListener('click', () => loadAssetsFromIndex());
+            if (uploadBtn) {
+                uploadBtn.addEventListener('click', () => {
+                    const btn = document.getElementById('uploadAssetsFolderBtn');
+                    if (btn) btn.click();
+                });
+            }
+            if (genBtn) genBtn.addEventListener('click', () => generateTransitions());
+
+            if (codeEl) {
+                codeEl.addEventListener('change', () => loadAssetsFromIndex());
+            }
+            if (filenamesEl) {
+                filenamesEl.addEventListener('change', () => recomputeListsFromFilenames());
+            }
+            if (maskTypeEl) {
+                maskTypeEl.addEventListener('change', () => recomputeListsFromFilenames());
+            }
+
+            if (blockTypeEl) {
+                blockTypeEl.addEventListener('change', updatePanelVisibility);
+            }
+
+            updatePanelVisibility();
+            // Best-effort auto-load (only if a code is already present)
+            if (isCipBlock() && codeEl && codeEl.value && (!urlsEl || !urlsEl.value)) {
+                loadAssetsFromIndex();
+            }
+        } catch (e) {
+            console.warn('Continuous image block helper setup failed:', e);
         }
 
         // Gabor trial: response task changes should re-evaluate key visibility.

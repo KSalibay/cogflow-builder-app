@@ -5,7 +5,7 @@
  * for experimental psychology tasks compatible with jsPsych and JATOS
  */
 
-try { console.log('[BuilderDebug] Loaded JsonBuilder.js build: 20260304-1'); } catch { /* ignore */ }
+try { console.log('[BuilderDebug] Loaded JsonBuilder.js build: 20260309-1'); } catch { /* ignore */ }
 
 class JsonBuilder {
     constructor() {
@@ -2101,6 +2101,19 @@ class JsonBuilder {
         const nextTaskType = event?.target?.value || 'rdm';
         const prevTaskType = this.currentTaskType || 'rdm';
 
+        // Continuous Image Presentation is a continuous-mode task (by design).
+        // If the user selects it while in trial-based mode, auto-switch to continuous.
+        if (nextTaskType === 'continuous-image' && this.experimentType !== 'continuous') {
+            const continuousRadio = document.getElementById('continuous');
+            if (continuousRadio) continuousRadio.checked = true;
+            this.experimentType = 'continuous';
+
+            // Re-render task-scoped panels so availability + defaults match.
+            this.enforceTaskTypeAvailability();
+            this.updateExperimentTypeUI();
+            this.updateConditionalUI();
+        }
+
         if (!this.isTaskTypeAllowedForExperiment(nextTaskType, this.experimentType)) {
             alert(`Task "${nextTaskType}" is not available for ${this.experimentType} experiments.`);
             if (event?.target) event.target.value = prevTaskType;
@@ -2349,6 +2362,15 @@ class JsonBuilder {
             return false;
         }
 
+        if (taskType === 'continuous-image') {
+            if (type === 'continuous-image-presentation') return true;
+            if (type === 'block') {
+                const innerType = getBlockInnerType();
+                return innerType === 'continuous-image-presentation';
+            }
+            return false;
+        }
+
         if (taskType === 'soc-dashboard') {
             if (type === 'soc-dashboard') return true;
             if (type === 'soc-dashboard-icon') return true;
@@ -2380,6 +2402,16 @@ class JsonBuilder {
     onExperimentTypeChange(event) {
         this.experimentType = event.target.value;
         console.log('Experiment type changed to:', this.experimentType);
+
+        // Prevent switching CIP into trial-based mode (auto-revert to continuous).
+        const taskTypeEl = document.getElementById('taskType');
+        const taskType = taskTypeEl?.value || this.currentTaskType || 'rdm';
+        if (this.experimentType === 'trial-based' && taskType === 'continuous-image') {
+            const continuousRadio = document.getElementById('continuous');
+            if (continuousRadio) continuousRadio.checked = true;
+            this.experimentType = 'continuous';
+            console.log('Reverted experiment type to continuous (CIP requires continuous mode)');
+        }
 
         // Keep task type options consistent with experiment type.
         // (SOC Dashboard is continuous-only.)
@@ -2505,11 +2537,12 @@ class JsonBuilder {
         if (e === 'continuous') {
             // Only show/allow continuous-capable tasks in continuous experiments.
             // RDM has a special continuous compilation path; SOC Dashboard is also continuous-only.
-            return (t === 'rdm' || t === 'soc-dashboard' || t === 'custom' || t === 'nback');
+            return (t === 'rdm' || t === 'soc-dashboard' || t === 'custom' || t === 'nback' || t === 'continuous-image');
         }
 
-        // Trial-based: SOC Dashboard should not be selectable.
+        // Trial-based: SOC Dashboard + Continuous Image Presentation should not be selectable.
         if (t === 'soc-dashboard') return false;
+        if (t === 'continuous-image') return false;
         return true;
     }
 
@@ -2556,6 +2589,9 @@ class JsonBuilder {
      * Show parameters for trial-based experiments
      */
     showTrialBasedParameters() {
+        // Defensive: stop any continuous-mode previews when switching modes.
+        this.stopCipDefaultsPreview();
+
         const container = document.getElementById('parameterForms');
         const taskType = document.getElementById('taskType')?.value || 'rdm';
 
@@ -3911,6 +3947,9 @@ class JsonBuilder {
      * Show parameters for continuous experiments
      */
     showContinuousParameters() {
+        // Ensure we don't leave timeouts running while swapping the UI.
+        this.stopCipDefaultsPreview();
+
         const container = document.getElementById('parameterForms');
         const taskType = document.getElementById('taskType')?.value || 'rdm';
 
@@ -4436,6 +4475,85 @@ class JsonBuilder {
                 </div>
             </div>
             `
+            : (taskType === 'continuous-image')
+            ? `
+            <div class="parameter-group" id="cipExperimentParameters">
+                <div class="group-title d-flex justify-content-between align-items-center">
+                    <div>
+                        <span>Continuous Image Presentation (CIP) Settings</span>
+                        <small class="text-muted d-block">Experiment-wide defaults (applies to newly-added Continuous Image blocks/components).</small>
+                    </div>
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-sm btn-info" id="previewCipDefaultsBtn" onclick="window.jsonBuilderInstance?.playCipDefaultsPreview()">
+                            <i class="fas fa-eye"></i> Preview
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" id="stopCipDefaultsBtn" onclick="window.jsonBuilderInstance?.stopCipDefaultsPreview()">
+                            <i class="fas fa-stop"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Mask Type:</label>
+                    <select class="form-control parameter-input" id="cipDefaultMaskType">
+                        <option value="pure_noise">Average + noise (pure noise)</option>
+                        <option value="noise_and_shuffle" selected>Average + noise + shuffle (noise and shuffle)</option>
+                        <option value="advanced_transform">Phase-scrambled (advanced transform)</option>
+                    </select>
+                    <div class="parameter-help">Controls how the shared mask is constructed from the averaged image set. Used by the CIP asset generator and stored into newly-created blocks.</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Mask Noise Amp:</label>
+                    <input type="number" class="form-control parameter-input" id="cipDefaultMaskNoiseAmp" value="24" min="0" max="128">
+                    <div class="parameter-help">0–128. Higher values add more noise to the shared mask.</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Mask Block Size (px):</label>
+                    <input type="number" class="form-control parameter-input" id="cipDefaultMaskBlockSize" value="12" min="1" max="128">
+                    <div class="parameter-help">Block size used for the shuffle/disintegration effect (only applies to “noise and shuffle”).</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Image Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="cipDefaultImageDurationMs" value="750" min="0" max="60000">
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Transition Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="cipDefaultTransitionDurationMs" value="250" min="0" max="60000">
+                    <div class="parameter-help">The preview approximates sprite transitions using ${'${frames}'} discrete steps.</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Transition Frames:</label>
+                    <input type="number" class="form-control parameter-input" id="cipDefaultTransitionFrames" value="8" min="2" max="60">
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">2AFC Choice Keys:</label>
+                    <input type="text" class="form-control parameter-input" id="cipDefaultChoiceKeys" value="f,j">
+                    <div class="parameter-help">Comma-separated (e.g., f,j). Stored as a string; blocks can override.</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Preview:</label>
+                    <div class="parameter-input">
+                        <div id="cipDefaultsPreview" style="position: relative; width: 240px; height: 140px; border: 1px solid #555; background: #111; overflow: hidden; border-radius: 6px;">
+                            <div id="cipPreviewImageLayer" style="position:absolute; inset:0; opacity:0; background-size: 24px 24px; background-image: linear-gradient(45deg, rgba(255,255,255,0.10) 25%, transparent 25%), linear-gradient(-45deg, rgba(255,255,255,0.10) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.10) 75%), linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.10) 75%); background-position: 0 0, 0 12px, 12px -12px, -12px 0px;">
+                                <div style="position:absolute; inset:auto 10px 10px 10px; color:#fff; font-size:12px; opacity:0.85;">IMAGE</div>
+                            </div>
+                            <div id="cipPreviewMaskLayer" style="position:absolute; inset:0; opacity:1; background-size: 20px 20px; background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.12), rgba(255,255,255,0.12) 10px, rgba(255,255,255,0.02) 10px, rgba(255,255,255,0.02) 20px);">
+                                <canvas id="cipPreviewMaskCanvas" width="240" height="140" style="position:absolute; inset:0; width:100%; height:100%; display:none;"></canvas>
+                                <div style="position:absolute; inset:auto 10px 10px 10px; color:#fff; font-size:12px; opacity:0.85;">MASK</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="parameter-help">Click Preview to play one mask→image→mask cycle using the current timings.</div>
+                </div>
+            </div>
+            `
             : (taskType === 'soc-dashboard')
             ? `
             <div class="parameter-group" id="socDashboardExperimentParameters">
@@ -4883,8 +5001,14 @@ class JsonBuilder {
                         ? 'SART Block'
                         : (currentTaskType === 'simon')
                             ? 'Simon Block'
+                        : (currentTaskType === 'task-switching')
+                            ? 'Task Switching Block'
+                        : (currentTaskType === 'pvt')
+                            ? 'PVT Block'
                         : (currentTaskType === 'gabor')
                             ? 'Gabor Block'
+                            : (currentTaskType === 'continuous-image')
+                                ? 'Continuous Image Block'
                             : (currentTaskType === 'stroop')
                                 ? 'Stroop Block'
                                 : (currentTaskType === 'emotional-stroop')
@@ -4899,8 +5023,14 @@ class JsonBuilder {
                     ? ['sart-trial']
                     : (currentTaskType === 'simon')
                         ? ['simon-trial']
+                    : (currentTaskType === 'task-switching')
+                        ? ['task-switching-trial']
+                    : (currentTaskType === 'pvt')
+                        ? ['pvt-trial']
                     : (currentTaskType === 'gabor')
                         ? ['gabor-trial', 'gabor-quest']
+                        : (currentTaskType === 'continuous-image')
+                            ? ['continuous-image-presentation']
                         : (currentTaskType === 'stroop')
                             ? ['stroop-trial']
                             : (currentTaskType === 'emotional-stroop')
@@ -5151,6 +5281,32 @@ class JsonBuilder {
                 pvt_iti_max: { type: 'number', default: 0, min: 0, max: 30000 }
             };
 
+            const continuousImageOnlyParams = {
+                cip_asset_code: { type: 'string', default: '' },
+                // Mask is derived from the pixel-wise average of the image set, then modified by the selected transform.
+                // Note: sprite sheets are generated per-mask-type; switching types can re-use existing assets if present.
+                cip_mask_type: { type: 'select', default: 'noise_and_shuffle', options: ['pure_noise', 'noise_and_shuffle', 'advanced_transform'] },
+                cip_mask_noise_amp: { type: 'number', default: 24, min: 0, max: 128 },
+                cip_mask_block_size: { type: 'number', default: 12, min: 1, max: 128 },
+                cip_repeat_mode: { type: 'select', default: 'no_repeats', options: ['no_repeats', 'repeat_to_fill'] },
+                cip_images_per_block: { type: 'number', default: 0, min: 0, max: 50000 },
+
+                cip_image_duration_ms: { type: 'number', default: 750, min: 0, max: 60000 },
+                cip_transition_duration_ms: { type: 'number', default: 250, min: 0, max: 60000 },
+                cip_choice_keys: { type: 'string', default: 'f,j' },
+
+                // Filenames are shown/edited by researchers; URL lists are filled by the modal helper.
+                cip_asset_filenames: { type: 'textarea', default: '', rows: 8 },
+
+                // Hidden (but persisted) lists used by the interpreter.
+                cip_image_urls: { type: 'textarea', default: '', rows: 6 },
+                cip_mask_to_image_sprite_urls: { type: 'textarea', default: '', rows: 6 },
+                cip_image_to_mask_sprite_urls: { type: 'textarea', default: '', rows: 6 },
+
+                // Internal: keep Builder+Interpreter in sync for sprite animations.
+                cip_transition_frames: { type: 'number', default: 8, min: 2, max: 60 }
+            };
+
             // RDM-only params remain in RDM mode; other tasks should not inherit the RDM UI surface.
             const rdmOnlyParams = {
                 // Dot color (used for simple trial/practice/adaptive; dot-groups uses per-group colors)
@@ -5225,6 +5381,8 @@ class JsonBuilder {
                         ? pvtOnlyParams
                     : (currentTaskType === 'gabor')
                         ? gaborOnlyParams
+                        : (currentTaskType === 'continuous-image')
+                            ? continuousImageOnlyParams
                         : (currentTaskType === 'stroop')
                             ? stroopOnlyParams
                         : (currentTaskType === 'emotional-stroop')
@@ -5543,8 +5701,8 @@ class JsonBuilder {
             return baseComponents;
         }
 
-        // For Flanker/SART/Simon/Task Switching/PVT/Gabor/Stroop/N-back, show only task-appropriate components.
-        if (taskType === 'flanker' || taskType === 'sart' || taskType === 'simon' || taskType === 'task-switching' || taskType === 'pvt' || taskType === 'gabor' || taskType === 'stroop' || taskType === 'emotional-stroop' || taskType === 'nback') {
+        // For Flanker/SART/Simon/Task Switching/PVT/Gabor/Stroop/N-back/Continuous Image, show only task-appropriate components.
+        if (taskType === 'flanker' || taskType === 'sart' || taskType === 'simon' || taskType === 'task-switching' || taskType === 'pvt' || taskType === 'gabor' || taskType === 'stroop' || taskType === 'emotional-stroop' || taskType === 'nback' || taskType === 'continuous-image') {
             if (taskType === 'flanker') {
                 baseComponents.push({
                     id: 'flanker-trial',
@@ -5686,6 +5844,26 @@ class JsonBuilder {
                         patch_border_width_px: { type: 'number', default: 2, min: 0, max: 50, step: 1 },
                         patch_border_color: { type: 'COLOR', default: '#ffffff' },
                         patch_border_opacity: { type: 'number', default: 0.22, min: 0, max: 1, step: 0.01 }
+                    }
+                });
+            }
+
+            if (taskType === 'continuous-image') {
+                baseComponents.push({
+                    id: 'continuous-image-presentation',
+                    name: `Continuous Image ${unitName}`,
+                    icon: 'fas fa-images',
+                    description: 'Continuous image presentation frame (precomputed transition sprites; 2AFC response)',
+                    category: 'task',
+                    parameters: {
+                        image_url: { type: 'string', default: '' },
+                        mask_to_image_sprite_url: { type: 'string', default: '' },
+                        image_to_mask_sprite_url: { type: 'string', default: '' },
+                        transition_frames: { type: 'number', default: 8, min: 2, max: 60 },
+
+                        image_duration_ms: { type: 'number', default: 750, min: 0, max: 60000 },
+                        transition_duration_ms: { type: 'number', default: 250, min: 0, max: 60000 },
+                        choices: { type: 'string', default: 'f,j' }
                     }
                 });
             }
@@ -6221,6 +6399,10 @@ class JsonBuilder {
                 Object.assign(componentData, this.getGaborDefaultsForNewComponent());
             }
 
+            if (componentDef.id === 'continuous-image-presentation') {
+                Object.assign(componentData, this.getContinuousImageDefaultsForNewComponent());
+            }
+
             if (componentDef.id === 'soc-dashboard') {
                 Object.assign(componentData, this.getSocDashboardDefaultsForNewComponent());
             }
@@ -6233,6 +6415,9 @@ class JsonBuilder {
                 const currentTaskType = document.getElementById('taskType')?.value || 'rdm';
                 if (currentTaskType === 'gabor') {
                     Object.assign(componentData, this.getGaborDefaultsForNewBlock());
+                }
+                if (currentTaskType === 'continuous-image') {
+                    Object.assign(componentData, this.getContinuousImageDefaultsForNewBlock());
                 }
                 if (currentTaskType === 'stroop') {
                     Object.assign(componentData, this.getStroopDefaultsForNewBlock());
@@ -6600,6 +6785,17 @@ class JsonBuilder {
                 cue_delay_max_ms: cueDelayMaxRaw ? parseInt(cueDelayMaxRaw) : 200,
                 stimulus_duration_ms: stimMsRaw ? parseInt(stimMsRaw) : 67,
                 mask_duration_ms: maskMsRaw ? parseInt(maskMsRaw) : 67
+            };
+        }
+
+        if (taskType === 'continuous-image') {
+            const d = this.getCurrentContinuousImageDefaults();
+            config.continuous_image_settings = {
+                mask_type: d.mask_type,
+                image_duration_ms: d.image_duration_ms,
+                transition_duration_ms: d.transition_duration_ms,
+                transition_frames: d.transition_frames,
+                choice_keys: d.choice_keys
             };
         }
 
@@ -7867,6 +8063,192 @@ class JsonBuilder {
         return rest;
     }
 
+    getCurrentContinuousImageDefaults() {
+        const safeInt = (raw, fallback, { min = null, max = null } = {}) => {
+            const v = Number.parseInt(raw ?? '', 10);
+            if (!Number.isFinite(v)) return fallback;
+            const clampedMin = (min === null) ? v : Math.max(min, v);
+            return (max === null) ? clampedMin : Math.min(max, clampedMin);
+        };
+
+        const normalizeCipMaskType = (raw) => {
+            const t0 = (raw ?? '').toString().trim();
+            const t = t0.toLowerCase();
+
+            // New UI values
+            if (t === 'pure_noise') return 'pure_noise';
+            if (t === 'noise_and_shuffle') return 'noise_and_shuffle';
+            if (t === 'advanced_transform') return 'advanced_transform';
+
+            // Friendly labels
+            if (t === 'pure noise') return 'pure_noise';
+            if (t === 'noise and shuffle') return 'noise_and_shuffle';
+            if (t === 'advanced transform') return 'advanced_transform';
+
+            // Legacy values
+            if (t === 'noise') return 'noise_and_shuffle';
+            if (t === 'sprite') return 'pure_noise';
+            if (t === 'blank') return 'pure_noise';
+
+            return 'noise_and_shuffle';
+        };
+
+        const maskTypeRaw = (document.getElementById('cipDefaultMaskType')?.value || 'noise_and_shuffle').toString();
+        const maskType = normalizeCipMaskType(maskTypeRaw);
+        const maskNoiseAmp = safeInt(document.getElementById('cipDefaultMaskNoiseAmp')?.value, 24, { min: 0, max: 128 });
+        const maskBlockSize = safeInt(document.getElementById('cipDefaultMaskBlockSize')?.value, 12, { min: 1, max: 128 });
+
+        return {
+            mask_type: maskType,
+            mask_noise_amp: maskNoiseAmp,
+            mask_block_size: maskBlockSize,
+            image_duration_ms: safeInt(document.getElementById('cipDefaultImageDurationMs')?.value, 750, { min: 0, max: 60000 }),
+            transition_duration_ms: safeInt(document.getElementById('cipDefaultTransitionDurationMs')?.value, 250, { min: 0, max: 60000 }),
+            transition_frames: safeInt(document.getElementById('cipDefaultTransitionFrames')?.value, 8, { min: 2, max: 60 }),
+            choice_keys: (document.getElementById('cipDefaultChoiceKeys')?.value || 'f,j').toString().trim() || 'f,j'
+        };
+    }
+
+    getContinuousImageDefaultsForNewComponent() {
+        const d = this.getCurrentContinuousImageDefaults();
+        return {
+            image_duration_ms: d.image_duration_ms,
+            transition_duration_ms: d.transition_duration_ms,
+            transition_frames: d.transition_frames,
+            choices: d.choice_keys
+        };
+    }
+
+    getContinuousImageDefaultsForNewBlock() {
+        const d = this.getCurrentContinuousImageDefaults();
+        return {
+            block_component_type: 'continuous-image-presentation',
+            cip_mask_type: d.mask_type,
+            cip_mask_noise_amp: d.mask_noise_amp,
+            cip_mask_block_size: d.mask_block_size,
+            cip_image_duration_ms: d.image_duration_ms,
+            cip_transition_duration_ms: d.transition_duration_ms,
+            cip_transition_frames: d.transition_frames,
+            cip_choice_keys: d.choice_keys
+        };
+    }
+
+    stopCipDefaultsPreview() {
+        const timers = Array.isArray(this._cipPreviewTimeouts) ? this._cipPreviewTimeouts : [];
+        for (const id of timers) {
+            try {
+                clearTimeout(id);
+            } catch {
+                // no-op
+            }
+        }
+        this._cipPreviewTimeouts = [];
+
+        const imageLayer = document.getElementById('cipPreviewImageLayer');
+        const maskLayer = document.getElementById('cipPreviewMaskLayer');
+        if (imageLayer) imageLayer.style.opacity = '0';
+        if (maskLayer) maskLayer.style.opacity = '1';
+    }
+
+    renderCipPreviewMask(maskType) {
+        const maskLayer = document.getElementById('cipPreviewMaskLayer');
+        const canvas = document.getElementById('cipPreviewMaskCanvas');
+        if (!maskLayer) return;
+
+        const t = (maskType ?? '').toString().trim().toLowerCase();
+        const isNoisyMask = (t === 'noise') || (t === 'pure_noise') || (t === 'noise_and_shuffle') || (t === 'advanced_transform');
+
+        if (canvas && isNoisyMask) {
+            canvas.style.display = 'block';
+            const ctx = canvas.getContext && canvas.getContext('2d');
+            if (ctx) {
+                const w = canvas.width || 240;
+                const h = canvas.height || 140;
+                const img = ctx.createImageData(w, h);
+
+                const rawAmp = Number.parseInt(document.getElementById('cipDefaultMaskNoiseAmp')?.value ?? '24', 10);
+                const amp = Number.isFinite(rawAmp) ? Math.max(0, Math.min(128, rawAmp)) : 24;
+
+                for (let i = 0; i < img.data.length; i += 4) {
+                    const v = Math.max(0, Math.min(255, Math.round(128 + (Math.random() * 2 - 1) * amp)));
+                    img.data[i] = v;
+                    img.data[i + 1] = v;
+                    img.data[i + 2] = v;
+                    img.data[i + 3] = 255;
+                }
+                ctx.putImageData(img, 0, 0);
+            }
+
+            maskLayer.style.backgroundImage = 'none';
+            maskLayer.style.backgroundColor = '#111';
+            return;
+        }
+
+        if (canvas) {
+            canvas.style.display = 'none';
+        }
+
+        if (t === 'blank') {
+            maskLayer.style.backgroundImage = 'none';
+            maskLayer.style.backgroundColor = '#000';
+            return;
+        }
+
+        maskLayer.style.backgroundColor = '#111';
+        maskLayer.style.backgroundSize = '20px 20px';
+        maskLayer.style.backgroundImage = 'repeating-linear-gradient(45deg, rgba(255,255,255,0.12), rgba(255,255,255,0.12) 10px, rgba(255,255,255,0.02) 10px, rgba(255,255,255,0.02) 20px)';
+    }
+
+    playCipDefaultsPreview() {
+        this.stopCipDefaultsPreview();
+
+        const d = this.getCurrentContinuousImageDefaults();
+        const preview = document.getElementById('cipDefaultsPreview');
+        const imageLayer = document.getElementById('cipPreviewImageLayer');
+        const maskLayer = document.getElementById('cipPreviewMaskLayer');
+
+        if (!preview || !imageLayer || !maskLayer) {
+            return;
+        }
+
+        this.renderCipPreviewMask(d.mask_type);
+
+        const frames = Math.max(2, Number.parseInt(d.transition_frames ?? 8, 10) || 8);
+        const transitionMs = Math.max(0, Number.parseInt(d.transition_duration_ms ?? 250, 10) || 250);
+        const imageMs = Math.max(0, Number.parseInt(d.image_duration_ms ?? 750, 10) || 750);
+
+        const stepMs = Math.max(1, Math.floor(transitionMs / frames));
+
+        const setMix = (alphaImage) => {
+            const a = Math.max(0, Math.min(1, alphaImage));
+            imageLayer.style.opacity = `${a}`;
+            maskLayer.style.opacity = `${1 - a}`;
+        };
+
+        const timeouts = [];
+
+        for (let i = 0; i <= frames; i += 1) {
+            const t = i * stepMs;
+            timeouts.push(setTimeout(() => setMix(i / frames), t));
+        }
+
+        const afterTransition = frames * stepMs;
+        timeouts.push(setTimeout(() => setMix(1), afterTransition));
+
+        const afterHold = afterTransition + imageMs;
+        timeouts.push(setTimeout(() => setMix(1), afterHold));
+
+        for (let i = 0; i <= frames; i += 1) {
+            const t = afterHold + i * stepMs;
+            timeouts.push(setTimeout(() => setMix(1 - (i / frames)), t));
+        }
+
+        const end = afterHold + frames * stepMs;
+        timeouts.push(setTimeout(() => setMix(0), end));
+
+        this._cipPreviewTimeouts = timeouts;
+    }
+
     getGaborDefaultsForNewComponent() {
         // Defaults panel values; used when adding new Gabor timeline items.
         const patchDiameterDeg = Number.parseFloat(document.getElementById('gaborPatchDiameterDeg')?.value || '6');
@@ -8322,12 +8704,40 @@ class JsonBuilder {
     }
 
     transformBlock(blockComponent) {
-        const componentType = blockComponent.block_component_type || 'rdm-trial';
-        const isGaborQuestBlock = componentType === 'gabor-quest';
-        const exportComponentType = isGaborQuestBlock ? 'gabor-trial' : componentType;
+        const componentTypeRaw = (
+            blockComponent.block_component_type
+            || blockComponent.component_type
+            || blockComponent.blockComponentType
+            || blockComponent.componentType
+            || 'rdm-trial'
+        );
         const lengthRaw = blockComponent.block_length;
         const length = Math.max(1, parseInt(lengthRaw ?? 1));
         const samplingMode = blockComponent.sampling_mode || 'per-trial';
+
+        // Block editors sometimes store values under `parameter_values`.
+        // Prefer top-level keys when present (they reflect the current editor UI), but fall back to nested.
+        const blockParams = (blockComponent && typeof blockComponent === 'object')
+            ? ((blockComponent.parameter_values && typeof blockComponent.parameter_values === 'object')
+                ? { ...blockComponent.parameter_values, ...blockComponent }
+                : blockComponent)
+            : {};
+
+        // If the inner type wasn't on block_component_type, it may be stored in parameter_values/component_type.
+        // Keep local componentType in sync for downstream branch selection.
+        const innerTypeFromParams = (
+            blockParams.block_component_type
+            || blockParams.component_type
+            || blockParams.blockComponentType
+            || blockParams.componentType
+            || null
+        );
+        const resolvedComponentType = (typeof innerTypeFromParams === 'string' && innerTypeFromParams.trim() !== '')
+            ? innerTypeFromParams
+            : componentTypeRaw;
+
+        const isGaborQuestBlock = resolvedComponentType === 'gabor-quest';
+        const exportComponentType = isGaborQuestBlock ? 'gabor-trial' : resolvedComponentType;
 
         const seedStr = (blockComponent.seed ?? '').toString().trim();
         const seed = seedStr === '' ? null : Number.parseInt(seedStr, 10);
@@ -8362,7 +8772,7 @@ class JsonBuilder {
             return Array.from(new Set(nums));
         };
 
-        if (componentType === 'rdm-trial') {
+        if (resolvedComponentType === 'rdm-trial') {
             addWindow('coherence', blockComponent.coherence_min, blockComponent.coherence_max);
             addWindow('speed', blockComponent.speed_min, blockComponent.speed_max);
 
@@ -8374,7 +8784,7 @@ class JsonBuilder {
             if (typeof blockComponent.dot_color === 'string' && blockComponent.dot_color.trim() !== '') {
                 values.dot_color = blockComponent.dot_color;
             }
-        } else if (componentType === 'rdm-practice') {
+        } else if (resolvedComponentType === 'rdm-practice') {
             addWindow('coherence', blockComponent.practice_coherence_min, blockComponent.practice_coherence_max);
             addWindow('feedback_duration', blockComponent.practice_feedback_duration_min, blockComponent.practice_feedback_duration_max);
 
@@ -8386,7 +8796,7 @@ class JsonBuilder {
             if (typeof blockComponent.dot_color === 'string' && blockComponent.dot_color.trim() !== '') {
                 values.dot_color = blockComponent.dot_color;
             }
-        } else if (componentType === 'rdm-adaptive') {
+        } else if (resolvedComponentType === 'rdm-adaptive') {
             addWindow('initial_coherence', blockComponent.adaptive_initial_coherence_min, blockComponent.adaptive_initial_coherence_max);
             addWindow('step_size', blockComponent.adaptive_step_size_min, blockComponent.adaptive_step_size_max);
 
@@ -8402,7 +8812,7 @@ class JsonBuilder {
             if (typeof blockComponent.dot_color === 'string' && blockComponent.dot_color.trim() !== '') {
                 values.dot_color = blockComponent.dot_color;
             }
-        } else if (componentType === 'rdm-dot-groups') {
+        } else if (resolvedComponentType === 'rdm-dot-groups') {
             addWindow('group_1_percentage', blockComponent.group_1_percentage_min, blockComponent.group_1_percentage_max);
             addWindow('group_1_coherence', blockComponent.group_1_coherence_min, blockComponent.group_1_coherence_max);
             addWindow('group_1_speed', blockComponent.group_1_speed_min, blockComponent.group_1_speed_max);
@@ -8433,7 +8843,7 @@ class JsonBuilder {
 
             if (g1Color) values.group_1_color = g1Color;
             if (g2Color) values.group_2_color = g2Color;
-        } else if (componentType === 'flanker-trial') {
+        } else if (resolvedComponentType === 'flanker-trial') {
             // Generic task fields; interpreter defines how these are rendered/scored.
             const parseStringList = (raw) => {
                 if (raw === undefined || raw === null) return [];
@@ -8496,7 +8906,7 @@ class JsonBuilder {
             addWindow('stimulus_duration_ms', blockComponent.flanker_stimulus_duration_min, blockComponent.flanker_stimulus_duration_max);
             addWindow('trial_duration_ms', blockComponent.flanker_trial_duration_min, blockComponent.flanker_trial_duration_max);
             addWindow('iti_ms', blockComponent.flanker_iti_min, blockComponent.flanker_iti_max);
-        } else if (componentType === 'sart-trial') {
+        } else if (resolvedComponentType === 'sart-trial') {
             const parseIntList = (raw) => {
                 if (raw === undefined || raw === null) return [];
                 return raw
@@ -8527,7 +8937,7 @@ class JsonBuilder {
             addWindow('mask_duration_ms', blockComponent.sart_mask_duration_min, blockComponent.sart_mask_duration_max);
             addWindow('trial_duration_ms', blockComponent.sart_trial_duration_min, blockComponent.sart_trial_duration_max);
             addWindow('iti_ms', blockComponent.sart_iti_min, blockComponent.sart_iti_max);
-        } else if (componentType === 'gabor-trial' || componentType === 'gabor-quest') {
+        } else if (resolvedComponentType === 'gabor-trial' || resolvedComponentType === 'gabor-quest') {
             const parseStringList = (raw) => {
                 if (raw === undefined || raw === null) return [];
                 return raw
@@ -8655,7 +9065,7 @@ class JsonBuilder {
         }
 
         // Aperture border (outline) settings apply to all RDM-derived block component types.
-        if (componentType && componentType.startsWith('rdm-')) {
+        if (resolvedComponentType && resolvedComponentType.startsWith('rdm-')) {
             const modeRaw = (blockComponent.show_aperture_outline_mode ?? 'inherit').toString().trim();
             const widthRaw = Number(blockComponent.aperture_outline_width);
             const colorRaw = (typeof blockComponent.aperture_outline_color === 'string') ? blockComponent.aperture_outline_color.trim() : '';
@@ -8678,7 +9088,7 @@ class JsonBuilder {
                     : {};
                 values.aperture_parameters = { ...existing, ...ap };
             }
-        } else if (componentType === 'stroop-trial') {
+        } else if (resolvedComponentType === 'stroop-trial') {
             const parseStringList = (raw) => {
                 if (raw === undefined || raw === null) return [];
                 return raw
@@ -8724,7 +9134,7 @@ class JsonBuilder {
             addWindow('stimulus_duration_ms', blockComponent.stroop_stimulus_duration_min, blockComponent.stroop_stimulus_duration_max);
             addWindow('trial_duration_ms', blockComponent.stroop_trial_duration_min, blockComponent.stroop_trial_duration_max);
             addWindow('iti_ms', blockComponent.stroop_iti_min, blockComponent.stroop_iti_max);
-        } else if (componentType === 'emotional-stroop-trial') {
+        } else if (resolvedComponentType === 'emotional-stroop-trial') {
             const parseStringList = (raw) => {
                 if (raw === undefined || raw === null) return [];
                 return raw
@@ -8775,7 +9185,7 @@ class JsonBuilder {
             addWindow('stimulus_duration_ms', blockComponent.emostroop_stimulus_duration_min, blockComponent.emostroop_stimulus_duration_max);
             addWindow('trial_duration_ms', blockComponent.emostroop_trial_duration_min, blockComponent.emostroop_trial_duration_max);
             addWindow('iti_ms', blockComponent.emostroop_iti_min, blockComponent.emostroop_iti_max);
-        } else if (componentType === 'simon-trial') {
+        } else if (resolvedComponentType === 'simon-trial') {
             const parseStringList = (raw) => {
                 if (raw === undefined || raw === null) return [];
                 return raw
@@ -8805,7 +9215,7 @@ class JsonBuilder {
             addWindow('stimulus_duration_ms', blockComponent.simon_stimulus_duration_min, blockComponent.simon_stimulus_duration_max);
             addWindow('trial_duration_ms', blockComponent.simon_trial_duration_min, blockComponent.simon_trial_duration_max);
             addWindow('iti_ms', blockComponent.simon_iti_min, blockComponent.simon_iti_max);
-        } else if (componentType === 'task-switching-trial') {
+        } else if (resolvedComponentType === 'task-switching-trial') {
             const trialType = (blockComponent.ts_trial_type ?? '').toString().trim();
             if (trialType) {
                 const tt = trialType.toLowerCase();
@@ -8868,7 +9278,7 @@ class JsonBuilder {
             addWindow('stimulus_duration_ms', blockComponent.ts_stimulus_duration_min, blockComponent.ts_stimulus_duration_max);
             addWindow('trial_duration_ms', blockComponent.ts_trial_duration_min, blockComponent.ts_trial_duration_max);
             addWindow('iti_ms', blockComponent.ts_iti_min, blockComponent.ts_iti_max);
-        } else if (componentType === 'pvt-trial') {
+        } else if (resolvedComponentType === 'pvt-trial') {
             const dev = (blockComponent.pvt_response_device ?? 'inherit').toString().trim();
             if (dev && dev !== 'inherit') values.response_device = dev;
 
@@ -8881,7 +9291,7 @@ class JsonBuilder {
             addWindow('foreperiod_ms', blockComponent.pvt_foreperiod_min, blockComponent.pvt_foreperiod_max);
             addWindow('trial_duration_ms', blockComponent.pvt_trial_duration_min, blockComponent.pvt_trial_duration_max);
             addWindow('iti_ms', blockComponent.pvt_iti_min, blockComponent.pvt_iti_max);
-        } else if (componentType === 'html-keyboard-response') {
+        } else if (resolvedComponentType === 'html-keyboard-response') {
             const stim = (blockComponent.stimulus_html ?? blockComponent.stimulus ?? '').toString();
             if (stim.trim() !== '') {
                 values.stimulus_html = stim;
@@ -8894,7 +9304,7 @@ class JsonBuilder {
             if (choices !== '') {
                 values.choices = choices;
             }
-        } else if (componentType === 'html-button-response') {
+        } else if (resolvedComponentType === 'html-button-response') {
             const stim = (blockComponent.stimulus_html ?? blockComponent.stimulus ?? '').toString();
             if (stim.trim() !== '') {
                 values.stimulus_html = stim;
@@ -8912,7 +9322,7 @@ class JsonBuilder {
             if (btnHtml.trim() !== '') {
                 values.button_html = btnHtml;
             }
-        } else if (componentType === 'image-keyboard-response') {
+        } else if (resolvedComponentType === 'image-keyboard-response') {
             const img = (blockComponent.stimulus_image ?? blockComponent.stimulus ?? '').toString().trim();
             if (img !== '') {
                 values.stimulus_image = img;
@@ -8929,6 +9339,38 @@ class JsonBuilder {
             if (choices !== '') {
                 values.choices = choices;
             }
+        } else if (resolvedComponentType === 'continuous-image-presentation') {
+            // Continuous Image Presentation (CIP): export the per-block cip_* fields, including hidden URL lists.
+            // IMPORTANT: the Interpreter consumes these from block.parameter_values (not from top-level config defaults).
+            const safeInt = (raw, fallback = null, { min = null, max = null } = {}) => {
+                if (raw === undefined || raw === null || raw === '') return fallback;
+                const v = Number.parseInt(raw, 10);
+                if (!Number.isFinite(v)) return fallback;
+                const clampedMin = (min === null) ? v : Math.max(min, v);
+                return (max === null) ? clampedMin : Math.min(max, clampedMin);
+            };
+
+            const safeStr = (raw) => (raw === undefined || raw === null) ? '' : raw.toString();
+
+            // Always include these keys (even if empty) so JSON preview/export reflects true state.
+            values.cip_asset_code = safeStr(blockParams.cip_asset_code).trim();
+            values.cip_mask_type = safeStr(blockParams.cip_mask_type).trim() || 'noise_and_shuffle';
+            values.cip_mask_noise_amp = safeInt(blockParams.cip_mask_noise_amp, 24, { min: 0, max: 128 });
+            values.cip_mask_block_size = safeInt(blockParams.cip_mask_block_size, 12, { min: 1, max: 128 });
+            values.cip_repeat_mode = safeStr(blockParams.cip_repeat_mode).trim() || 'no_repeats';
+            values.cip_images_per_block = safeInt(blockParams.cip_images_per_block, 0, { min: 0, max: 50000 });
+
+            values.cip_image_duration_ms = safeInt(blockParams.cip_image_duration_ms, 750, { min: 0, max: 60000 });
+            values.cip_transition_duration_ms = safeInt(blockParams.cip_transition_duration_ms, 250, { min: 0, max: 60000 });
+            values.cip_transition_frames = safeInt(blockParams.cip_transition_frames, 8, { min: 2, max: 60 });
+            values.cip_choice_keys = safeStr(blockParams.cip_choice_keys).trim() || 'f,j';
+
+            values.cip_asset_filenames = safeStr(blockParams.cip_asset_filenames);
+
+            // Hidden/persisted lists (populated by the CIP asset modal)
+            values.cip_image_urls = safeStr(blockParams.cip_image_urls);
+            values.cip_mask_to_image_sprite_urls = safeStr(blockParams.cip_mask_to_image_sprite_urls);
+            values.cip_image_to_mask_sprite_urls = safeStr(blockParams.cip_image_to_mask_sprite_urls);
         }
 
         const out = {
@@ -8944,7 +9386,7 @@ class JsonBuilder {
         }
 
         // Continuous-mode transitions for generated trials (fixed per block)
-        if (this.experimentType === 'continuous') {
+        if (this.experimentType === 'continuous' && resolvedComponentType !== 'continuous-image-presentation') {
             const defaults = this.getDefaultTransitionSettings();
             const duration = (blockComponent.transition_duration !== undefined && blockComponent.transition_duration !== null && blockComponent.transition_duration !== '')
                 ? parseInt(blockComponent.transition_duration)
@@ -8960,7 +9402,7 @@ class JsonBuilder {
         }
 
         // Optional per-block response override
-        if (componentType && componentType.startsWith('rdm-')) {
+        if (resolvedComponentType && resolvedComponentType.startsWith('rdm-')) {
             const override = this.buildRDMResponseParametersOverride(blockComponent);
             if (override) {
                 out.response_parameters_override = override;

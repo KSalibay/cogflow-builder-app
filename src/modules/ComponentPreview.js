@@ -98,6 +98,8 @@ class ComponentPreview {
             this.showHtmlButtonResponsePreview(componentData);
         } else if (componentType === 'image-keyboard-response') {
             this.showImageKeyboardResponsePreview(componentData);
+        } else if (componentType === 'continuous-image-presentation') {
+            this.showContinuousImagePresentationPreview(componentData);
         } else if (componentType === 'visual-angle-calibration') {
             this.showVisualAngleCalibrationPreview(componentData);
         } else if (componentType === 'reward-settings') {
@@ -2289,6 +2291,11 @@ class ComponentPreview {
             return;
         }
 
+        if (baseType === 'continuous-image-presentation') {
+            this.showContinuousImagePresentationBlockPreview(componentData);
+            return;
+        }
+
         // Render a randomly sampled parameter set from the block window so users can
         // quickly sanity-check the block configuration.
         const sampled = this.sampleComponentFromBlock(componentData);
@@ -2355,6 +2362,602 @@ class ComponentPreview {
         }
 
         this.showRDMPreview(sampled);
+    }
+
+    stopContinuousImagePresentationPreview() {
+        const timers = Array.isArray(this._cipPreviewTimeouts) ? this._cipPreviewTimeouts : [];
+        for (const id of timers) {
+            try {
+                clearTimeout(id);
+            } catch {
+                // ignore
+            }
+        }
+        this._cipPreviewTimeouts = [];
+
+        // Cancel any in-flight sprite animations (RAF loops).
+        this._cipPreviewPlayToken = (Number(this._cipPreviewPlayToken) || 0) + 1;
+        if (Number.isFinite(Number(this._cipPreviewRafId))) {
+            try {
+                cancelAnimationFrame(this._cipPreviewRafId);
+            } catch {
+                // ignore
+            }
+        }
+        this._cipPreviewRafId = null;
+
+        // Reset visibility if the modal is currently open.
+        const imageLayer = document.getElementById('cipPreviewModalImageLayer');
+        const maskLayer = document.getElementById('cipPreviewModalMaskLayer');
+        const spriteLayer = document.getElementById('cipPreviewModalSpriteLayer');
+        const spriteCanvas = document.getElementById('cipPreviewModalSpriteCanvas');
+        if (imageLayer) imageLayer.style.opacity = '0';
+        if (maskLayer) maskLayer.style.opacity = '1';
+        if (spriteLayer) spriteLayer.style.opacity = '0';
+        if (spriteCanvas) {
+            spriteCanvas.style.display = 'none';
+            const ctx = spriteCanvas.getContext && spriteCanvas.getContext('2d');
+            if (ctx) {
+                ctx.clearRect(0, 0, spriteCanvas.width, spriteCanvas.height);
+            }
+        }
+    }
+
+    renderCipPreviewMaskInto(maskLayer, canvas, maskType) {
+        if (!maskLayer) return;
+
+        const t0 = (maskType ?? '').toString().trim();
+        const t = t0.toLowerCase();
+        const normalized =
+            (t === 'blank') ? 'blank'
+            : (t === 'noise' || t === 'pure_noise' || t === 'noise_and_shuffle' || t === 'advanced_transform') ? 'noise'
+            : (t === 'sprite') ? 'sprite'
+            : 'noise';
+
+        if (canvas && normalized === 'noise') {
+            canvas.style.display = 'block';
+            const ctx = canvas.getContext && canvas.getContext('2d');
+            if (ctx) {
+                const w = canvas.width || 320;
+                const h = canvas.height || 200;
+                const img = ctx.createImageData(w, h);
+                for (let i = 0; i < img.data.length; i += 4) {
+                    const v = Math.floor(Math.random() * 256);
+                    img.data[i] = v;
+                    img.data[i + 1] = v;
+                    img.data[i + 2] = v;
+                    img.data[i + 3] = 255;
+                }
+                ctx.putImageData(img, 0, 0);
+            }
+
+            maskLayer.style.backgroundImage = 'none';
+            maskLayer.style.backgroundColor = '#111';
+            return;
+        }
+
+        if (canvas) {
+            canvas.style.display = 'none';
+        }
+
+        if (normalized === 'blank') {
+            maskLayer.style.backgroundImage = 'none';
+            maskLayer.style.backgroundColor = '#000';
+            return;
+        }
+
+        // sprite (placeholder): simple patterned mask
+        maskLayer.style.backgroundColor = '#111';
+        maskLayer.style.backgroundSize = '20px 20px';
+        maskLayer.style.backgroundImage = 'repeating-linear-gradient(45deg, rgba(255,255,255,0.12), rgba(255,255,255,0.12) 10px, rgba(255,255,255,0.02) 10px, rgba(255,255,255,0.02) 20px)';
+    }
+
+    playContinuousImagePresentationPreview({
+        maskType,
+        transitionMs,
+        frames,
+        imageMs,
+        maskToImageSpriteUrl = '',
+        imageToMaskSpriteUrl = '',
+        imageUrl = '',
+        sequenceItems = null
+    }) {
+        this.stopContinuousImagePresentationPreview();
+
+        const imageLayer = document.getElementById('cipPreviewModalImageLayer');
+        const maskLayer = document.getElementById('cipPreviewModalMaskLayer');
+        const spriteLayer = document.getElementById('cipPreviewModalSpriteLayer');
+        const canvas = document.getElementById('cipPreviewModalMaskCanvas');
+        const spriteCanvas = document.getElementById('cipPreviewModalSpriteCanvas');
+        if (!imageLayer || !maskLayer) return;
+
+        if (imageUrl) {
+            const cssUrl = (imageUrl ?? '').toString().trim().replace(/"/g, '%22');
+            imageLayer.style.backgroundImage = `url("${cssUrl}")`;
+            imageLayer.style.backgroundSize = 'contain';
+            imageLayer.style.backgroundPosition = 'center';
+            imageLayer.style.backgroundRepeat = 'no-repeat';
+        } else {
+            // Revert to the placeholder background defined in the HTML.
+            imageLayer.style.backgroundImage = '';
+            imageLayer.style.backgroundSize = '';
+            imageLayer.style.backgroundPosition = '';
+            imageLayer.style.backgroundRepeat = '';
+        }
+
+        const f = Math.max(2, Number.parseInt(frames ?? 8, 10) || 8);
+        const tMs = Math.max(0, Number.parseInt(transitionMs ?? 250, 10) || 250);
+        const iMs = Math.max(0, Number.parseInt(imageMs ?? 750, 10) || 750);
+        const stepMs = Math.max(1, Math.floor(tMs / f));
+
+        const items = Array.isArray(sequenceItems) && sequenceItems.length > 0
+            ? sequenceItems
+            : null;
+
+        // If sprite URLs are provided, we should use them regardless of maskType.
+        // `maskType` controls how the shared mask is *generated*, not whether we have sprites.
+        const firstM2I = (items ? (items[0]?.maskToImageSpriteUrl ?? '') : maskToImageSpriteUrl).toString().trim();
+        const firstI2M = (items ? (items[0]?.imageToMaskSpriteUrl ?? '') : imageToMaskSpriteUrl).toString().trim();
+        const hasSprites = firstM2I !== '' && firstI2M !== '' && !!spriteCanvas;
+
+        if (hasSprites) {
+            // Sprite-sheet preview (canvas blit): deterministic per-frame drawing.
+            if (canvas) canvas.style.display = 'none';
+            if (spriteLayer) spriteLayer.style.opacity = '0';
+
+            // Keep the mask label visible without covering the sprite.
+            maskLayer.style.opacity = '1';
+            maskLayer.style.backgroundImage = 'none';
+            maskLayer.style.backgroundColor = 'transparent';
+            imageLayer.style.opacity = '0';
+
+            spriteCanvas.style.display = 'block';
+            const spriteCtx = spriteCanvas.getContext && spriteCanvas.getContext('2d');
+            if (!spriteCtx) return;
+
+            const token = (Number(this._cipPreviewPlayToken) || 0) + 1;
+            this._cipPreviewPlayToken = token;
+
+            const ensureCanvasSize = () => {
+                const dpr = window.devicePixelRatio || 1;
+                const w = Math.max(1, Math.floor((spriteCanvas.clientWidth || spriteCanvas.width || 360) * dpr));
+                const h = Math.max(1, Math.floor((spriteCanvas.clientHeight || spriteCanvas.height || 220) * dpr));
+                if (spriteCanvas.width !== w || spriteCanvas.height !== h) {
+                    spriteCanvas.width = w;
+                    spriteCanvas.height = h;
+                }
+            };
+
+            const loadImage = (url) => {
+                const u = (url ?? '').toString().trim();
+                if (!u) return Promise.resolve(null);
+                const cache = (this._cipPreviewAssetCache && this._cipPreviewAssetCache instanceof Map)
+                    ? this._cipPreviewAssetCache
+                    : null;
+                if (cache && cache.has(u)) return Promise.resolve(cache.get(u));
+
+                return new Promise((resolve) => {
+                    try {
+                        const img = new Image();
+                        img.decoding = 'async';
+                        img.onload = () => {
+                            try {
+                                if (cache) cache.set(u, img);
+                            } catch {
+                                // ignore
+                            }
+                            resolve(img);
+                        };
+                        img.onerror = () => resolve(null);
+                        img.src = u;
+                    } catch {
+                        resolve(null);
+                    }
+                });
+            };
+
+            const drawFrame = (img, frameIndex) => {
+                if (!img) return;
+                ensureCanvasSize();
+                const fw = Math.floor(img.width / f);
+                const fh = img.height;
+                const idx = Math.max(0, Math.min(f - 1, frameIndex | 0));
+                const sx = idx * fw;
+                spriteCtx.clearRect(0, 0, spriteCanvas.width, spriteCanvas.height);
+                try {
+                    // Draw with aspect-ratio preserved (like CSS background-size: contain)
+                    const cw = spriteCanvas.width;
+                    const ch = spriteCanvas.height;
+                    const scale = Math.min(cw / Math.max(1, fw), ch / Math.max(1, fh));
+                    const dw = Math.max(1, Math.floor(fw * scale));
+                    const dh = Math.max(1, Math.floor(fh * scale));
+                    const dx = Math.floor((cw - dw) / 2);
+                    const dy = Math.floor((ch - dh) / 2);
+                    spriteCtx.drawImage(img, sx, 0, fw, fh, dx, dy, dw, dh);
+                } catch {
+                    // ignore
+                }
+            };
+
+            const playSprite = async (url, durationMs) => {
+                const img = await loadImage(url);
+                if (this._cipPreviewPlayToken !== token) return;
+                if (!img) return;
+
+                const dur = Math.max(0, Number.parseInt(durationMs ?? 0, 10) || 0);
+                if (dur <= 0) {
+                    drawFrame(img, f - 1);
+                    return;
+                }
+
+                const start = performance.now();
+                return new Promise((resolve) => {
+                    const tick = () => {
+                        if (this._cipPreviewPlayToken !== token) return resolve();
+                        const now = performance.now();
+                        const elapsed = now - start;
+                        const p = Math.max(0, Math.min(1, elapsed / dur));
+                        const idx = Math.min(f - 1, Math.floor(p * f));
+                        drawFrame(img, idx);
+                        if (elapsed >= dur) return resolve();
+                        this._cipPreviewRafId = requestAnimationFrame(tick);
+                    };
+                    this._cipPreviewRafId = requestAnimationFrame(tick);
+                });
+            };
+
+            const setImageUrl = (url) => {
+                const u = (url ?? '').toString().trim();
+                if (!u) return;
+                const cssUrl = u.replace(/"/g, '%22');
+                imageLayer.style.backgroundImage = `url("${cssUrl}")`;
+                imageLayer.style.backgroundSize = 'contain';
+                imageLayer.style.backgroundPosition = 'center';
+                imageLayer.style.backgroundRepeat = 'no-repeat';
+            };
+
+            const seqItems = items ? items : [{ imageUrl, maskToImageSpriteUrl, imageToMaskSpriteUrl }];
+            const maskHoldMs = Math.max(0, stepMs);
+
+            (async () => {
+                for (const it of seqItems) {
+                    if (this._cipPreviewPlayToken !== token) return;
+
+                    const m2i = (it?.maskToImageSpriteUrl ?? maskToImageSpriteUrl).toString().trim();
+                    const i2m = (it?.imageToMaskSpriteUrl ?? imageToMaskSpriteUrl).toString().trim();
+                    const imgUrl = (it?.imageUrl ?? imageUrl).toString().trim();
+
+                    // Mask hold: show frame 0 of mask->image sprite (it starts at the shared mask).
+                    imageLayer.style.opacity = '0';
+                    maskLayer.style.opacity = '1';
+                    spriteCanvas.style.display = 'block';
+                    const m2iImg = await loadImage(m2i);
+                    if (this._cipPreviewPlayToken !== token) return;
+                    if (m2iImg) drawFrame(m2iImg, 0);
+                    if (maskHoldMs > 0) await new Promise(r => setTimeout(r, maskHoldMs));
+
+                    // mask -> image transition
+                    await playSprite(m2i, tMs);
+                    if (this._cipPreviewPlayToken !== token) return;
+
+                    // show image
+                    setImageUrl(imgUrl);
+                    spriteCanvas.style.display = 'none';
+                    imageLayer.style.opacity = '1';
+                    maskLayer.style.opacity = '0';
+                    if (iMs > 0) await new Promise(r => setTimeout(r, iMs));
+                    if (this._cipPreviewPlayToken !== token) return;
+
+                    // image -> mask transition
+                    imageLayer.style.opacity = '0';
+                    maskLayer.style.opacity = '1';
+                    spriteCanvas.style.display = 'block';
+                    await playSprite(i2m, tMs);
+                    if (this._cipPreviewPlayToken !== token) return;
+                }
+            })();
+
+            return;
+        }
+
+        // Fallback: placeholder (mask pattern/noise + opacity stepping)
+        this.renderCipPreviewMaskInto(maskLayer, canvas, maskType);
+        if (spriteLayer) spriteLayer.style.opacity = '0';
+
+        const setMix = (alphaImage) => {
+            const a = Math.max(0, Math.min(1, alphaImage));
+            imageLayer.style.opacity = `${a}`;
+            maskLayer.style.opacity = `${1 - a}`;
+        };
+
+        // Start fully masked
+        setMix(0);
+
+        const timeouts = [];
+
+        // mask -> image
+        for (let i = 0; i <= f; i += 1) {
+            const t = i * stepMs;
+            timeouts.push(setTimeout(() => setMix(i / f), t));
+        }
+
+        const afterTransition = f * stepMs;
+        // hold image
+        timeouts.push(setTimeout(() => setMix(1), afterTransition));
+        // image -> mask
+        const afterHold = afterTransition + iMs;
+        for (let i = 0; i <= f; i += 1) {
+            const t = afterHold + i * stepMs;
+            timeouts.push(setTimeout(() => setMix(1 - (i / f)), t));
+        }
+
+        this._cipPreviewTimeouts = timeouts;
+    }
+
+    showContinuousImagePresentationBlockPreview(blockData) {
+        // Normalize: some exports store block fields under parameter_values.
+        const src = (blockData && typeof blockData === 'object' && blockData.parameter_values && typeof blockData.parameter_values === 'object')
+            ? { ...blockData, ...blockData.parameter_values }
+            : (blockData || {});
+
+        const derived = {
+            type: 'continuous-image-presentation',
+            name: (src?.name ?? 'CIP Block Preview').toString(),
+            preview_mode: 'block',
+            mask_type: (src?.cip_mask_type ?? 'sprite').toString(),
+            image_duration_ms: src?.cip_image_duration_ms,
+            transition_duration_ms: src?.cip_transition_duration_ms,
+            transition_frames: src?.cip_transition_frames,
+            choices: (src?.cip_choice_keys ?? '').toString(),
+
+            images_per_block: src?.cip_images_per_block,
+
+            // Optional: generated assets for preview
+            image_urls: (src?.cip_image_urls ?? '').toString(),
+            mask_to_image_sprite_urls: (src?.cip_mask_to_image_sprite_urls ?? '').toString(),
+            image_to_mask_sprite_urls: (src?.cip_image_to_mask_sprite_urls ?? '').toString()
+        };
+
+        this.showContinuousImagePresentationPreview(derived, { contextNote: 'Block preview (uses CIP block timings)' });
+    }
+
+    showContinuousImagePresentationPreview(componentData, { contextNote = '' } = {}) {
+        const previewModal = this.getPreviewModal();
+        if (!previewModal) return;
+        const { modalEl, modal } = previewModal;
+
+        const modalBody = modalEl.querySelector('.modal-body');
+        if (!modalBody) return;
+
+        const escape = (s) => {
+            return (s ?? '')
+                .toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        };
+
+        const maskType = (componentData?.mask_type ?? componentData?.cip_mask_type ?? 'sprite').toString();
+        const imageMs = componentData?.image_duration_ms ?? componentData?.cip_image_duration_ms ?? 750;
+        const transitionMs = componentData?.transition_duration_ms ?? componentData?.cip_transition_duration_ms ?? 250;
+        const frames = componentData?.transition_frames ?? componentData?.cip_transition_frames ?? 8;
+        const keys = (componentData?.choices ?? componentData?.cip_choice_keys ?? '').toString();
+
+        const parseUrlList = (raw) => {
+            if (raw === undefined || raw === null) return [];
+            return raw
+                .toString()
+                .split(/[\n,]+/)
+                .map(s => s.trim())
+                .filter(Boolean);
+        };
+
+        const imageUrls = parseUrlList(componentData?.image_urls ?? componentData?.cip_image_urls);
+        const maskToImageSpriteUrls = parseUrlList(componentData?.mask_to_image_sprite_urls ?? componentData?.cip_mask_to_image_sprite_urls);
+        const imageToMaskSpriteUrls = parseUrlList(componentData?.image_to_mask_sprite_urls ?? componentData?.cip_image_to_mask_sprite_urls);
+
+        const sampleTransitionSet = () => {
+            const hasPaired =
+                imageUrls.length > 0 &&
+                maskToImageSpriteUrls.length === imageUrls.length &&
+                imageToMaskSpriteUrls.length === imageUrls.length;
+
+            if (hasPaired) {
+                const idx = Math.floor(Math.random() * imageUrls.length);
+                return {
+                    imageUrl: imageUrls[idx] || '',
+                    maskToImageSpriteUrl: maskToImageSpriteUrls[idx] || '',
+                    imageToMaskSpriteUrl: imageToMaskSpriteUrls[idx] || ''
+                };
+            }
+
+            const pick = (arr) => {
+                if (!Array.isArray(arr) || arr.length === 0) return '';
+                const idx = Math.floor(Math.random() * arr.length);
+                return arr[idx] || '';
+            };
+
+            return {
+                imageUrl: pick(imageUrls),
+                maskToImageSpriteUrl: pick(maskToImageSpriteUrls),
+                imageToMaskSpriteUrl: pick(imageToMaskSpriteUrls)
+            };
+        };
+
+        const sampleSequence = () => {
+            const mode = (componentData?.preview_mode ?? '').toString();
+            if (mode !== 'block') return [];
+
+            const hasPaired =
+                imageUrls.length > 0 &&
+                maskToImageSpriteUrls.length === imageUrls.length &&
+                imageToMaskSpriteUrls.length === imageUrls.length;
+
+            if (!hasPaired) return [];
+
+            const idxs = imageUrls.map((_, i) => i);
+            // Fisher-Yates shuffle
+            for (let i = idxs.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                const tmp = idxs[i];
+                idxs[i] = idxs[j];
+                idxs[j] = tmp;
+            }
+
+            const nRaw = Number.parseInt(componentData?.images_per_block ?? componentData?.cip_images_per_block ?? 0, 10);
+            const n = (Number.isFinite(nRaw) && nRaw > 0) ? Math.min(nRaw, idxs.length) : idxs.length;
+            return idxs.slice(0, Math.max(1, n)).map((idx) => ({
+                imageUrl: imageUrls[idx] || '',
+                maskToImageSpriteUrl: maskToImageSpriteUrls[idx] || '',
+                imageToMaskSpriteUrl: imageToMaskSpriteUrls[idx] || ''
+            }));
+        };
+
+        const initialSample = sampleTransitionSet();
+        const initialSequence = sampleSequence();
+
+        const note = (componentData?._previewContextNote ?? contextNote ?? '').toString();
+
+        modalBody.innerHTML = `
+            <div class="p-3">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <div class="h5 mb-0">Continuous Image Presentation (CIP)</div>
+                        ${note ? `<div class="small text-muted">${escape(note)}</div>` : ''}
+                    </div>
+                    <div class="small text-muted text-end">
+                        Mask: <strong>${escape(maskType)}</strong><br/>
+                        Transition: ${escape(transitionMs)} ms (${escape(frames)} frames)<br/>
+                        Image: ${escape(imageMs)} ms
+                        ${keys ? `<br/>Keys: <span class="badge bg-secondary">${escape(keys)}</span>` : ''}
+                    </div>
+                </div>
+
+                <div class="position-relative border rounded overflow-hidden" style="height:220px; background:#111;">
+                    <div id="cipPreviewModalSpriteLayer" style="position:absolute; inset:0; opacity:0; background-color:#111;"></div>
+                    <canvas id="cipPreviewModalSpriteCanvas" width="360" height="220" style="position:absolute; inset:0; width:100%; height:100%; display:none;"></canvas>
+                    <div id="cipPreviewModalImageLayer" style="position:absolute; inset:0; opacity:0; background-size: 24px 24px; background-image: linear-gradient(45deg, rgba(255,255,255,0.10) 25%, transparent 25%), linear-gradient(-45deg, rgba(255,255,255,0.10) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.10) 75%), linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.10) 75%); background-position: 0 0, 0 12px, 12px -12px, -12px 0px;">
+                        <div style="position:absolute; inset:auto 12px 12px 12px; color:#fff; font-size:12px; opacity:0.85;">IMAGE</div>
+                    </div>
+                    <div id="cipPreviewModalMaskLayer" style="position:absolute; inset:0; opacity:1; background-size: 20px 20px; background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.12), rgba(255,255,255,0.12) 10px, rgba(255,255,255,0.02) 10px, rgba(255,255,255,0.02) 20px);">
+                        <canvas id="cipPreviewModalMaskCanvas" width="360" height="220" style="position:absolute; inset:0; width:100%; height:100%; display:none;"></canvas>
+                        <div style="position:absolute; inset:auto 12px 12px 12px; color:#fff; font-size:12px; opacity:0.85;">MASK</div>
+                    </div>
+                    <div id="cipPreviewLoading" style="position:absolute; inset:0; display:none; align-items:center; justify-content:center; text-align:center; padding:12px; background: rgba(0,0,0,0.55); color:#fff; font-size:13px; z-index:5;">
+                        Loading preview assets…
+                    </div>
+                </div>
+
+                <div class="small text-muted mt-2">Preview plays one mask→image→mask cycle using the current timings (uses sprite sheets when available; otherwise placeholder visuals).</div>
+                <div class="d-flex justify-content-end mt-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="cipPreviewResampleBtn">Resample</button>
+                </div>
+            </div>
+        `;
+
+        // Stop any prior timers, and ensure we stop when the modal closes.
+        this.stopContinuousImagePresentationPreview();
+        try {
+            modalEl.addEventListener('hidden.bs.modal', () => this.stopContinuousImagePresentationPreview(), { once: true });
+        } catch {
+            // ignore
+        }
+
+        modal.show();
+
+        const loadingEl = document.getElementById('cipPreviewLoading');
+        const showLoading = (msg) => {
+            if (loadingEl) {
+                loadingEl.textContent = (msg ?? 'Loading preview assets…').toString();
+                loadingEl.style.display = 'flex';
+            }
+        };
+        const hideLoading = () => {
+            if (loadingEl) loadingEl.style.display = 'none';
+        };
+
+        const preloadImage = (url) => {
+            const u = (url ?? '').toString().trim();
+            if (!u) return Promise.resolve({ ok: true, url: '' });
+            return new Promise((resolve) => {
+                try {
+                    if (!this._cipPreviewAssetCache || !(this._cipPreviewAssetCache instanceof Map)) {
+                        this._cipPreviewAssetCache = new Map();
+                    }
+                    const img = new Image();
+                    img.decoding = 'async';
+                    img.loading = 'eager';
+                    img.onload = () => {
+                        try {
+                            this._cipPreviewAssetCache.set(u, img);
+                        } catch {
+                            // ignore
+                        }
+                        resolve({ ok: true, url: u });
+                    };
+                    img.onerror = () => resolve({ ok: false, url: u });
+                    img.src = u;
+                } catch {
+                    resolve({ ok: false, url: u });
+                }
+            });
+        };
+
+        const preloadAll = async (urls) => {
+            const uniq = Array.from(new Set((urls || []).map(s => (s ?? '').toString().trim()).filter(Boolean)));
+            const results = await Promise.all(uniq.map(preloadImage));
+            const failed = results.filter(r => !r.ok).map(r => r.url);
+            return { ok: failed.length === 0, failed };
+        };
+
+        const playWithPreload = async ({ sample, sequence }) => {
+            const token = (Number(this._cipPreviewLoadToken) || 0) + 1;
+            this._cipPreviewLoadToken = token;
+
+            const items = (Array.isArray(sequence) && sequence.length > 0)
+                ? sequence
+                : [sample];
+
+            const urlsToLoad = [];
+            for (const it of items) {
+                urlsToLoad.push(it?.imageUrl ?? '');
+                urlsToLoad.push(it?.maskToImageSpriteUrl ?? '');
+                urlsToLoad.push(it?.imageToMaskSpriteUrl ?? '');
+            }
+
+            showLoading(`Loading ${urlsToLoad.filter(Boolean).length} assets…`);
+            const { ok, failed } = await preloadAll(urlsToLoad);
+            if (this._cipPreviewLoadToken !== token) return;
+            hideLoading();
+
+            if (!ok) {
+                console.warn('CIP preview: some assets failed to preload:', failed);
+            }
+
+            this.playContinuousImagePresentationPreview({
+                maskType,
+                transitionMs,
+                frames,
+                imageMs,
+                maskToImageSpriteUrl: sample?.maskToImageSpriteUrl ?? '',
+                imageToMaskSpriteUrl: sample?.imageToMaskSpriteUrl ?? '',
+                imageUrl: sample?.imageUrl ?? '',
+                sequenceItems: (Array.isArray(sequence) && sequence.length > 0) ? sequence : null
+            });
+        };
+
+        playWithPreload({ sample: initialSample, sequence: initialSequence });
+
+        const resampleBtn = document.getElementById('cipPreviewResampleBtn');
+        if (resampleBtn) {
+            resampleBtn.addEventListener('click', () => {
+                const seq = sampleSequence();
+                const one = sampleTransitionSet();
+                playWithPreload({ sample: one, sequence: (Array.isArray(seq) && seq.length > 0) ? seq : null });
+            });
+        }
     }
 
     showHtmlButtonResponsePreview(componentData) {

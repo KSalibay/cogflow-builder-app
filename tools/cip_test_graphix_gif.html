@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CIP Local Diagnostic (test_graphix → stitched GIF)</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 16px; }
+    .row { display:flex; gap:16px; flex-wrap: wrap; align-items: flex-start; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 12px; }
+    label { display:block; font-size: 12px; opacity: 0.85; margin-bottom: 4px; }
+    input { width: 120px; }
+    button { padding: 8px 12px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+    canvas { background: #111; border-radius: 8px; }
+    img { max-width: 100%; height: auto; image-rendering: pixelated; }
+    .muted { opacity: 0.8; }
+    .ok { color: #0a7; }
+    .warn { color: #b50; }
+    .err { color: #c00; }
+  </style>
+</head>
+<body>
+  <h2>Local CIP Diagnostic (avg mask + transitions → one GIF)</h2>
+  <div class="muted" style="max-width: 900px;">
+    Loads <span class="mono">img/test_graphix/b1.png</span>, <span class="mono">b2.png</span>, <span class="mono">b3.png</span> from this repo,
+    builds the shared mask as the pixel-wise average (plus noise + block shuffle), generates mask↔image dissolve transitions,
+    then stitches a single diagnostic GIF:
+    <span class="mono">mask → m2i(b1) → b1 → i2m(b1) → mask → ... → b3 → i2m(b3) → mask</span>.
+    <br/><br/>
+    Run via a local server (recommended): <span class="mono">python -m http.server</span> from the <span class="mono">json-builder-app</span> folder,
+    then open <span class="mono">http://localhost:8000/tools/cip_test_graphix_gif.html</span>.
+  </div>
+
+  <div class="row" style="margin-top: 12px;">
+    <div class="card">
+      <div class="row">
+        <div>
+          <label>Transition frames</label>
+          <input id="frames" type="number" min="2" max="64" value="12" />
+        </div>
+        <div>
+          <label>Transition ms</label>
+          <input id="transitionMs" type="number" min="0" max="5000" value="250" />
+        </div>
+        <div>
+          <label>Image hold ms</label>
+          <input id="imageHoldMs" type="number" min="0" max="5000" value="500" />
+        </div>
+        <div>
+          <label>Mask hold ms</label>
+          <input id="maskHoldMs" type="number" min="0" max="5000" value="120" />
+        </div>
+        <div>
+          <label>Block size (px)</label>
+          <input id="blockSize" type="number" min="1" max="128" value="12" />
+        </div>
+        <div>
+          <label>Noise amp (0-128)</label>
+          <input id="noiseAmp" type="number" min="0" max="128" value="24" />
+        </div>
+        <div>
+          <label>Seed</label>
+          <input id="seed" type="number" min="0" max="999999999" value="1337" />
+        </div>
+      </div>
+      <div style="margin-top: 10px; display:flex; gap:10px; align-items:center;">
+        <button id="goBtn">Generate GIF</button>
+        <a id="download" href="#" download="cip_test_graphix.gif" style="display:none;">Download GIF</a>
+      </div>
+      <div id="status" class="mono" style="margin-top: 10px;"></div>
+    </div>
+
+    <div class="card">
+      <div class="mono muted" style="margin-bottom: 8px;">Live preview (last rendered frame)</div>
+      <canvas id="preview" width="640" height="360"></canvas>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top: 16px;">
+    <div class="mono muted" style="margin-bottom: 8px;">Output GIF</div>
+    <div id="gifOut"></div>
+  </div>
+
+  <script type="module">
+    // Lightweight GIF encoding in-browser.
+    // CDN import keeps this tool simple and avoids Node/native dependencies.
+    import { GIFEncoder, quantize, applyPalette } from 'https://cdn.jsdelivr.net/npm/gifenc@1.0.3/+esm';
+
+    const statusEl = document.getElementById('status');
+    const previewCanvas = document.getElementById('preview');
+    const pctx = previewCanvas.getContext('2d', { willReadFrequently: true });
+    const gifOut = document.getElementById('gifOut');
+    const download = document.getElementById('download');
+
+    function setStatus(msg, cls = '') {
+      statusEl.className = `mono ${cls}`.trim();
+      statusEl.textContent = msg;
+    }
+
+    function clamp255(x) { return x < 0 ? 0 : (x > 255 ? 255 : x); }
+    function clamp01(x) { return x < 0 ? 0 : (x > 1 ? 1 : x); }
+    function smoothstep(t) {
+      const x = clamp01(t);
+      return x * x * (3 - 2 * x);
+    }
+
+    function mulberry32(seed) {
+      let a = (seed >>> 0) || 1;
+      return function() {
+        a |= 0;
+        a = (a + 0x6D2B79F5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    async function fetchBitmap(url) {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`);
+      const blob = await res.blob();
+      return await createImageBitmap(blob);
+    }
+
+    function canvasFromBitmap(bitmap, w, h) {
+      const c = document.createElement('canvas');
+      c.width = w;
+      c.height = h;
+      const ctx = c.getContext('2d', { willReadFrequently: true });
+      ctx.globalAlpha = 1;
+      ctx.drawImage(bitmap, 0, 0, w, h);
+      return c;
+    }
+
+    function canvasFromBitmapCenterCrop(bitmap, targetW, targetH) {
+      const sw = bitmap.width;
+      const sh = bitmap.height;
+
+      const sx = Math.max(0, Math.floor((sw - targetW) / 2));
+      const sy = Math.max(0, Math.floor((sh - targetH) / 2));
+      const sW = Math.min(targetW, sw);
+      const sH = Math.min(targetH, sh);
+
+      const c = document.createElement('canvas');
+      c.width = targetW;
+      c.height = targetH;
+      const ctx = c.getContext('2d', { willReadFrequently: true });
+      ctx.globalAlpha = 1;
+      ctx.clearRect(0, 0, targetW, targetH);
+      ctx.drawImage(bitmap, sx, sy, sW, sH, 0, 0, targetW, targetH);
+      return c;
+    }
+
+    function getImageData(canvas) {
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      return ctx.getImageData(0, 0, canvas.width, canvas.height);
+    }
+
+    function putImageDataToPreview(imgData) {
+      // Fit to preview canvas while preserving aspect.
+      const w = imgData.width;
+      const h = imgData.height;
+      previewCanvas.width = w;
+      previewCanvas.height = h;
+      pctx.putImageData(imgData, 0, 0);
+    }
+
+    function computeAverageImageData(imageDatas) {
+      if (!Array.isArray(imageDatas) || imageDatas.length === 0) throw new Error('No images for average');
+      const w = imageDatas[0].width;
+      const h = imageDatas[0].height;
+      const n = imageDatas.length;
+      const out = new Uint8ClampedArray(w * h * 4);
+      const sums = new Float64Array(w * h * 4);
+
+      for (const img of imageDatas) {
+        if (img.width !== w || img.height !== h) throw new Error('Image sizes differ; resize first');
+        const d = img.data;
+        for (let i = 0; i < d.length; i++) sums[i] += d[i];
+      }
+
+      for (let i = 0; i < out.length; i += 4) {
+        out[i] = clamp255(Math.round(sums[i] / n));
+        out[i + 1] = clamp255(Math.round(sums[i + 1] / n));
+        out[i + 2] = clamp255(Math.round(sums[i + 2] / n));
+        out[i + 3] = 255;
+      }
+
+      return new ImageData(out, w, h);
+    }
+
+    function buildNoiseShuffledMaskFromAverage(avgImgData, { noiseAmp = 24, blockSize = 12, rng }) {
+      const w = avgImgData.width;
+      const h = avgImgData.height;
+      const src = avgImgData.data;
+      const base = new Uint8ClampedArray(src.length);
+
+      // average + per-pixel noise (same noise added to RGB)
+      for (let i = 0; i < src.length; i += 4) {
+        const j = (rng() * 2 - 1) * noiseAmp;
+        base[i] = clamp255(Math.round(src[i] + j));
+        base[i + 1] = clamp255(Math.round(src[i + 1] + j));
+        base[i + 2] = clamp255(Math.round(src[i + 2] + j));
+        base[i + 3] = 255;
+      }
+
+      // block-shuffle the mask so the endpoint has shuffled structure
+      const bs = Math.max(1, Math.floor(blockSize));
+      const bx = Math.ceil(w / bs);
+      const by = Math.ceil(h / bs);
+      const totalBlocks = bx * by;
+
+      const perm = new Uint32Array(totalBlocks);
+      for (let i = 0; i < totalBlocks; i++) perm[i] = i;
+      // Fisher-Yates
+      for (let i = totalBlocks - 1; i > 0; i--) {
+        const j = Math.floor(rng() * (i + 1));
+        const t = perm[i];
+        perm[i] = perm[j];
+        perm[j] = t;
+      }
+
+      const out = new Uint8ClampedArray(base.length);
+
+      for (let blockIndex = 0; blockIndex < totalBlocks; blockIndex++) {
+        const dx0 = (blockIndex % bx) * bs;
+        const dy0 = Math.floor(blockIndex / bx) * bs;
+
+        const srcBlock = perm[blockIndex];
+        const sx0 = (srcBlock % bx) * bs;
+        const sy0 = Math.floor(srcBlock / bx) * bs;
+
+        const ww = Math.min(bs, w - dx0);
+        const hh = Math.min(bs, h - dy0);
+
+        for (let yy = 0; yy < hh; yy++) {
+          const dy = dy0 + yy;
+          const sy = Math.min(h - 1, sy0 + yy);
+          for (let xx = 0; xx < ww; xx++) {
+            const dx = dx0 + xx;
+            const sx = Math.min(w - 1, sx0 + xx);
+            const di = (dy * w + dx) * 4;
+            const si = (sy * w + sx) * 4;
+            out[di] = base[si];
+            out[di + 1] = base[si + 1];
+            out[di + 2] = base[si + 2];
+            out[di + 3] = 255;
+          }
+        }
+      }
+
+      return new ImageData(out, w, h);
+    }
+
+    function buildTransitionFrames({ imageImgData, maskImgData, frames, direction, blockSize, rng }) {
+      const w = imageImgData.width;
+      const h = imageImgData.height;
+      if (maskImgData.width !== w || maskImgData.height !== h) throw new Error('Mask/image size mismatch');
+
+      const img = imageImgData.data;
+      const mask = maskImgData.data;
+      const f = Math.max(2, Math.floor(frames));
+
+      const bs = Math.max(1, Math.floor(blockSize));
+      const bx = Math.ceil(w / bs);
+      const by = Math.ceil(h / bs);
+      const totalBlocks = bx * by;
+
+      // Reveal order per block (rank in [0,1])
+      const order = new Uint32Array(totalBlocks);
+      for (let i = 0; i < totalBlocks; i++) order[i] = i;
+      for (let i = totalBlocks - 1; i > 0; i--) {
+        const j = Math.floor(rng() * (i + 1));
+        const t = order[i];
+        order[i] = order[j];
+        order[j] = t;
+      }
+      const revealRank = new Float32Array(totalBlocks);
+      const denom = Math.max(1, totalBlocks - 1);
+      for (let rank = 0; rank < totalBlocks; rank++) revealRank[order[rank]] = rank / denom;
+
+      // Shuffle mapping per block: each destination block samples pixels from a permuted source block
+      const shuffleBlock = new Uint32Array(totalBlocks);
+      for (let i = 0; i < totalBlocks; i++) shuffleBlock[i] = i;
+      for (let i = totalBlocks - 1; i > 0; i--) {
+        const j = Math.floor(rng() * (i + 1));
+        const t = shuffleBlock[i];
+        shuffleBlock[i] = shuffleBlock[j];
+        shuffleBlock[j] = t;
+      }
+
+      const out = new Uint8ClampedArray(w * h * 4);
+      const framesOut = [];
+
+      const window = 0.18; // width of the "active mixing" band in reveal-rank space
+
+      function writeBlock(blockIndex, mix) {
+        const x0 = (blockIndex % bx) * bs;
+        const y0 = Math.floor(blockIndex / bx) * bs;
+        const ww = Math.min(bs, w - x0);
+        const hh = Math.min(bs, h - y0);
+
+        const srcBlock = shuffleBlock[blockIndex];
+        const sx0 = (srcBlock % bx) * bs;
+        const sy0 = Math.floor(srcBlock / bx) * bs;
+
+        const s = mix;
+        const inv = 1 - s;
+
+        for (let yy = 0; yy < hh; yy++) {
+          const y = y0 + yy;
+          const sy = Math.min(h - 1, sy0 + yy);
+          for (let xx = 0; xx < ww; xx++) {
+            const x = x0 + xx;
+            const sx = Math.min(w - 1, sx0 + xx);
+
+            const di = (y * w + x) * 4;
+            const si = (sy * w + sx) * 4;
+
+            const mr = mask[di];
+            const mg = mask[di + 1];
+            const mb = mask[di + 2];
+
+            const cr = img[di];
+            const cg = img[di + 1];
+            const cb = img[di + 2];
+
+            const sr = img[si];
+            const sg = img[si + 1];
+            const sb = img[si + 2];
+
+            if (direction === 'mask_to_image') {
+              // mask -> (shuffled hint) -> correct image
+              const midR = sr * inv + cr * s;
+              const midG = sg * inv + cg * s;
+              const midB = sb * inv + cb * s;
+              out[di] = clamp255(Math.round(mr * inv + midR * s));
+              out[di + 1] = clamp255(Math.round(mg * inv + midG * s));
+              out[di + 2] = clamp255(Math.round(mb * inv + midB * s));
+              out[di + 3] = 255;
+            } else {
+              // image -> (shuffled jitter) -> mask
+              const midR = sr * inv + mr * s;
+              const midG = sg * inv + mg * s;
+              const midB = sb * inv + mb * s;
+              out[di] = clamp255(Math.round(cr * inv + midR * s));
+              out[di + 1] = clamp255(Math.round(cg * inv + midG * s));
+              out[di + 2] = clamp255(Math.round(cb * inv + midB * s));
+              out[di + 3] = 255;
+            }
+          }
+        }
+      }
+
+      for (let frameIdx = 0; frameIdx < f; frameIdx++) {
+        const t = (f <= 1) ? 1 : (frameIdx / (f - 1));
+
+        // Start frame as the endpoint-less base (mask for m2i, image for i2m)
+        const base = (direction === 'mask_to_image') ? mask : img;
+        out.set(base);
+
+        for (let blockIndex = 0; blockIndex < totalBlocks; blockIndex++) {
+          const r = revealRank[blockIndex];
+          const v = clamp01((t - (r - window)) / (2 * window));
+          const s = smoothstep(v);
+          if (s <= 0) continue;
+          writeBlock(blockIndex, s);
+        }
+
+        const imgData = new ImageData(new Uint8ClampedArray(out), w, h);
+        framesOut.push(imgData);
+      }
+
+      return framesOut;
+    }
+
+    async function run() {
+      const frames = Math.max(2, parseInt(document.getElementById('frames').value || '12', 10));
+      const transitionMs = Math.max(0, parseInt(document.getElementById('transitionMs').value || '250', 10));
+      const imageHoldMs = Math.max(0, parseInt(document.getElementById('imageHoldMs').value || '500', 10));
+      const maskHoldMs = Math.max(0, parseInt(document.getElementById('maskHoldMs').value || '120', 10));
+      const blockSize = Math.max(1, parseInt(document.getElementById('blockSize').value || '12', 10));
+      const noiseAmp = Math.max(0, Math.min(128, parseInt(document.getElementById('noiseAmp').value || '24', 10)));
+      const seed = (parseInt(document.getElementById('seed').value || '1337', 10) >>> 0);
+
+      const rng = mulberry32(seed);
+      const urls = [
+        '../img/test_graphix/b1.png',
+        '../img/test_graphix/b2.png',
+        '../img/test_graphix/b3.png'
+      ];
+
+      setStatus('Loading bitmaps...', '');
+      download.style.display = 'none';
+      gifOut.innerHTML = '';
+
+      const bitmaps = [];
+      for (let i = 0; i < urls.length; i++) {
+        setStatus(`Loading ${urls[i]} (${i+1}/${urls.length})...`);
+        bitmaps.push(await fetchBitmap(urls[i]));
+      }
+
+      const widths = bitmaps.map(b => b.width);
+      const heights = bitmaps.map(b => b.height);
+      const w = Math.min(...widths);
+      const h = Math.min(...heights);
+      const allSame = widths.every(x => x === widths[0]) && heights.every(y => y === heights[0]);
+      if (!allSame) {
+        setStatus(`Input sizes differ (${widths.join(',')} x ${heights.join(',')}). Center-cropping to ${w}x${h}...`, 'warn');
+      }
+
+      setStatus(`Computing average mask (${w}x${h})...`);
+      const imgCanvases = bitmaps.map(bm => canvasFromBitmapCenterCrop(bm, w, h));
+      const imgDatas = imgCanvases.map(getImageData);
+      const avg = computeAverageImageData(imgDatas);
+
+      setStatus('Building shared mask (avg + noise + block-shuffle)...');
+      const mask = buildNoiseShuffledMaskFromAverage(avg, { noiseAmp, blockSize, rng });
+      putImageDataToPreview(mask);
+
+      // Build stitched frame list: mask → m2i → image → i2m → mask ...
+      const allFrames = [];
+      const allDelays = [];
+
+      function pushFrame(imgData, delayMs) {
+        allFrames.push(imgData);
+        allDelays.push(delayMs);
+        putImageDataToPreview(imgData);
+      }
+
+      // initial mask hold
+      pushFrame(mask, maskHoldMs);
+
+      const perTransDelay = Math.max(1, Math.floor(transitionMs / frames));
+
+      for (let idx = 0; idx < imgDatas.length; idx++) {
+        setStatus(`Generating transitions for b${idx+1} (${idx+1}/${imgDatas.length})...`);
+
+        const localRng = mulberry32((seed + 1000 * (idx + 1)) >>> 0);
+
+        const m2i = buildTransitionFrames({
+          imageImgData: imgDatas[idx],
+          maskImgData: mask,
+          frames,
+          direction: 'mask_to_image',
+          blockSize,
+          rng: localRng
+        });
+
+        const i2m = buildTransitionFrames({
+          imageImgData: imgDatas[idx],
+          maskImgData: mask,
+          frames,
+          direction: 'image_to_mask',
+          blockSize,
+          rng: localRng
+        });
+
+        // mask -> image transition frames (skip frame 0 to avoid duplicating mask)
+        for (let i = 1; i < m2i.length; i++) pushFrame(m2i[i], perTransDelay);
+
+        // hold image
+        pushFrame(imgDatas[idx], imageHoldMs);
+
+        // image -> mask transition frames (skip frame 0 to avoid duplicating the image)
+        for (let i = 1; i < i2m.length; i++) pushFrame(i2m[i], perTransDelay);
+
+        // hold mask
+        pushFrame(mask, maskHoldMs);
+      }
+
+      setStatus(`Encoding GIF (${allFrames.length} frames)...`, 'warn');
+
+      const enc = GIFEncoder();
+
+      // Encode with per-frame palettes (simple and robust for diagnostics).
+      for (let i = 0; i < allFrames.length; i++) {
+        if (i % 10 === 0) setStatus(`Encoding GIF frame ${i+1}/${allFrames.length}...`, 'warn');
+        const rgba = allFrames[i].data;
+        const palette = quantize(rgba, 256);
+        const indexed = applyPalette(rgba, palette);
+        // gifenc expects `delay` in milliseconds (it converts to 1/100s internally).
+        enc.writeFrame(indexed, w, h, { palette, delay: Math.max(0, Math.round(allDelays[i])) });
+      }
+
+      enc.finish();
+      const bytes = enc.bytes();
+      const blob = new Blob([bytes], { type: 'image/gif' });
+      const url = URL.createObjectURL(blob);
+
+      const imgEl = document.createElement('img');
+      imgEl.src = url;
+      imgEl.alt = 'CIP diagnostic GIF';
+      imgEl.style.maxWidth = '900px';
+      imgEl.style.borderRadius = '8px';
+      imgEl.style.border = '1px solid #ddd';
+      gifOut.innerHTML = '';
+      gifOut.appendChild(imgEl);
+
+      download.href = url;
+      download.style.display = 'inline';
+
+      setStatus(`Done. GIF frames=${allFrames.length}, size=${w}x${h}.`, 'ok');
+    }
+
+    document.getElementById('goBtn').addEventListener('click', async () => {
+      try {
+        setStatus('Starting...', '');
+        await run();
+      } catch (e) {
+        console.error(e);
+        setStatus(`Error: ${e && e.message ? e.message : String(e)}`, 'err');
+      }
+    });
+
+    setStatus('Ready. Click “Generate GIF”.', '');
+  </script>
+</body>
+</html>
