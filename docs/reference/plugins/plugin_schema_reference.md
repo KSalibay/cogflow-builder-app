@@ -2,7 +2,7 @@
 
 Generated from `src/schemas/JSPsychSchemas.js`.
 
-Generated at: 2026-03-06T19:52:34Z
+Generated at: 2026-03-09T20:26:01Z
 
 ---
 
@@ -24,11 +24,25 @@ Generate many trials from parameter windows/ranges (compact representation for l
 | adaptive_target_performance | FLOAT | 0.82 | RDM Adaptive: target performance (fixed) | blockTarget: rdm-adaptive |
 | aperture_outline_color | COLOR | #FFFFFF | Outline color when overriding outline visibility | blockTarget: rdm-* |
 | aperture_outline_width | FLOAT | 2 | Outline width (px) when overriding outline visibility | blockTarget: rdm-* |
-| block_component_type | SELECT | rdm-trial | What component type this block generates | options: rdm-trial, rdm-practice, rdm-adaptive, rdm-dot-groups, flanker-trial, sart-trial, simon-trial, pvt-trial, task-switching-trial, stroop-trial, emotional-stroop-trial, gabor-trial, gabor-quest, nback-block, html-button-response, html-keyboard-response, image-keyboard-response \| required |
+| block_component_type | SELECT | rdm-trial | What component type this block generates | options: rdm-trial, rdm-practice, rdm-adaptive, rdm-dot-groups, flanker-trial, sart-trial, simon-trial, pvt-trial, task-switching-trial, stroop-trial, emotional-stroop-trial, gabor-trial, gabor-quest, nback-block, html-button-response, html-keyboard-response, image-keyboard-response, continuous-image-presentation \| required |
 | block_length | INT | 100 | Number of trials/frames this block represents | required |
 | button_choices | STRING | Continue | Button labels (comma/newline separated) | blockTarget: html-button-response |
 | button_html | HTML_STRING |  | Optional custom button HTML template (advanced) | blockTarget: html-button-response |
 | choices | STRING | ALL_KEYS | Keyboard choices: ALL_KEYS, NO_KEYS, or a comma/space-separated list (e.g., "f j") | blockTarget: html-keyboard-response,image-keyboard-response |
+| cip_asset_code | STRING |  | CIP: asset bundle code used by the Builder asset generator | blockTarget: continuous-image-presentation |
+| cip_asset_filenames | STRING |  | CIP: source image filenames (comma/newline separated) | blockTarget: continuous-image-presentation |
+| cip_choice_keys | STRING | f,j | CIP: comma-separated response keys | blockTarget: continuous-image-presentation |
+| cip_image_duration_ms | INT | 750 | CIP: image presentation duration (ms) | min: 0 \| max: 60000 \| blockTarget: continuous-image-presentation |
+| cip_image_to_mask_sprite_urls | STRING |  | CIP: resolved sprite URLs for image→mask transitions (comma/newline separated) | blockTarget: continuous-image-presentation |
+| cip_image_urls | STRING |  | CIP: resolved image URLs (comma/newline separated) | blockTarget: continuous-image-presentation |
+| cip_images_per_block | INT | 0 | CIP: how many images the block expands into (0 = default) | min: 0 \| max: 50000 \| blockTarget: continuous-image-presentation |
+| cip_mask_block_size | INT | 12 | CIP: block size used by mask transforms | min: 1 \| max: 128 \| blockTarget: continuous-image-presentation |
+| cip_mask_noise_amp | INT | 24 | CIP: noise amplitude applied to the mask | min: 0 \| max: 128 \| blockTarget: continuous-image-presentation |
+| cip_mask_to_image_sprite_urls | STRING |  | CIP: resolved sprite URLs for mask→image transitions (comma/newline separated) | blockTarget: continuous-image-presentation |
+| cip_mask_type | SELECT | noise_and_shuffle | CIP: mask generation mode | options: pure_noise, noise_and_shuffle, advanced_transform \| blockTarget: continuous-image-presentation |
+| cip_repeat_mode | SELECT | no_repeats | CIP: whether to repeat images to fill the block | options: no_repeats, repeat_to_fill \| blockTarget: continuous-image-presentation |
+| cip_transition_duration_ms | INT | 250 | CIP: mask transition duration (ms) | min: 0 \| max: 60000 \| blockTarget: continuous-image-presentation |
+| cip_transition_frames | INT | 8 | CIP: number of frames used for sprite-sheet mask transitions | min: 2 \| max: 60 \| blockTarget: continuous-image-presentation |
 | coherence_max | FLOAT | 0.8 | RDM Trial: coherence range max (0-1) | blockTarget: rdm-trial |
 | coherence_min | FLOAT | 0.2 | RDM Trial: coherence range min (0-1) | blockTarget: rdm-trial |
 | cue_border_color | COLOR | #FFFFFF | RDM Groups: cue border color when cue_border_mode = custom | blockTarget: rdm-dot-groups |

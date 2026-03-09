@@ -1860,7 +1860,7 @@ class JSPsychSchemas {
                     block_component_type: {
                         type: this.parameterTypes.SELECT,
                         default: 'rdm-trial',
-                        options: ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups', 'flanker-trial', 'sart-trial', 'simon-trial', 'pvt-trial', 'task-switching-trial', 'stroop-trial', 'emotional-stroop-trial', 'gabor-trial', 'gabor-quest', 'nback-block', 'html-button-response', 'html-keyboard-response', 'image-keyboard-response'],
+                        options: ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups', 'flanker-trial', 'sart-trial', 'simon-trial', 'pvt-trial', 'task-switching-trial', 'stroop-trial', 'emotional-stroop-trial', 'gabor-trial', 'gabor-quest', 'nback-block', 'html-button-response', 'html-keyboard-response', 'image-keyboard-response', 'continuous-image-presentation'],
                         required: true,
                         description: 'What component type this block generates'
                     },
@@ -1924,6 +1924,107 @@ class JSPsychSchemas {
                         default: '',
                         blockTarget: 'image-keyboard-response',
                         description: 'List of images (comma or newline separated). Use this to sample different images across trials in the Block (works with uploaded assets filenames).'
+                    },
+
+                    // Continuous Image Presentation (CIP) per-block settings.
+                    // NOTE: the Interpreter consumes these from block.parameter_values after export.
+                    cip_asset_code: {
+                        type: this.parameterTypes.STRING,
+                        default: '',
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: asset bundle code used by the Builder asset generator'
+                    },
+                    cip_mask_type: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'noise_and_shuffle',
+                        options: ['pure_noise', 'noise_and_shuffle', 'advanced_transform'],
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: mask generation mode'
+                    },
+                    cip_mask_noise_amp: {
+                        type: this.parameterTypes.INT,
+                        default: 24,
+                        min: 0,
+                        max: 128,
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: noise amplitude applied to the mask'
+                    },
+                    cip_mask_block_size: {
+                        type: this.parameterTypes.INT,
+                        default: 12,
+                        min: 1,
+                        max: 128,
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: block size used by mask transforms'
+                    },
+                    cip_repeat_mode: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'no_repeats',
+                        options: ['no_repeats', 'repeat_to_fill'],
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: whether to repeat images to fill the block'
+                    },
+                    cip_images_per_block: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        min: 0,
+                        max: 50000,
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: how many images the block expands into (0 = default)'
+                    },
+                    cip_image_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 750,
+                        min: 0,
+                        max: 60000,
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: image presentation duration (ms)'
+                    },
+                    cip_transition_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 250,
+                        min: 0,
+                        max: 60000,
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: mask transition duration (ms)'
+                    },
+                    cip_transition_frames: {
+                        type: this.parameterTypes.INT,
+                        default: 8,
+                        min: 2,
+                        max: 60,
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: number of frames used for sprite-sheet mask transitions'
+                    },
+                    cip_choice_keys: {
+                        type: this.parameterTypes.STRING,
+                        default: 'f,j',
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: comma-separated response keys'
+                    },
+                    cip_asset_filenames: {
+                        type: this.parameterTypes.STRING,
+                        default: '',
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: source image filenames (comma/newline separated)'
+                    },
+                    cip_image_urls: {
+                        type: this.parameterTypes.STRING,
+                        default: '',
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: resolved image URLs (comma/newline separated)'
+                    },
+                    cip_mask_to_image_sprite_urls: {
+                        type: this.parameterTypes.STRING,
+                        default: '',
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: resolved sprite URLs for mask→image transitions (comma/newline separated)'
+                    },
+                    cip_image_to_mask_sprite_urls: {
+                        type: this.parameterTypes.STRING,
+                        default: '',
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: resolved sprite URLs for image→mask transitions (comma/newline separated)'
                     },
 
                     // N-back generator parameters (Block → nback-block)

@@ -2454,6 +2454,13 @@ class TimelineBuilder {
                 return s.endsWith('.png') || s.endsWith('.jpg') || s.endsWith('.jpeg') || s.endsWith('.gif') || s.endsWith('.webp');
             };
 
+            const isCipTransitionSpriteFilename = (name) => {
+                const s = (name ?? '').toString().trim().toLowerCase();
+                if (!s.endsWith('.png')) return false;
+                // Transition sprites are generated as: <base>__cip_<maskKey>_(m2i|i2m).png
+                return /__cip_[a-z0-9_-]+_(m2i|i2m)\.png$/i.test(s);
+            };
+
             const parseLines = (raw) => (raw ?? '')
                 .toString()
                 .split(/\r?\n/g)
@@ -3162,7 +3169,7 @@ class TimelineBuilder {
 
             const recomputeListsFromFilenames = () => {
                 if (!filenamesEl || !urlsEl) return;
-                const names = parseLines(filenamesEl.value).filter(isImageFilename);
+                const names = parseLines(filenamesEl.value).filter((n) => isImageFilename(n) && !isCipTransitionSpriteFilename(n));
                 const map = (lastAssetsMap && typeof lastAssetsMap === 'object') ? lastAssetsMap : null;
                 const maskKey = normalizeCipMaskType(maskTypeEl ? maskTypeEl.value : 'noise_and_shuffle');
                 const urls = [];
@@ -3207,7 +3214,7 @@ class TimelineBuilder {
                 }
 
                 const filenames = Object.keys(filesMap)
-                    .filter(isImageFilename)
+                    .filter((n) => isImageFilename(n) && !isCipTransitionSpriteFilename(n))
                     .sort((a, b) => a.localeCompare(b));
 
                 if (filenamesEl) {
