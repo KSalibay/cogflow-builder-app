@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CogFlow Builder — Generate Plugin Refdocs</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; line-height: 1.35; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    button { padding: 10px 14px; cursor: pointer; }
+    textarea { width: 100%; min-height: 60vh; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; padding: 12px; }
+    .muted { color: #666; font-size: 13px; }
+    code { background: #f4f4f4; padding: 2px 4px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Generate Plugin Schema Refdocs</h1>
+  <p class="muted">
+    Loads <code>src/schemas/JSPsychSchemas.js</code> and produces Markdown reference docs for all plugins.
+    This runs entirely in the browser (no Node required).
+  </p>
+
+  <div class="row">
+    <button id="generateBtn" type="button">Generate</button>
+    <button id="downloadBtn" type="button" disabled>Download markdown</button>
+    <span id="status" class="muted"></span>
+  </div>
+
+  <div style="margin-top: 14px;">
+    <textarea id="out" placeholder="Click Generate..."></textarea>
+  </div>
+
+  <script src="../src/schemas/RDMTaskSchema.js"></script>
+  <script src="../src/schemas/JSPsychSchemas.js"></script>
+  <script>
+    (function () {
+      const elOut = document.getElementById('out');
+      const elStatus = document.getElementById('status');
+      const btnGen = document.getElementById('generateBtn');
+      const btnDl = document.getElementById('downloadBtn');
+
+      function escCell(s) {
+        return String(s ?? '').replace(/\|/g, '\\|').replace(/\r?\n/g, '<br/>');
+      }
+
+      function fmtDefault(v) {
+        if (v === undefined) return '';
+        if (v === null) return 'null';
+        if (typeof v === 'string') return v;
+        if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+        try { return JSON.stringify(v); } catch { return String(v); }
+      }
+
+      function fmtNotes(spec) {
+        const notes = [];
+        if (!spec || typeof spec !== 'object') return '';
+        if (Array.isArray(spec.options) && spec.options.length) notes.push('options: ' + spec.options.map(String).join(', '));
+        if (spec.min !== undefined) notes.push('min: ' + spec.min);
+        if (spec.max !== undefined) notes.push('max: ' + spec.max);
+        if (spec.blockTarget) notes.push('blockTarget: ' + spec.blockTarget);
+        if (spec.required === true) notes.push('required');
+        return notes.join(' | ');
+      }
+
+      function generateMarkdown() {
+        if (typeof JSPsychSchemas !== 'function') {
+          throw new Error('JSPsychSchemas not found (scripts failed to load)');
+        }
+        const schemas = new JSPsychSchemas();
+        const pluginSchemas = schemas && schemas.pluginSchemas ? schemas.pluginSchemas : {};
+        const keys = Object.keys(pluginSchemas).sort((a, b) => a.localeCompare(b));
+
+        const lines = [];
+        lines.push('# Plugin Schema Reference');
+        lines.push('');
+        lines.push('Generated from `src/schemas/JSPsychSchemas.js`');
+        lines.push('');
+        lines.push('Generated at: ' + new Date().toISOString());
+        lines.push('');
+
+        for (const type of keys) {
+          const schema = pluginSchemas[type] || {};
+          const name = schema.name ? String(schema.name) : type;
+          const description = schema.description ? String(schema.description) : '';
+          const params = (schema.parameters && typeof schema.parameters === 'object') ? schema.parameters : {};
+          const paramKeys = Object.keys(params).sort((a, b) => a.localeCompare(b));
+
+          lines.push('---');
+          lines.push('');
+          lines.push('## ' + name);
+          lines.push('');
+          lines.push('**Type:** `' + type + '`');
+          if (description) {
+            lines.push('');
+            lines.push(description);
+          }
+          lines.push('');
+          lines.push('### Parameters');
+          lines.push('');
+
+          if (paramKeys.length === 0) {
+            lines.push('_No parameters defined._');
+            lines.push('');
+            continue;
+          }
+
+          lines.push('| Name | Type | Default | Description | Notes |');
+          lines.push('|---|---|---|---|---|');
+          for (const p of paramKeys) {
+            const spec = params[p] || {};
+            const row = [
+              escCell(p),
+              escCell(spec.type ?? ''),
+              escCell(fmtDefault(spec.default)),
+              escCell(spec.description ?? ''),
+              escCell(fmtNotes(spec)),
+            ];
+            lines.push('| ' + row.join(' | ') + ' |');
+          }
+          lines.push('');
+        }
+
+        return lines.join('\n');
+      }
+
+      function downloadText(filename, text) {
+        const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 250);
+      }
+
+      let lastMd = '';
+
+      btnGen.onclick = () => {
+        btnDl.disabled = true;
+        elStatus.textContent = 'Generating...';
+        try {
+          lastMd = generateMarkdown();
+          elOut.value = lastMd;
+          btnDl.disabled = !lastMd;
+          elStatus.textContent = 'Done.';
+        } catch (e) {
+          console.error(e);
+          elStatus.textContent = 'Error: ' + (e && e.message ? e.message : String(e));
+        }
+      };
+
+      btnDl.onclick = () => {
+        if (!lastMd) return;
+        downloadText('plugin_schema_reference.md', lastMd);
+      };
+    })();
+  </script>
+</body>
+</html>

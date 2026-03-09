@@ -48,6 +48,9 @@
                 <button class="btn btn-outline-light me-2" id="saveTemplateBtn">
                     <i class="fas fa-save"></i> Save Template
                 </button>
+                <button class="btn btn-outline-light me-2" id="uploadAssetsFolderBtn" title="Upload a local assets folder to Token Store so you can refer to images by filename in your config">
+                    <i class="fas fa-folder-tree"></i> Upload Assets
+                </button>
                 <button class="btn btn-outline-light me-2" id="saveJsonBtn">
                     <i class="fas fa-download"></i> Save JSON
                 </button>
@@ -63,6 +66,9 @@
 
                 <!-- Hidden input: local JSON import for Token Store uploads -->
                 <input id="importLocalJsonInput" type="file" accept=".json,application/json" multiple style="display:none" />
+
+                <!-- Hidden input: local assets folder selection (Chromium supports webkitdirectory) -->
+                <input id="assetsFolderInput" type="file" multiple webkitdirectory directory style="display:none" />
             </div>
         </div>
     </nav>
@@ -96,12 +102,15 @@
                             <select class="form-select" id="taskType">
                                 <option value="rdm" selected>Random Dot Motion (RDM)</option>
                                 <option value="stroop">Stroop Task</option>
+                                <option value="emotional-stroop">Emotional Stroop Task</option>
                                 <option value="nback">N-Back</option>
                                 <option value="simon">Simon Task</option>
+                                <option value="task-switching">Task Switching</option>
                                 <option value="pvt">Psychomotor Vigilance Task (PVT)</option>
                                 <option value="gabor">Gabor Patch Task</option>
                                 <option value="flanker">Flanker Task</option>
                                 <option value="sart">SART</option>
+                                <option value="continuous-image">Continuous Image Presentation</option>
                                 <option value="soc-dashboard">SOC Dashboard</option>
                                 <option value="custom">Custom Task</option>
                             </select>
@@ -365,14 +374,14 @@
     </script>
 
     <!-- Cache-bust local scripts -->
-    <script src="src/JsonBuilder.js?v=20260224-1"></script>
+    <script src="src/JsonBuilder.js?v=20260309-1"></script>
     <script src="src/modules/DataCollectionModules.js?v=20260114-1"></script>
     <script src="src/modules/TrialManager.js?v=20260113-10"></script>
-    <script src="src/modules/TimelineBuilder.js?v=20260223-1"></script>
+    <script src="src/modules/TimelineBuilder.js?v=20260309-1"></script>
     <script src="src/modules/SocDashboardPreview.js?v=20260218-1"></script>
-    <script src="src/modules/ComponentPreview.js?v=20260223-1"></script>
+    <script src="src/modules/ComponentPreview.js?v=20260305-4"></script>
     <script src="src/schemas/RDMTaskSchema.js?v=20260113-10"></script>
-    <script src="src/schemas/JSPsychSchemas.js?v=20260219-1"></script>
+    <script src="src/schemas/JSPsychSchemas.js?v=20260305-1"></script>
     <script src="src/schemas/UnifiedSchema.js?v=20260113-10"></script>
 
     <script>
@@ -1125,7 +1134,23 @@
             // Setup save handler
             const saveBtn = document.getElementById('saveParametersBtn');
             if (saveBtn) {
+                // Preserve the existing handler so we can restore it when closing.
+                // The default is set by JsonBuilder.initializeEventListeners().
+                const prevOnclick = saveBtn.onclick;
                 saveBtn.onclick = saveInstructionsComponent;
+
+                // Restore handlers/state after closing the modal so other component
+                // editors (e.g., survey-response) can save normally.
+                try {
+                    const restore = () => {
+                        try { saveBtn.onclick = prevOnclick; } catch { /* ignore */ }
+                        try { window.editingInstructionsComponent = null; } catch { /* ignore */ }
+                        try { modal.removeEventListener('hidden.bs.modal', restore); } catch { /* ignore */ }
+                    };
+                    modal.addEventListener('hidden.bs.modal', restore);
+                } catch {
+                    // ignore
+                }
             }
             
             // Show modal

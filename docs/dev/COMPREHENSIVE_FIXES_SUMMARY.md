@@ -2,7 +2,7 @@
 
 ## Update - January 2026
 
-This document is a historical snapshot. The current builder output format is defined by [src/JsonBuilder.js](src/JsonBuilder.js) and differs from some examples here (notably dot-groups now export in a flat `group_1_*` / `group_2_*` shape, and new features like Blocks and response overrides exist).
+This document is a historical snapshot. The current builder output format is defined by [src/JsonBuilder.js](../../src/JsonBuilder.js) and differs from some examples here (notably dot-groups now export in a flat `group_1_*` / `group_2_*` shape, and new features like Blocks and response overrides exist).
 
 ## 🎯 Issues Addressed
 

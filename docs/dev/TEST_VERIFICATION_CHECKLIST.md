@@ -4,7 +4,7 @@
 
 ### ✅ Layout
 
-**Test**: Open [index.html](index.html) - the three panels should display side-by-side on desktop screens.
+**Test**: Open [index.html](../../index.html) - the three panels should display side-by-side on desktop screens.
 
 ---
 

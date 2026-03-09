@@ -7,7 +7,7 @@
 
 class JSPsychSchemas {
     constructor() {
-        console.log('[SchemaDebug] Loaded JSPsychSchemas.js build: 20260114-3');
+        console.log('[SchemaDebug] Loaded JSPsychSchemas.js build: 20260304-1');
         this.parameterTypes = this.initializeParameterTypes();
         this.pluginSchemas = this.initializePluginSchemas();
         this.experimentSchemas = this.initializeExperimentSchemas();
@@ -1331,6 +1331,184 @@ class JSPsychSchemas {
                 }
             },
 
+            'task-switching-trial': {
+                name: 'task-switching-trial',
+                description: 'Task Switching trial (combined stimulus for two tasks; cueing can be explicit/position/color; scoring implemented by interpreter)',
+                parameters: {
+                    task_index: {
+                        type: this.parameterTypes.INT,
+                        default: 1,
+                        min: 1,
+                        max: 2,
+                        description: 'Which task is currently active (1 or 2)'
+                    },
+                    stimulus: {
+                        type: this.parameterTypes.STRING,
+                        default: 'A 1',
+                        description: 'Combined stimulus string (e.g., "A 2"). The interpreter also supports stimulus_task_1/stimulus_task_2 fields.'
+                    },
+                    stimulus_task_1: {
+                        type: this.parameterTypes.STRING,
+                        default: 'A',
+                        description: 'Task 1 token (letters task by default)'
+                    },
+                    stimulus_task_2: {
+                        type: this.parameterTypes.STRING,
+                        default: '1',
+                        description: 'Task 2 token (numbers task by default)'
+                    },
+
+                    trial_type: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'switch',
+                        options: ['single', 'switch'],
+                        description: 'Single-task vs task-switching sequence (used by block generation; explicit trials can ignore)'
+                    },
+                    single_task_index: {
+                        type: this.parameterTypes.INT,
+                        default: 1,
+                        min: 1,
+                        max: 2,
+                        description: 'When trial_type=single, which task index is used (1 or 2)'
+                    },
+
+                    cue_type: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'explicit',
+                        options: ['explicit', 'position', 'color'],
+                        description: 'Cueing mode: explicit text, position mapping, or color mapping'
+                    },
+                    cue_text: {
+                        type: this.parameterTypes.STRING,
+                        default: '',
+                        description: 'Optional explicit cue override text (if blank, uses task_1_cue_text/task_2_cue_text)'
+                    },
+                    cue_font_size_px: {
+                        type: this.parameterTypes.INT,
+                        default: 28,
+                        min: 8,
+                        max: 200,
+                        description: 'Explicit cue font size (px)'
+                    },
+                    cue_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        min: 0,
+                        max: 10000,
+                        description: 'Explicit cue duration in ms (0 = stays visible)'
+                    },
+                    cue_gap_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        min: 0,
+                        max: 10000,
+                        description: 'Optional delay between cue and stimulus (ms; if supported by the runtime)'
+                    },
+                    cue_color_hex: {
+                        type: this.parameterTypes.COLOR,
+                        default: '#FFFFFF',
+                        description: 'Explicit cue color (hex)'
+                    },
+
+                    task_1_cue_text: {
+                        type: this.parameterTypes.STRING,
+                        default: 'LETTERS',
+                        description: 'Default explicit cue label for Task 1'
+                    },
+                    task_2_cue_text: {
+                        type: this.parameterTypes.STRING,
+                        default: 'NUMBERS',
+                        description: 'Default explicit cue label for Task 2'
+                    },
+
+                    task_1_position: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'left',
+                        options: ['left', 'right', 'top', 'bottom'],
+                        description: 'Position cue: stimulus position when Task 1 is active'
+                    },
+                    task_2_position: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'right',
+                        options: ['left', 'right', 'top', 'bottom'],
+                        description: 'Position cue: stimulus position when Task 2 is active'
+                    },
+
+                    task_1_color_hex: {
+                        type: this.parameterTypes.COLOR,
+                        default: '#FFFFFF',
+                        description: 'Color cue: stimulus color when Task 1 is active (hex)'
+                    },
+                    task_2_color_hex: {
+                        type: this.parameterTypes.COLOR,
+                        default: '#FFFFFF',
+                        description: 'Color cue: stimulus color when Task 2 is active (hex)'
+                    },
+                    stimulus_color_hex: {
+                        type: this.parameterTypes.COLOR,
+                        default: '#FFFFFF',
+                        description: 'Stimulus color when cue_type is not color (hex)'
+                    },
+
+                    stimulus_position: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'top',
+                        options: ['left', 'right', 'top', 'bottom'],
+                        description: 'Stimulus position when cue_type is not position'
+                    },
+                    border_enabled: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        description: 'Whether to draw a border around the stimulus'
+                    },
+
+                    left_key: {
+                        type: this.parameterTypes.KEY,
+                        default: 'f',
+                        description: 'Left/category A response key'
+                    },
+                    right_key: {
+                        type: this.parameterTypes.KEY,
+                        default: 'j',
+                        description: 'Right/category B response key'
+                    },
+
+                    stimulus_set_mode: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'letters_numbers',
+                        options: ['letters_numbers', 'custom'],
+                        description: 'Built-in scoring vs custom token sets'
+                    },
+                    tasks: {
+                        type: this.parameterTypes.COMPLEX,
+                        default: [],
+                        description: 'Custom mode: tasks[0] and tasks[1] each define category_a_tokens/category_b_tokens arrays'
+                    },
+
+                    stimulus_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        min: 0,
+                        max: 60000,
+                        description: 'Stimulus display duration (ms). 0 = show until response or trial duration'
+                    },
+                    trial_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 2000,
+                        min: 0,
+                        max: 60000,
+                        description: 'Total trial duration (ms). 0 = no timeout.'
+                    },
+                    iti_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 500,
+                        min: 0,
+                        max: 30000,
+                        description: 'Inter-trial interval (ms)'
+                    }
+                }
+            },
+
             'stroop-trial': {
                 name: 'stroop-trial',
                 description: 'Stroop trial (word shown in ink color; response/scoring implemented by interpreter)',
@@ -1682,7 +1860,7 @@ class JSPsychSchemas {
                     block_component_type: {
                         type: this.parameterTypes.SELECT,
                         default: 'rdm-trial',
-                        options: ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups', 'flanker-trial', 'sart-trial', 'simon-trial', 'pvt-trial', 'stroop-trial', 'gabor-trial', 'gabor-quest', 'nback-block'],
+                        options: ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups', 'flanker-trial', 'sart-trial', 'simon-trial', 'pvt-trial', 'task-switching-trial', 'stroop-trial', 'emotional-stroop-trial', 'gabor-trial', 'gabor-quest', 'nback-block', 'html-button-response', 'html-keyboard-response', 'image-keyboard-response', 'continuous-image-presentation'],
                         required: true,
                         description: 'What component type this block generates'
                     },
@@ -1702,6 +1880,151 @@ class JSPsychSchemas {
                         type: this.parameterTypes.STRING,
                         default: '',
                         description: 'Optional random seed (blank = no seed)'
+                    },
+
+                    // Generic jsPsych trials inside Blocks (minimal set)
+                    stimulus_html: {
+                        type: this.parameterTypes.HTML_STRING,
+                        default: '<p>Replace this with your HTML.</p>',
+                        blockTarget: 'html-keyboard-response,html-button-response',
+                        description: 'HTML stimulus content for generated trials'
+                    },
+                    prompt: {
+                        type: this.parameterTypes.HTML_STRING,
+                        default: '',
+                        blockTarget: 'html-keyboard-response,html-button-response,image-keyboard-response',
+                        description: 'Optional prompt shown below the stimulus (HTML allowed)'
+                    },
+                    choices: {
+                        type: this.parameterTypes.STRING,
+                        default: 'ALL_KEYS',
+                        blockTarget: 'html-keyboard-response,image-keyboard-response',
+                        description: 'Keyboard choices: ALL_KEYS, NO_KEYS, or a comma/space-separated list (e.g., "f j")'
+                    },
+                    button_choices: {
+                        type: this.parameterTypes.STRING,
+                        default: 'Continue',
+                        blockTarget: 'html-button-response',
+                        description: 'Button labels (comma/newline separated)'
+                    },
+                    button_html: {
+                        type: this.parameterTypes.HTML_STRING,
+                        default: '',
+                        blockTarget: 'html-button-response',
+                        description: 'Optional custom button HTML template (advanced)'
+                    },
+                    stimulus_image: {
+                        type: this.parameterTypes.IMAGE,
+                        default: '',
+                        blockTarget: 'image-keyboard-response',
+                        description: 'Single image URL or filename (e.g., "img1.png" after uploading assets). If you provide stimulus_images, it takes precedence.'
+                    },
+                    stimulus_images: {
+                        type: this.parameterTypes.HTML_STRING,
+                        default: '',
+                        blockTarget: 'image-keyboard-response',
+                        description: 'List of images (comma or newline separated). Use this to sample different images across trials in the Block (works with uploaded assets filenames).'
+                    },
+
+                    // Continuous Image Presentation (CIP) per-block settings.
+                    // NOTE: the Interpreter consumes these from block.parameter_values after export.
+                    cip_asset_code: {
+                        type: this.parameterTypes.STRING,
+                        default: '',
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: asset bundle code used by the Builder asset generator'
+                    },
+                    cip_mask_type: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'noise_and_shuffle',
+                        options: ['pure_noise', 'noise_and_shuffle', 'advanced_transform'],
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: mask generation mode'
+                    },
+                    cip_mask_noise_amp: {
+                        type: this.parameterTypes.INT,
+                        default: 24,
+                        min: 0,
+                        max: 128,
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: noise amplitude applied to the mask'
+                    },
+                    cip_mask_block_size: {
+                        type: this.parameterTypes.INT,
+                        default: 12,
+                        min: 1,
+                        max: 128,
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: block size used by mask transforms'
+                    },
+                    cip_repeat_mode: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'no_repeats',
+                        options: ['no_repeats', 'repeat_to_fill'],
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: whether to repeat images to fill the block'
+                    },
+                    cip_images_per_block: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        min: 0,
+                        max: 50000,
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: how many images the block expands into (0 = default)'
+                    },
+                    cip_image_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 750,
+                        min: 0,
+                        max: 60000,
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: image presentation duration (ms)'
+                    },
+                    cip_transition_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 250,
+                        min: 0,
+                        max: 60000,
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: mask transition duration (ms)'
+                    },
+                    cip_transition_frames: {
+                        type: this.parameterTypes.INT,
+                        default: 8,
+                        min: 2,
+                        max: 60,
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: number of frames used for sprite-sheet mask transitions'
+                    },
+                    cip_choice_keys: {
+                        type: this.parameterTypes.STRING,
+                        default: 'f,j',
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: comma-separated response keys'
+                    },
+                    cip_asset_filenames: {
+                        type: this.parameterTypes.STRING,
+                        default: '',
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: source image filenames (comma/newline separated)'
+                    },
+                    cip_image_urls: {
+                        type: this.parameterTypes.STRING,
+                        default: '',
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: resolved image URLs (comma/newline separated)'
+                    },
+                    cip_mask_to_image_sprite_urls: {
+                        type: this.parameterTypes.STRING,
+                        default: '',
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: resolved sprite URLs for mask→image transitions (comma/newline separated)'
+                    },
+                    cip_image_to_mask_sprite_urls: {
+                        type: this.parameterTypes.STRING,
+                        default: '',
+                        blockTarget: 'continuous-image-presentation',
+                        description: 'CIP: resolved sprite URLs for image→mask transitions (comma/newline separated)'
                     },
 
                     // N-back generator parameters (Block → nback-block)

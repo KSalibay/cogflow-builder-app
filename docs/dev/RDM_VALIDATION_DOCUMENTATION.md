@@ -1,6 +1,6 @@
 # RDM Component Validation Implementation
 
-Note: this document describes the validation layer and (in places) older/aspirational schema shapes. For the *current exported JSON shape*, use the builder output reference in [docs/inputs_outputs.md](docs/inputs_outputs.md) and the implementation in [src/JsonBuilder.js](src/JsonBuilder.js).
+Note: this document describes the validation layer and (in places) older/aspirational schema shapes. For the *current exported JSON shape*, use the builder output reference in [docs/inputs_outputs.md](../inputs_outputs.md) and the implementation in [src/JsonBuilder.js](../../src/JsonBuilder.js).
 
 ## Overview
 Added comprehensive validation support for all RDM (Random Dot Motion) component types in the JSON Builder App. The validation system now properly validates RDM-specific components and their parameters.
@@ -110,7 +110,7 @@ The validation automatically occurs when:
 
 ## Testing
 
-Created `test_rdm_validation.html` for standalone testing of validation logic.
+Created `tools/dev_test_pages/test_rdm_validation.html` for standalone testing of validation logic.
 
 ## Example Valid Components
 

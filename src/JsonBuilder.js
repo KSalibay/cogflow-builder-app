@@ -5,6 +5,8 @@
  * for experimental psychology tasks compatible with jsPsych and JATOS
  */
 
+try { console.log('[BuilderDebug] Loaded JsonBuilder.js build: 20260309-1'); } catch { /* ignore */ }
+
 class JsonBuilder {
     constructor() {
         this.timeline = [];
@@ -424,6 +426,43 @@ class JsonBuilder {
         this.applyStroopResponseVisibility();
     }
 
+    applyEmotionalStroopWordListVisibility() {
+        const countRaw = Number.parseInt(document.getElementById('emotionalStroopWordListCount')?.value || '2', 10);
+        const count = Number.isFinite(countRaw) ? (countRaw === 3 ? 3 : 2) : 2;
+        const g3 = document.getElementById('emotionalStroopWordList3Group');
+        if (g3) g3.style.display = (count === 3) ? '' : 'none';
+    }
+
+    bindEmotionalStroopWordListUI() {
+        // No-op unless the Emotional Stroop panel is currently rendered.
+        const countEl = document.getElementById('emotionalStroopWordListCount');
+        if (!countEl) return;
+
+        if (countEl.dataset.bound !== '1') {
+            countEl.dataset.bound = '1';
+            countEl.addEventListener('change', () => {
+                this.applyEmotionalStroopWordListVisibility();
+                this.updateJSON();
+            });
+        }
+
+        [
+            'emotionalStroopWordList1Label',
+            'emotionalStroopWordList1Words',
+            'emotionalStroopWordList2Label',
+            'emotionalStroopWordList2Words',
+            'emotionalStroopWordList3Label',
+            'emotionalStroopWordList3Words'
+        ].forEach((id) => {
+            const el = document.getElementById(id);
+            if (!el || el.dataset.bound === '1') return;
+            el.dataset.bound = '1';
+            el.addEventListener('input', () => this.updateJSON());
+        });
+
+        this.applyEmotionalStroopWordListVisibility();
+    }
+
     bindSimonSettingsUI() {
         const devEl = document.getElementById('simonDefaultResponseDevice');
         if (!devEl) return;
@@ -451,6 +490,107 @@ class JsonBuilder {
         });
 
         this.applySimonResponseVisibility();
+    }
+
+    applyTaskSwitchingCustomSetVisibility() {
+        const mode = (document.getElementById('taskSwitchingStimulusSetMode')?.value || 'letters_numbers').toString();
+        const customRoot = document.getElementById('taskSwitchingCustomSets');
+        if (!customRoot) return;
+
+        const show = mode === 'custom';
+        customRoot.style.display = show ? '' : 'none';
+        customRoot.querySelectorAll('input, select, textarea').forEach((el) => {
+            el.disabled = !show;
+        });
+    }
+
+    applyTaskSwitchingCueVisibility() {
+        const cueType = (document.getElementById('taskSwitchingCueType')?.value || 'explicit').toString();
+        const explicitRoot = document.getElementById('taskSwitchingCueExplicitGroup');
+        const positionRoot = document.getElementById('taskSwitchingCuePositionGroup');
+        const colorRoot = document.getElementById('taskSwitchingCueColorGroup');
+
+        const showExplicit = cueType === 'explicit';
+        const showPosition = cueType === 'position';
+        const showColor = cueType === 'color';
+
+        if (explicitRoot) {
+            explicitRoot.style.display = showExplicit ? '' : 'none';
+            explicitRoot.querySelectorAll('input, select, textarea').forEach((el) => {
+                el.disabled = !showExplicit;
+            });
+        }
+
+        if (positionRoot) {
+            positionRoot.style.display = showPosition ? '' : 'none';
+            positionRoot.querySelectorAll('input, select, textarea').forEach((el) => {
+                el.disabled = !showPosition;
+            });
+        }
+
+        if (colorRoot) {
+            colorRoot.style.display = showColor ? '' : 'none';
+            colorRoot.querySelectorAll('input, select, textarea').forEach((el) => {
+                el.disabled = !showColor;
+            });
+        }
+    }
+
+    bindTaskSwitchingSettingsUI() {
+        const modeEl = document.getElementById('taskSwitchingStimulusSetMode');
+        if (!modeEl) return;
+
+        if (modeEl.dataset.bound === '1') {
+            this.applyTaskSwitchingCustomSetVisibility();
+            this.applyTaskSwitchingCueVisibility();
+            return;
+        }
+
+        modeEl.dataset.bound = '1';
+        modeEl.addEventListener('change', () => {
+            this.applyTaskSwitchingCustomSetVisibility();
+            this.updateJSON();
+        });
+
+        const cueTypeEl = document.getElementById('taskSwitchingCueType');
+        if (cueTypeEl && cueTypeEl.dataset.bound !== '1') {
+            cueTypeEl.dataset.bound = '1';
+            cueTypeEl.addEventListener('change', () => {
+                this.applyTaskSwitchingCueVisibility();
+                this.updateJSON();
+            });
+        }
+
+        [
+            'taskSwitchingStimulusPosition',
+            'taskSwitchingBorderEnabled',
+            'taskSwitchingLeftKey',
+            'taskSwitchingRightKey',
+            'taskSwitchingCueType',
+            'taskSwitchingTask1CueText',
+            'taskSwitchingTask2CueText',
+            'taskSwitchingCueFontSizePx',
+            'taskSwitchingCueDurationMs',
+            'taskSwitchingCueGapMs',
+            'taskSwitchingCueColorHex',
+            'taskSwitchingTask1Position',
+            'taskSwitchingTask2Position',
+            'taskSwitchingTask1ColorHex',
+            'taskSwitchingTask2ColorHex',
+            'taskSwitchingTask1CategoryA',
+            'taskSwitchingTask1CategoryB',
+            'taskSwitchingTask2CategoryA',
+            'taskSwitchingTask2CategoryB'
+        ].forEach((id) => {
+            const el = document.getElementById(id);
+            if (!el || el.dataset.bound === '1') return;
+            el.dataset.bound = '1';
+            el.addEventListener('change', () => this.updateJSON());
+            el.addEventListener('input', () => this.updateJSON());
+        });
+
+        this.applyTaskSwitchingCustomSetVisibility();
+        this.applyTaskSwitchingCueVisibility();
     }
 
     bindPvtSettingsUI() {
@@ -732,6 +872,37 @@ class JsonBuilder {
             this.exportJSON();
         });
 
+        // Assets folder upload -> Token Store assets + filename-to-URL index
+        const assetsBtn = document.getElementById('uploadAssetsFolderBtn');
+        const assetsInput = document.getElementById('assetsFolderInput');
+        if (assetsBtn && assetsInput && assetsBtn.dataset.bound !== '1') {
+            assetsBtn.dataset.bound = '1';
+
+            assetsBtn.addEventListener('click', () => {
+                try {
+                    assetsInput.value = '';
+                } catch {
+                    // ignore
+                }
+                try {
+                    assetsInput.click();
+                } catch {
+                    // ignore
+                }
+            });
+
+            assetsInput.addEventListener('change', async () => {
+                const files = Array.from(assetsInput.files || []);
+                if (files.length === 0) return;
+                try {
+                    await this.uploadAssetDirectoryToTokenStore(files);
+                } catch (e) {
+                    console.error('uploadAssetDirectoryToTokenStore failed:', e);
+                    this.showValidationResult('error', `Asset folder upload failed. (${e?.message || 'Unknown error'})`);
+                }
+            });
+        }
+
         // Local JSON import -> Token Store upload (batch)
         const importBtn = document.getElementById('importLocalJsonBtn');
         const importInput = document.getElementById('importLocalJsonInput');
@@ -904,6 +1075,198 @@ class JsonBuilder {
             // ignore
         }
         return {};
+    }
+
+    getTokenStoreAssetIndex() {
+        const key = 'cogflow_token_store_asset_index_v1';
+        const legacyKey = 'psychjson_token_store_asset_index_v1';
+        try {
+            const raw = localStorage.getItem(key) || localStorage.getItem(legacyKey) || '';
+            const parsed = raw ? JSON.parse(raw) : {};
+            if (parsed && typeof parsed === 'object') return parsed;
+        } catch {
+            // ignore
+        }
+        return {};
+    }
+
+    setTokenStoreAssetIndex(index) {
+        const key = 'cogflow_token_store_asset_index_v1';
+        const legacyKey = 'psychjson_token_store_asset_index_v1';
+        try {
+            const obj = (index && typeof index === 'object') ? index : {};
+            const json = JSON.stringify(obj);
+            localStorage.setItem(key, json);
+            localStorage.setItem(legacyKey, json);
+        } catch {
+            // ignore
+        }
+    }
+
+    getTokenStoreAssetMapForCodeAndTask(code, taskType) {
+        const c = (code || '').toString().trim();
+        if (!c) return null;
+        const t = this.normalizeTokenStoreTaskType(taskType);
+        const all = this.getTokenStoreAssetIndex();
+        const byCode = all[c];
+        if (!byCode || typeof byCode !== 'object') return null;
+        const byTask = byCode.by_task && typeof byCode.by_task === 'object' ? byCode.by_task : null;
+        if (!byTask) return null;
+        const m = byTask[t];
+        if (!m || typeof m !== 'object') return null;
+        const files = m.files && typeof m.files === 'object' ? m.files : null;
+        if (!files) return null;
+        return files;
+    }
+
+    setTokenStoreAssetMapForCodeAndTask(code, taskType, filesMap) {
+        const c = (code || '').toString().trim();
+        if (!c) return;
+        const t = this.normalizeTokenStoreTaskType(taskType);
+        const all = this.getTokenStoreAssetIndex();
+        const existing = all[c];
+        const next = (existing && typeof existing === 'object' && existing.by_task && typeof existing.by_task === 'object')
+            ? existing
+            : { v: 1, by_task: {} };
+        if (!next.by_task || typeof next.by_task !== 'object') next.by_task = {};
+        next.by_task[t] = {
+            updated_at_local: new Date().toISOString(),
+            files: (filesMap && typeof filesMap === 'object') ? filesMap : {}
+        };
+        all[c] = next;
+        this.setTokenStoreAssetIndex(all);
+    }
+
+    escapeRegex(s) {
+        return String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    rewriteStringUsingTokenStoreAssets(raw, assetsByFilename) {
+        const s = (raw ?? '').toString();
+        if (!s) return s;
+
+        // Do not touch already-hosted URLs or asset:// placeholders.
+        if (/^(https?:|data:|blob:|asset:)/i.test(s.trim())) return s;
+
+        // Exact string match first (most common: image stimulus = "img1.png").
+        const direct = assetsByFilename && assetsByFilename[s];
+        if (direct && direct.url) return direct.url;
+
+        // Replace occurrences inside HTML/templates safely.
+        // Only replace when the filename appears as its own token (e.g., src="img1.png", url('img1.png')).
+        let out = s;
+        const entries = assetsByFilename && typeof assetsByFilename === 'object' ? Object.entries(assetsByFilename) : [];
+        for (const [filename, meta] of entries) {
+            const url = meta && meta.url ? String(meta.url) : '';
+            if (!filename || !url) continue;
+            if (!out.includes(filename)) continue;
+
+            const escaped = this.escapeRegex(filename);
+            const re = new RegExp(`(^|[\\s"'=:(),])(${escaped})(?=$|[\\s"'<>),;])`, 'g');
+            out = out.replace(re, `$1${url}`);
+        }
+        return out;
+    }
+
+    rewriteBareAssetFilenamesToTokenStoreUrls(config, { code, taskType }) {
+        const filesMap = this.getTokenStoreAssetMapForCodeAndTask(code, taskType);
+        if (!filesMap) return config;
+
+        const rewriteDeep = (x) => {
+            if (typeof x === 'string') {
+                return this.rewriteStringUsingTokenStoreAssets(x, filesMap);
+            }
+            if (Array.isArray(x)) return x.map(rewriteDeep);
+            if (x && typeof x === 'object') {
+                const out = {};
+                for (const [k, v] of Object.entries(x)) {
+                    out[k] = rewriteDeep(v);
+                }
+                return out;
+            }
+            return x;
+        };
+
+        return rewriteDeep((config && typeof config === 'object') ? config : {});
+    }
+
+    async uploadAssetDirectoryToTokenStore(files) {
+        const inputFiles = Array.isArray(files) ? files : [];
+        if (inputFiles.length === 0) return;
+
+        const code = this.promptForExportCodeOnly();
+        if (!code) return;
+
+        // Use current Builder task selection as the Token Store task bucket.
+        const taskType = this.normalizeTokenStoreTaskType(document.getElementById('taskType')?.value || 'task');
+
+        let baseUrl = this.peekTokenStoreBaseUrl();
+        if (!baseUrl) {
+            baseUrl = this.getTokenStoreBaseUrl();
+        }
+        if (!baseUrl) return;
+
+        if (!/^https?:\/\//i.test(baseUrl) || /^(javascript:|data:|file:)/i.test(baseUrl)) {
+            this.showValidationResult('error', 'Invalid Token Store base URL.');
+            return;
+        }
+
+        let record = this.getTokenStoreRecordForCodeAndTask(code, taskType);
+        if (!record) {
+            this.showValidationResult('warning', `No token found for code ${code} (${String(taskType).toUpperCase()}). Creating a new token...`);
+            record = await this.createTokenStoreConfig(baseUrl);
+            this.setTokenStoreRecordForCodeAndTask(code, taskType, record, { filename: null });
+        }
+
+        // De-dupe by basename (folder uploads can contain duplicates). Keep first.
+        const queue = inputFiles.slice().filter((f) => f && f.name).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+        const seen = new Set();
+        const duplicates = [];
+        const unique = [];
+        for (const f of queue) {
+            const name = String(f.name || '').trim();
+            if (!name) continue;
+            const key = name;
+            if (seen.has(key)) {
+                duplicates.push(name);
+                continue;
+            }
+            seen.add(key);
+            unique.push(f);
+        }
+
+        if (duplicates.length > 0) {
+            this.showValidationResult('warning', `Skipped ${duplicates.length} duplicate filename(s) in the selected folder (kept first occurrence).`);
+        }
+
+        const existing = this.getTokenStoreAssetMapForCodeAndTask(code, taskType) || {};
+        const conflicts = unique.filter((f) => {
+            const name = String(f.name || '').trim();
+            return !!(name && existing[name] && existing[name].url);
+        });
+
+        if (conflicts.length > 0) {
+            const ok = confirm(
+                `This assets index already contains ${conflicts.length} file(s) for code ${code} and task ${String(taskType).toUpperCase()} (e.g., ${conflicts[0].name}).\n\nContinue and overwrite the saved URL mapping(s) by re-uploading?`
+            );
+            if (!ok) {
+                this.showValidationResult('warning', 'Asset folder upload cancelled.');
+                return;
+            }
+        }
+
+        const nextMap = { ...existing };
+        let uploaded = 0;
+        for (const file of unique) {
+            const filename = String(file.name || '').trim();
+            if (!filename) continue;
+            const out = await this.uploadAssetToTokenStore(baseUrl, record, file, filename);
+            nextMap[filename] = { url: out.url };
+            uploaded += 1;
+        }
+
+        this.setTokenStoreAssetMapForCodeAndTask(code, taskType, nextMap);
+        this.showValidationResult('success', `Uploaded ${uploaded} asset(s) to Token Store and saved a filename→URL index for code ${code} (${String(taskType).toUpperCase()}).`);
     }
 
     normalizeTokenStoreTaskType(taskType) {
@@ -1738,6 +2101,19 @@ class JsonBuilder {
         const nextTaskType = event?.target?.value || 'rdm';
         const prevTaskType = this.currentTaskType || 'rdm';
 
+        // Continuous Image Presentation is a continuous-mode task (by design).
+        // If the user selects it while in trial-based mode, auto-switch to continuous.
+        if (nextTaskType === 'continuous-image' && this.experimentType !== 'continuous') {
+            const continuousRadio = document.getElementById('continuous');
+            if (continuousRadio) continuousRadio.checked = true;
+            this.experimentType = 'continuous';
+
+            // Re-render task-scoped panels so availability + defaults match.
+            this.enforceTaskTypeAvailability();
+            this.updateExperimentTypeUI();
+            this.updateConditionalUI();
+        }
+
         if (!this.isTaskTypeAllowedForExperiment(nextTaskType, this.experimentType)) {
             alert(`Task "${nextTaskType}" is not available for ${this.experimentType} experiments.`);
             if (event?.target) event.target.value = prevTaskType;
@@ -1782,7 +2158,7 @@ class JsonBuilder {
 
     maybeInsertStarterTimeline(taskType) {
         if (taskType === 'soc-dashboard' && this.experimentType !== 'continuous') return;
-        if (taskType !== 'flanker' && taskType !== 'sart' && taskType !== 'gabor' && taskType !== 'stroop' && taskType !== 'simon' && taskType !== 'pvt' && taskType !== 'soc-dashboard' && taskType !== 'nback') return;
+        if (taskType !== 'flanker' && taskType !== 'sart' && taskType !== 'gabor' && taskType !== 'stroop' && taskType !== 'emotional-stroop' && taskType !== 'simon' && taskType !== 'task-switching' && taskType !== 'pvt' && taskType !== 'soc-dashboard' && taskType !== 'nback') return;
 
         const timelineContainer = document.getElementById('timelineComponents');
         if (!timelineContainer) return;
@@ -1798,10 +2174,14 @@ class JsonBuilder {
                 ? 'sart-trial'
                 : (taskType === 'simon')
                     ? 'simon-trial'
+                : (taskType === 'task-switching')
+                    ? 'task-switching-trial'
                 : (taskType === 'pvt')
                     ? 'pvt-trial'
                 : (taskType === 'stroop')
                     ? 'stroop-trial'
+                : (taskType === 'emotional-stroop')
+                    ? 'emotional-stroop-trial'
                 : (taskType === 'nback')
                     ? 'nback-trial-sequence'
                 : (taskType === 'soc-dashboard')
@@ -1936,11 +2316,29 @@ class JsonBuilder {
             return false;
         }
 
+        if (taskType === 'emotional-stroop') {
+            if (type === 'emotional-stroop-trial') return true;
+            if (type === 'block') {
+                const innerType = getBlockInnerType();
+                return innerType === 'emotional-stroop-trial';
+            }
+            return false;
+        }
+
         if (taskType === 'simon') {
             if (type === 'simon-trial') return true;
             if (type === 'block') {
                 const innerType = getBlockInnerType();
                 return innerType === 'simon-trial';
+            }
+            return false;
+        }
+
+        if (taskType === 'task-switching') {
+            if (type === 'task-switching-trial') return true;
+            if (type === 'block') {
+                const innerType = getBlockInnerType();
+                return innerType === 'task-switching-trial';
             }
             return false;
         }
@@ -1960,6 +2358,15 @@ class JsonBuilder {
             if (type === 'block') {
                 const innerType = getBlockInnerType();
                 return innerType === 'nback-block';
+            }
+            return false;
+        }
+
+        if (taskType === 'continuous-image') {
+            if (type === 'continuous-image-presentation') return true;
+            if (type === 'block') {
+                const innerType = getBlockInnerType();
+                return innerType === 'continuous-image-presentation';
             }
             return false;
         }
@@ -1995,6 +2402,16 @@ class JsonBuilder {
     onExperimentTypeChange(event) {
         this.experimentType = event.target.value;
         console.log('Experiment type changed to:', this.experimentType);
+
+        // Prevent switching CIP into trial-based mode (auto-revert to continuous).
+        const taskTypeEl = document.getElementById('taskType');
+        const taskType = taskTypeEl?.value || this.currentTaskType || 'rdm';
+        if (this.experimentType === 'trial-based' && taskType === 'continuous-image') {
+            const continuousRadio = document.getElementById('continuous');
+            if (continuousRadio) continuousRadio.checked = true;
+            this.experimentType = 'continuous';
+            console.log('Reverted experiment type to continuous (CIP requires continuous mode)');
+        }
 
         // Keep task type options consistent with experiment type.
         // (SOC Dashboard is continuous-only.)
@@ -2120,11 +2537,12 @@ class JsonBuilder {
         if (e === 'continuous') {
             // Only show/allow continuous-capable tasks in continuous experiments.
             // RDM has a special continuous compilation path; SOC Dashboard is also continuous-only.
-            return (t === 'rdm' || t === 'soc-dashboard' || t === 'custom' || t === 'nback');
+            return (t === 'rdm' || t === 'soc-dashboard' || t === 'custom' || t === 'nback' || t === 'continuous-image');
         }
 
-        // Trial-based: SOC Dashboard should not be selectable.
+        // Trial-based: SOC Dashboard + Continuous Image Presentation should not be selectable.
         if (t === 'soc-dashboard') return false;
+        if (t === 'continuous-image') return false;
         return true;
     }
 
@@ -2171,6 +2589,9 @@ class JsonBuilder {
      * Show parameters for trial-based experiments
      */
     showTrialBasedParameters() {
+        // Defensive: stop any continuous-mode previews when switching modes.
+        this.stopCipDefaultsPreview();
+
         const container = document.getElementById('parameterForms');
         const taskType = document.getElementById('taskType')?.value || 'rdm';
 
@@ -2511,6 +2932,157 @@ class JsonBuilder {
                 </div>
             </div>
             `
+            : (taskType === 'task-switching')
+            ? `
+            <div class="parameter-group" id="taskSwitchingExperimentParameters">
+                <div class="group-title d-flex justify-content-between align-items-center">
+                    <div>
+                        <span>Task Switching Experiment Settings</span>
+                        <small class="text-muted d-block">Default values for Task Switching components</small>
+                    </div>
+                    <button class="btn btn-sm btn-info" id="previewTaskDefaultsBtn" onclick="window.componentPreview?.showPreview(window.jsonBuilderInstance?.getCurrentTaskSwitchingDefaults())">
+                        <i class="fas fa-eye"></i> Preview Defaults
+                    </button>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Stimulus Set:</label>
+                    <select class="form-control parameter-input" id="taskSwitchingStimulusSetMode">
+                        <option value="letters_numbers" selected>Letters + Numbers (Vowel/Consonant; Odd/Even)</option>
+                        <option value="custom">Custom (two 2AFC token sets)</option>
+                    </select>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Stimulus Position:</label>
+                    <select class="form-control parameter-input" id="taskSwitchingStimulusPosition">
+                        <option value="left">Left</option>
+                        <option value="right">Right</option>
+                        <option value="top" selected>Top</option>
+                        <option value="bottom">Bottom</option>
+                    </select>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Stimulus Border:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="taskSwitchingBorderEnabled">
+                            <label class="form-check-label" for="taskSwitchingBorderEnabled">Draw a border around the stimulus</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Left Key:</label>
+                    <input type="text" class="form-control parameter-input" id="taskSwitchingLeftKey" value="f">
+                    <div class="parameter-help">Default key for Category A / LEFT responses</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Right Key:</label>
+                    <input type="text" class="form-control parameter-input" id="taskSwitchingRightKey" value="j">
+                    <div class="parameter-help">Default key for Category B / RIGHT responses</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Cue Type:</label>
+                    <select class="form-control parameter-input" id="taskSwitchingCueType">
+                        <option value="explicit" selected>Explicit text cue</option>
+                        <option value="position">Position cue (stimulus position by task)</option>
+                        <option value="color">Color cue (stimulus color by task)</option>
+                    </select>
+                    <div class="parameter-help">Controls how the task is cued during Task Switching trials.</div>
+                </div>
+
+                <div id="taskSwitchingCueExplicitGroup">
+                    <div class="parameter-row">
+                        <label class="parameter-label">Task A Cue Text:</label>
+                        <input type="text" class="form-control parameter-input" id="taskSwitchingTask1CueText" value="LETTERS">
+                        <div class="parameter-help">Shown when Task A is active (explicit cue type)</div>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Task B Cue Text:</label>
+                        <input type="text" class="form-control parameter-input" id="taskSwitchingTask2CueText" value="NUMBERS">
+                        <div class="parameter-help">Shown when Task B is active (explicit cue type)</div>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Cue Font Size (px):</label>
+                        <input type="number" class="form-control parameter-input" id="taskSwitchingCueFontSizePx" value="28" min="8" max="200">
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Cue Duration (ms):</label>
+                        <input type="number" class="form-control parameter-input" id="taskSwitchingCueDurationMs" value="0" min="0" max="10000">
+                        <div class="parameter-help">0 = cue remains visible throughout the trial</div>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Cue Gap (ms):</label>
+                        <input type="number" class="form-control parameter-input" id="taskSwitchingCueGapMs" value="0" min="0" max="10000">
+                        <div class="parameter-help">Optional delay between cue and stimulus (if supported by the runtime)</div>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Cue Color:</label>
+                        <input type="color" class="form-control form-control-color parameter-input" id="taskSwitchingCueColorHex" value="#FFFFFF">
+                    </div>
+                </div>
+
+                <div id="taskSwitchingCuePositionGroup" style="display:none;">
+                    <div class="parameter-row">
+                        <label class="parameter-label">Task A Position:</label>
+                        <select class="form-control parameter-input" id="taskSwitchingTask1Position">
+                            <option value="left" selected>Left</option>
+                            <option value="right">Right</option>
+                            <option value="top">Top</option>
+                            <option value="bottom">Bottom</option>
+                        </select>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Task B Position:</label>
+                        <select class="form-control parameter-input" id="taskSwitchingTask2Position">
+                            <option value="left">Left</option>
+                            <option value="right" selected>Right</option>
+                            <option value="top">Top</option>
+                            <option value="bottom">Bottom</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="taskSwitchingCueColorGroup" style="display:none;">
+                    <div class="parameter-row">
+                        <label class="parameter-label">Task A Color:</label>
+                        <input type="color" class="form-control form-control-color parameter-input" id="taskSwitchingTask1ColorHex" value="#FFFFFF">
+                        <div class="parameter-help">Stimulus color when Task A is active (color cue type)</div>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Task B Color:</label>
+                        <input type="color" class="form-control form-control-color parameter-input" id="taskSwitchingTask2ColorHex" value="#FFFFFF">
+                        <div class="parameter-help">Stimulus color when Task B is active (color cue type)</div>
+                    </div>
+                </div>
+
+                <div id="taskSwitchingCustomSets" style="display:none;">
+                    <div class="parameter-row">
+                        <label class="parameter-label">Task A Tokens (Category A):</label>
+                        <textarea class="form-control parameter-input" id="taskSwitchingTask1CategoryA" rows="2" placeholder="e.g., A,E,I,O,U"></textarea>
+                        <div class="parameter-help">Comma-separated tokens mapped to LEFT key</div>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Task A Tokens (Category B):</label>
+                        <textarea class="form-control parameter-input" id="taskSwitchingTask1CategoryB" rows="2" placeholder="e.g., B,C,D,F,G"></textarea>
+                        <div class="parameter-help">Comma-separated tokens mapped to RIGHT key</div>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Task B Tokens (Category A):</label>
+                        <textarea class="form-control parameter-input" id="taskSwitchingTask2CategoryA" rows="2" placeholder="e.g., 1,3,5,7,9"></textarea>
+                        <div class="parameter-help">Comma-separated tokens mapped to LEFT key</div>
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Task B Tokens (Category B):</label>
+                        <textarea class="form-control parameter-input" id="taskSwitchingTask2CategoryB" rows="2" placeholder="e.g., 2,4,6,8"></textarea>
+                        <div class="parameter-help">Comma-separated tokens mapped to RIGHT key</div>
+                    </div>
+                </div>
+            </div>
+            `
             : (taskType === 'pvt')
             ? `
             <div class="parameter-group" id="pvtExperimentParameters">
@@ -2844,6 +3416,117 @@ class JsonBuilder {
                     <div class="parameter-row">
                         <label class="parameter-label">Incongruent Key:</label>
                         <input type="text" class="form-control parameter-input" id="stroopIncongruentKey" value="j">
+                    </div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Font Size (px):</label>
+                    <input type="number" class="form-control parameter-input" id="stroopStimulusFontSizePx" value="64" min="10" max="200">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Stimulus Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="stroopStimulusDurationMs" value="0" min="0" max="10000">
+                    <div class="parameter-help">0 = show until response or trial duration</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Trial Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="stroopTrialDurationMs" value="2000" min="0" max="30000">
+                    <div class="parameter-help">0 = no timeout</div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">ITI (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="stroopItiMs" value="500" min="0" max="10000">
+                </div>
+            </div>
+            `
+            : (taskType === 'emotional-stroop')
+            ? `
+            <div class="parameter-group" id="emotionalStroopExperimentParameters">
+                <div class="group-title d-flex justify-content-between align-items-center">
+                    <div>
+                        <span>Emotional Stroop Experiment Settings</span>
+                        <small class="text-muted d-block">Default values for Emotional Stroop components</small>
+                    </div>
+                    <button class="btn btn-sm btn-info" id="previewTaskDefaultsBtn" onclick="window.componentPreview?.showPreview(window.jsonBuilderInstance?.getCurrentEmotionalStroopDefaults())">
+                        <i class="fas fa-eye"></i> Preview Defaults
+                    </button>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Word Lists:</label>
+                    <div class="d-flex gap-2 align-items-center" style="flex-wrap:wrap;">
+                        <select class="form-control parameter-input" id="emotionalStroopWordListCount" style="max-width: 180px;">
+                            <option value="2" selected>2 lists</option>
+                            <option value="3">3 lists</option>
+                        </select>
+                        <div class="parameter-help mb-0">Choose 2 or 3 labeled word pools (labels recorded in data)</div>
+                    </div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">List 1 Label:</label>
+                    <input type="text" class="form-control parameter-input" id="emotionalStroopWordList1Label" value="Neutral">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">List 1 Words:</label>
+                    <textarea class="form-control parameter-input" id="emotionalStroopWordList1Words" rows="2">CHAIR,TABLE,WINDOW</textarea>
+                    <div class="parameter-help">Comma-separated words in this list</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">List 2 Label:</label>
+                    <input type="text" class="form-control parameter-input" id="emotionalStroopWordList2Label" value="Negative">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">List 2 Words:</label>
+                    <textarea class="form-control parameter-input" id="emotionalStroopWordList2Words" rows="2">SAD,ANGRY,FEAR</textarea>
+                    <div class="parameter-help">Comma-separated words in this list</div>
+                </div>
+
+                <div id="emotionalStroopWordList3Group" style="display:none;">
+                    <div class="parameter-row">
+                        <label class="parameter-label">List 3 Label:</label>
+                        <input type="text" class="form-control parameter-input" id="emotionalStroopWordList3Label" value="Positive">
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">List 3 Words:</label>
+                        <textarea class="form-control parameter-input" id="emotionalStroopWordList3Words" rows="2">HAPPY,JOY,LOVE</textarea>
+                        <div class="parameter-help">Comma-separated words in this list</div>
+                    </div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label text-muted">Data Capture:</label>
+                    <div class="parameter-help">When trials are generated from Blocks, the selected list label is stored in <code>word_list_label</code> (and index in <code>word_list_index</code>).</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Ink Palette Size:</label>
+                    <input type="number" class="form-control parameter-input" id="stroopStimulusSetSize" value="4" min="2" max="7">
+                    <div class="parameter-help">Number of ink colors available for this task (2–7)</div>
+                </div>
+
+                <div id="stroopStimuliRows"></div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Default Response Device:</label>
+                    <select class="form-control parameter-input" id="stroopDefaultResponseDevice">
+                        <option value="keyboard" selected>Keyboard</option>
+                        <option value="mouse">Mouse</option>
+                    </select>
+                    <div class="parameter-help">Mouse mode shows on-screen buttons; keyboard uses keys below.</div>
+                </div>
+
+                <div class="parameter-row" id="stroopKeyboardOnlyNote" style="display:none;">
+                    <label class="parameter-label text-muted">Keyboard Mappings:</label>
+                    <div class="parameter-help text-muted">Key mappings are ignored when response device is Mouse.</div>
+                </div>
+
+                <div id="stroopColorNamingKeysGroup">
+                    <div class="parameter-row">
+                        <label class="parameter-label">Choice Keys:</label>
+                        <input type="text" class="form-control parameter-input" id="stroopChoiceKeys" value="1,2,3,4">
+                        <div class="parameter-help">Comma-separated keys mapped to Ink 1..N (e.g., 1,2,3,4)</div>
                     </div>
                 </div>
 
@@ -3229,8 +3912,14 @@ class JsonBuilder {
         // Task-specific conditional UI (Stroop stimulus set + response mappings)
         this.bindStroopSettingsUI();
 
+        // Emotional Stroop: word-list UI (2 vs 3 lists)
+        this.bindEmotionalStroopWordListUI();
+
         // Task-specific conditional UI (Simon response device + keys)
         this.bindSimonSettingsUI();
+
+        // Task-specific conditional UI (Task Switching custom stimulus sets)
+        this.bindTaskSwitchingSettingsUI();
 
         // Reduce default scrolling: collapse long experiment-default sections.
         this.wrapParameterFormsInCollapsibles();
@@ -3258,6 +3947,9 @@ class JsonBuilder {
      * Show parameters for continuous experiments
      */
     showContinuousParameters() {
+        // Ensure we don't leave timeouts running while swapping the UI.
+        this.stopCipDefaultsPreview();
+
         const container = document.getElementById('parameterForms');
         const taskType = document.getElementById('taskType')?.value || 'rdm';
 
@@ -3783,6 +4475,85 @@ class JsonBuilder {
                 </div>
             </div>
             `
+            : (taskType === 'continuous-image')
+            ? `
+            <div class="parameter-group" id="cipExperimentParameters">
+                <div class="group-title d-flex justify-content-between align-items-center">
+                    <div>
+                        <span>Continuous Image Presentation (CIP) Settings</span>
+                        <small class="text-muted d-block">Experiment-wide defaults (applies to newly-added Continuous Image blocks/components).</small>
+                    </div>
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-sm btn-info" id="previewCipDefaultsBtn" onclick="window.jsonBuilderInstance?.playCipDefaultsPreview()">
+                            <i class="fas fa-eye"></i> Preview
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" id="stopCipDefaultsBtn" onclick="window.jsonBuilderInstance?.stopCipDefaultsPreview()">
+                            <i class="fas fa-stop"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Mask Type:</label>
+                    <select class="form-control parameter-input" id="cipDefaultMaskType">
+                        <option value="pure_noise">Average + noise (pure noise)</option>
+                        <option value="noise_and_shuffle" selected>Average + noise + shuffle (noise and shuffle)</option>
+                        <option value="advanced_transform">Phase-scrambled (advanced transform)</option>
+                    </select>
+                    <div class="parameter-help">Controls how the shared mask is constructed from the averaged image set. Used by the CIP asset generator and stored into newly-created blocks.</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Mask Noise Amp:</label>
+                    <input type="number" class="form-control parameter-input" id="cipDefaultMaskNoiseAmp" value="24" min="0" max="128">
+                    <div class="parameter-help">0–128. Higher values add more noise to the shared mask.</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Mask Block Size (px):</label>
+                    <input type="number" class="form-control parameter-input" id="cipDefaultMaskBlockSize" value="12" min="1" max="128">
+                    <div class="parameter-help">Block size used for the shuffle/disintegration effect (only applies to “noise and shuffle”).</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Image Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="cipDefaultImageDurationMs" value="750" min="0" max="60000">
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Transition Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="cipDefaultTransitionDurationMs" value="250" min="0" max="60000">
+                    <div class="parameter-help">The preview approximates sprite transitions using ${'${frames}'} discrete steps.</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Transition Frames:</label>
+                    <input type="number" class="form-control parameter-input" id="cipDefaultTransitionFrames" value="8" min="2" max="60">
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">2AFC Choice Keys:</label>
+                    <input type="text" class="form-control parameter-input" id="cipDefaultChoiceKeys" value="f,j">
+                    <div class="parameter-help">Comma-separated (e.g., f,j). Stored as a string; blocks can override.</div>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label">Preview:</label>
+                    <div class="parameter-input">
+                        <div id="cipDefaultsPreview" style="position: relative; width: 240px; height: 140px; border: 1px solid #555; background: #111; overflow: hidden; border-radius: 6px;">
+                            <div id="cipPreviewImageLayer" style="position:absolute; inset:0; opacity:0; background-size: 24px 24px; background-image: linear-gradient(45deg, rgba(255,255,255,0.10) 25%, transparent 25%), linear-gradient(-45deg, rgba(255,255,255,0.10) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.10) 75%), linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.10) 75%); background-position: 0 0, 0 12px, 12px -12px, -12px 0px;">
+                                <div style="position:absolute; inset:auto 10px 10px 10px; color:#fff; font-size:12px; opacity:0.85;">IMAGE</div>
+                            </div>
+                            <div id="cipPreviewMaskLayer" style="position:absolute; inset:0; opacity:1; background-size: 20px 20px; background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.12), rgba(255,255,255,0.12) 10px, rgba(255,255,255,0.02) 10px, rgba(255,255,255,0.02) 20px);">
+                                <canvas id="cipPreviewMaskCanvas" width="240" height="140" style="position:absolute; inset:0; width:100%; height:100%; display:none;"></canvas>
+                                <div style="position:absolute; inset:auto 10px 10px 10px; color:#fff; font-size:12px; opacity:0.85;">MASK</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="parameter-help">Click Preview to play one mask→image→mask cycle using the current timings.</div>
+                </div>
+            </div>
+            `
             : (taskType === 'soc-dashboard')
             ? `
             <div class="parameter-group" id="socDashboardExperimentParameters">
@@ -4175,8 +4946,10 @@ class JsonBuilder {
     /**
      * Get component definitions based on experiment type and data collection
      */
-    getComponentDefinitions() {
-        const taskType = document.getElementById('taskType')?.value || 'rdm';
+    getComponentDefinitions(opts = {}) {
+        const taskType = (opts && typeof opts === 'object' && typeof opts.taskTypeOverride === 'string' && opts.taskTypeOverride.trim() !== '')
+            ? opts.taskTypeOverride.trim()
+            : (document.getElementById('taskType')?.value || 'rdm');
         const unitName = (this.experimentType === 'continuous') ? 'Frame' : 'Trial';
 
         const createComponentDefFromSchema = (schemaId, { name, icon, description, category } = {}) => {
@@ -4228,10 +5001,18 @@ class JsonBuilder {
                         ? 'SART Block'
                         : (currentTaskType === 'simon')
                             ? 'Simon Block'
+                        : (currentTaskType === 'task-switching')
+                            ? 'Task Switching Block'
+                        : (currentTaskType === 'pvt')
+                            ? 'PVT Block'
                         : (currentTaskType === 'gabor')
                             ? 'Gabor Block'
+                            : (currentTaskType === 'continuous-image')
+                                ? 'Continuous Image Block'
                             : (currentTaskType === 'stroop')
                                 ? 'Stroop Block'
+                                : (currentTaskType === 'emotional-stroop')
+                                    ? 'Emotional Stroop Block'
                                 : 'Block';
 
             const baseOptions = (currentTaskType === 'flanker')
@@ -4242,18 +5023,30 @@ class JsonBuilder {
                     ? ['sart-trial']
                     : (currentTaskType === 'simon')
                         ? ['simon-trial']
+                    : (currentTaskType === 'task-switching')
+                        ? ['task-switching-trial']
+                    : (currentTaskType === 'pvt')
+                        ? ['pvt-trial']
                     : (currentTaskType === 'gabor')
                         ? ['gabor-trial', 'gabor-quest']
+                        : (currentTaskType === 'continuous-image')
+                            ? ['continuous-image-presentation']
                         : (currentTaskType === 'stroop')
                             ? ['stroop-trial']
+                            : (currentTaskType === 'emotional-stroop')
+                                ? ['emotional-stroop-trial']
                         : ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups'];
 
-            const defaultType = baseOptions[0] || 'rdm-trial';
+            // Always allow generic jsPsych trial types inside Blocks (across all tasks).
+            const genericOptions = ['html-button-response', 'html-keyboard-response', 'image-keyboard-response'];
+            const options = Array.from(new Set([...(baseOptions || []), ...genericOptions]));
+
+            const defaultType = (baseOptions && baseOptions[0]) ? baseOptions[0] : (options[0] || 'rdm-trial');
 
             const defaultBlockLength = this.getExperimentWideBlockLengthDefault();
 
             const commonParams = {
-                block_component_type: { type: 'select', default: defaultType, options: baseOptions },
+                block_component_type: { type: 'select', default: defaultType, options },
                 block_length: { type: 'number', default: defaultBlockLength, min: 1, max: 50000 },
                 sampling_mode: { type: 'select', default: 'per-trial', options: ['per-trial', 'per-block'] },
                 seed: { type: 'string', default: '' }
@@ -4369,6 +5162,38 @@ class JsonBuilder {
                 stroop_iti_max: { type: 'number', default: 500, min: 0, max: 10000 }
             };
 
+            const emotionalStroopOnlyParams = {
+                // Sampling: labeled word lists (2–3)
+                emostroop_word_list_count: { type: 'select', default: '2', options: ['2', '3'] },
+
+                emostroop_word_list_1_label: { type: 'string', default: 'Neutral' },
+                emostroop_word_list_1_words: { type: 'string', default: 'CHAIR,TABLE,WINDOW' },
+
+                emostroop_word_list_2_label: { type: 'string', default: 'Negative' },
+                emostroop_word_list_2_words: { type: 'string', default: 'SAD,ANGRY,FEAR' },
+
+                emostroop_word_list_3_label: { type: 'string', default: 'Positive' },
+                emostroop_word_list_3_words: { type: 'string', default: 'HAPPY,JOY,LOVE' },
+
+                // Back-compat: flattened word pool (ignored at runtime if word_lists present)
+                emostroop_word_options: { type: 'string', default: '' },
+
+                // Ink palette sampling
+                emostroop_ink_color_options: { type: 'string', default: 'RED,GREEN,BLUE,YELLOW' },
+
+                // Response overrides
+                emostroop_response_device: { type: 'select', default: 'inherit', options: ['inherit', 'keyboard', 'mouse'] },
+                emostroop_choice_keys: { type: 'string', default: '' },
+
+                // Timing windows
+                emostroop_stimulus_duration_min: { type: 'number', default: 0, min: 0, max: 10000 },
+                emostroop_stimulus_duration_max: { type: 'number', default: 0, min: 0, max: 10000 },
+                emostroop_trial_duration_min: { type: 'number', default: 2000, min: 0, max: 60000 },
+                emostroop_trial_duration_max: { type: 'number', default: 2000, min: 0, max: 60000 },
+                emostroop_iti_min: { type: 'number', default: 500, min: 0, max: 10000 },
+                emostroop_iti_max: { type: 'number', default: 500, min: 0, max: 10000 }
+            };
+
             const simonOnlyParams = {
                 // Sampling
                 simon_color_options: { type: 'string', default: 'BLUE,ORANGE' },
@@ -4388,6 +5213,60 @@ class JsonBuilder {
                 simon_iti_max: { type: 'number', default: 500, min: 0, max: 10000 }
             };
 
+            const taskSwitchingOnlyParams = {
+                // Core block mode
+                ts_trial_type: {
+                    type: 'select',
+                    default: 'switch',
+                    options: ['switch', 'single'],
+                    description: 'Switching alternates tasks; single fixes one task for the whole block.'
+                },
+                ts_single_task_index: {
+                    type: 'select',
+                    default: 1,
+                    options: [1, 2],
+                    description: 'Used only when Trial type = single.'
+                },
+
+                // Cueing
+                ts_cue_type: {
+                    type: 'select',
+                    default: 'explicit',
+                    options: ['position', 'color', 'explicit']
+                },
+
+                // Position cue params
+                ts_task_1_position: { type: 'select', default: 'left', options: ['left', 'right', 'top', 'bottom'] },
+                ts_task_2_position: { type: 'select', default: 'right', options: ['left', 'right', 'top', 'bottom'] },
+
+                // Color cue params
+                ts_task_1_color_hex: { type: 'COLOR', default: '#FFFFFF' },
+                ts_task_2_color_hex: { type: 'COLOR', default: '#FFFFFF' },
+
+                // Explicit cue params
+                ts_task_1_cue_text: { type: 'string', default: 'LETTERS' },
+                ts_task_2_cue_text: { type: 'string', default: 'NUMBERS' },
+                ts_cue_font_size_px: { type: 'number', default: 28, min: 8, max: 96 },
+                ts_cue_duration_ms: { type: 'number', default: 0, min: 0, max: 5000 },
+                ts_cue_gap_ms: { type: 'number', default: 0, min: 0, max: 5000 },
+                ts_cue_color_hex: { type: 'COLOR', default: '#FFFFFF' },
+
+                // Stimulus appearance / response
+                ts_stimulus_position: { type: 'select', default: 'top', options: ['left', 'right', 'top', 'bottom'] },
+                ts_stimulus_color_hex: { type: 'COLOR', default: '#FFFFFF' },
+                ts_border_enabled: { type: 'boolean', default: false },
+                ts_left_key: { type: 'string', default: '' },
+                ts_right_key: { type: 'string', default: '' },
+
+                // Timing windows
+                ts_stimulus_duration_min: { type: 'number', default: 0, min: 0, max: 10000 },
+                ts_stimulus_duration_max: { type: 'number', default: 0, min: 0, max: 10000 },
+                ts_trial_duration_min: { type: 'number', default: 2000, min: 0, max: 60000 },
+                ts_trial_duration_max: { type: 'number', default: 2000, min: 0, max: 60000 },
+                ts_iti_min: { type: 'number', default: 500, min: 0, max: 10000 },
+                ts_iti_max: { type: 'number', default: 500, min: 0, max: 10000 }
+            };
+
             const pvtOnlyParams = {
                 // Response overrides
                 pvt_response_device: { type: 'select', default: 'inherit', options: ['inherit', 'keyboard', 'mouse', 'both'] },
@@ -4400,6 +5279,32 @@ class JsonBuilder {
                 pvt_trial_duration_max: { type: 'number', default: 10000, min: 0, max: 60000 },
                 pvt_iti_min: { type: 'number', default: 0, min: 0, max: 30000 },
                 pvt_iti_max: { type: 'number', default: 0, min: 0, max: 30000 }
+            };
+
+            const continuousImageOnlyParams = {
+                cip_asset_code: { type: 'string', default: '' },
+                // Mask is derived from the pixel-wise average of the image set, then modified by the selected transform.
+                // Note: sprite sheets are generated per-mask-type; switching types can re-use existing assets if present.
+                cip_mask_type: { type: 'select', default: 'noise_and_shuffle', options: ['pure_noise', 'noise_and_shuffle', 'advanced_transform'] },
+                cip_mask_noise_amp: { type: 'number', default: 24, min: 0, max: 128 },
+                cip_mask_block_size: { type: 'number', default: 12, min: 1, max: 128 },
+                cip_repeat_mode: { type: 'select', default: 'no_repeats', options: ['no_repeats', 'repeat_to_fill'] },
+                cip_images_per_block: { type: 'number', default: 0, min: 0, max: 50000 },
+
+                cip_image_duration_ms: { type: 'number', default: 750, min: 0, max: 60000 },
+                cip_transition_duration_ms: { type: 'number', default: 250, min: 0, max: 60000 },
+                cip_choice_keys: { type: 'string', default: 'f,j' },
+
+                // Filenames are shown/edited by researchers; URL lists are filled by the modal helper.
+                cip_asset_filenames: { type: 'textarea', default: '', rows: 8 },
+
+                // Hidden (but persisted) lists used by the interpreter.
+                cip_image_urls: { type: 'textarea', default: '', rows: 6 },
+                cip_mask_to_image_sprite_urls: { type: 'textarea', default: '', rows: 6 },
+                cip_image_to_mask_sprite_urls: { type: 'textarea', default: '', rows: 6 },
+
+                // Internal: keep Builder+Interpreter in sync for sprite animations.
+                cip_transition_frames: { type: 'number', default: 8, min: 2, max: 60 }
             };
 
             // RDM-only params remain in RDM mode; other tasks should not inherit the RDM UI surface.
@@ -4470,12 +5375,18 @@ class JsonBuilder {
                     ? sartOnlyParams
                     : (currentTaskType === 'simon')
                         ? simonOnlyParams
+                    : (currentTaskType === 'task-switching')
+                        ? taskSwitchingOnlyParams
                     : (currentTaskType === 'pvt')
                         ? pvtOnlyParams
                     : (currentTaskType === 'gabor')
                         ? gaborOnlyParams
+                        : (currentTaskType === 'continuous-image')
+                            ? continuousImageOnlyParams
                         : (currentTaskType === 'stroop')
                             ? stroopOnlyParams
+                        : (currentTaskType === 'emotional-stroop')
+                            ? emotionalStroopOnlyParams
                         : rdmOnlyParams;
 
             return {
@@ -4526,6 +5437,7 @@ class JsonBuilder {
                 category: 'setup',
                 type: 'detection-response-task-start',
                 parameters: {
+                    override_iso_standard: { type: 'boolean', default: false },
                     segment_label: { type: 'string', default: '' },
                     response_key: { type: 'string', default: 'space' },
                     min_iti_ms: { type: 'number', default: 3000, min: 200, max: 600000, step: 50 },
@@ -4536,7 +5448,7 @@ class JsonBuilder {
                     location: { type: 'select', default: 'top-right', options: ['top-right', 'top-left', 'bottom-right', 'bottom-left'] },
                     size_px: { type: 'number', default: 18, min: 6, max: 80, step: 1 },
                     min_rt_ms: { type: 'number', default: 100, min: 0, max: 60000, step: 10 },
-                    max_rt_ms: { type: 'number', default: 2000, min: 50, max: 60000, step: 10 }
+                    max_rt_ms: { type: 'number', default: 2500, min: 50, max: 60000, step: 10 }
                 }
             },
             {
@@ -4789,8 +5701,8 @@ class JsonBuilder {
             return baseComponents;
         }
 
-        // For Flanker/SART/Simon/PVT/Gabor/Stroop/N-back, show only task-appropriate components.
-        if (taskType === 'flanker' || taskType === 'sart' || taskType === 'simon' || taskType === 'pvt' || taskType === 'gabor' || taskType === 'stroop' || taskType === 'nback') {
+        // For Flanker/SART/Simon/Task Switching/PVT/Gabor/Stroop/N-back/Continuous Image, show only task-appropriate components.
+        if (taskType === 'flanker' || taskType === 'sart' || taskType === 'simon' || taskType === 'task-switching' || taskType === 'pvt' || taskType === 'gabor' || taskType === 'stroop' || taskType === 'emotional-stroop' || taskType === 'nback' || taskType === 'continuous-image') {
             if (taskType === 'flanker') {
                 baseComponents.push({
                     id: 'flanker-trial',
@@ -4859,6 +5771,27 @@ class JsonBuilder {
                 });
             }
 
+            if (taskType === 'task-switching') {
+                baseComponents.push({
+                    id: 'task-switching-trial',
+                    name: `Task Switching ${unitName}`,
+                    icon: 'fas fa-random',
+                    description: 'Task switching trial/frame (2AFC per task; interpreter implements stimulus + scoring)',
+                    category: 'task',
+                    parameters: {
+                        task_index: { type: 'select', default: 1, options: [1, 2] },
+                        stimulus: { type: 'string', default: 'A' },
+                        stimulus_position: { type: 'select', default: 'top', options: ['left', 'right', 'top', 'bottom'] },
+                        border_enabled: { type: 'boolean', default: false },
+                        left_key: { type: 'string', default: 'f' },
+                        right_key: { type: 'string', default: 'j' },
+                        stimulus_duration_ms: { type: 'number', default: 0, min: 0, max: 10000 },
+                        trial_duration_ms: { type: 'number', default: 2000, min: 0, max: 30000 },
+                        iti_ms: { type: 'number', default: 500, min: 0, max: 10000 }
+                    }
+                });
+            }
+
             if (taskType === 'pvt') {
                 baseComponents.push({
                     id: 'pvt-trial',
@@ -4915,6 +5848,26 @@ class JsonBuilder {
                 });
             }
 
+            if (taskType === 'continuous-image') {
+                baseComponents.push({
+                    id: 'continuous-image-presentation',
+                    name: `Continuous Image ${unitName}`,
+                    icon: 'fas fa-images',
+                    description: 'Continuous image presentation frame (precomputed transition sprites; 2AFC response)',
+                    category: 'task',
+                    parameters: {
+                        image_url: { type: 'string', default: '' },
+                        mask_to_image_sprite_url: { type: 'string', default: '' },
+                        image_to_mask_sprite_url: { type: 'string', default: '' },
+                        transition_frames: { type: 'number', default: 8, min: 2, max: 60 },
+
+                        image_duration_ms: { type: 'number', default: 750, min: 0, max: 60000 },
+                        transition_duration_ms: { type: 'number', default: 250, min: 0, max: 60000 },
+                        choices: { type: 'string', default: 'f,j' }
+                    }
+                });
+            }
+
             if (taskType === 'stroop') {
                 baseComponents.push({
                     id: 'stroop-trial',
@@ -4934,6 +5887,30 @@ class JsonBuilder {
                         choice_keys: { type: 'array', default: ['1', '2', '3', '4'] },
                         congruent_key: { type: 'string', default: 'f' },
                         incongruent_key: { type: 'string', default: 'j' },
+
+                        stimulus_font_size_px: { type: 'number', default: 64, min: 12, max: 200 },
+                        stimulus_duration_ms: { type: 'number', default: 0, min: 0, max: 10000 },
+                        trial_duration_ms: { type: 'number', default: 2000, min: 0, max: 30000 },
+                        iti_ms: { type: 'number', default: 500, min: 0, max: 10000 }
+                    }
+                });
+            }
+
+            if (taskType === 'emotional-stroop') {
+                baseComponents.push({
+                    id: 'emotional-stroop-trial',
+                    name: `Emotional Stroop ${unitName}`,
+                    icon: 'fas fa-font',
+                    description: 'Emotional Stroop trial/frame (emotional word shown in ink color; respond by ink color)',
+                    category: 'task',
+                    parameters: {
+                        word: { type: 'string', default: 'HAPPY' },
+                        word_list_label: { type: 'string', default: 'Neutral' },
+                        word_list_index: { type: 'number', default: 1, min: 1, max: 3 },
+                        ink_color_name: { type: 'string', default: 'BLUE' },
+
+                        response_device: { type: 'select', default: 'inherit', options: ['inherit', 'keyboard', 'mouse'] },
+                        choice_keys: { type: 'array', default: ['1', '2', '3', '4'] },
 
                         stimulus_font_size_px: { type: 'number', default: 64, min: 12, max: 200 },
                         stimulus_duration_ms: { type: 'number', default: 0, min: 0, max: 10000 },
@@ -4966,6 +5943,21 @@ class JsonBuilder {
                     parameters: {
                         stimulus: { type: 'string', default: '<p>Press a key to continue.</p>' },
                         choices: { type: 'select', default: 'ALL_KEYS', options: ['ALL_KEYS', 'space', 'enter', 'escape'] },
+                        prompt: { type: 'string', default: '' },
+                        stimulus_duration: { type: 'number', default: null, min: 0, max: 30000 },
+                        trial_duration: { type: 'number', default: null, min: 0, max: 60000 },
+                        response_ends_trial: { type: 'boolean', default: true }
+                    }
+                },
+                {
+                    id: 'html-button-response',
+                    name: 'HTML + Button',
+                    icon: 'fas fa-mouse-pointer',
+                    description: 'Show HTML content and collect button response',
+                    category: 'basic',
+                    parameters: {
+                        stimulus: { type: 'string', default: '<p>Click a button to continue.</p>' },
+                        choices: { type: 'array', default: ['Continue'] },
                         prompt: { type: 'string', default: '' },
                         stimulus_duration: { type: 'number', default: null, min: 0, max: 30000 },
                         trial_duration: { type: 'number', default: null, min: 0, max: 60000 },
@@ -5140,6 +6132,21 @@ class JsonBuilder {
 
         // Add generic stimulus components (RDM mode)
         baseComponents.push(
+            {
+                id: 'html-keyboard-response',
+                name: 'HTML + Keyboard',
+                icon: 'fas fa-keyboard',
+                description: 'Show HTML content and collect keyboard response',
+                category: 'basic',
+                parameters: {
+                    stimulus: { type: 'string', default: '<p>Press a key to continue.</p>' },
+                    choices: { type: 'select', default: 'ALL_KEYS', options: ['ALL_KEYS', 'space', 'enter', 'escape'] },
+                    prompt: { type: 'string', default: '' },
+                    stimulus_duration: { type: 'number', default: null, min: 0, max: 30000 },
+                    trial_duration: { type: 'number', default: null, min: 0, max: 60000 },
+                    response_ends_trial: { type: 'boolean', default: true }
+                }
+            },
             {
                 id: 'image-keyboard-response',
                 name: 'Image + Keyboard',
@@ -5372,8 +6379,16 @@ class JsonBuilder {
                 Object.assign(componentData, this.getStroopDefaultsForNewComponent());
             }
 
+            if (componentDef.id === 'emotional-stroop-trial') {
+                Object.assign(componentData, this.getEmotionalStroopDefaultsForNewComponent());
+            }
+
             if (componentDef.id === 'simon-trial') {
                 Object.assign(componentData, this.getSimonDefaultsForNewComponent());
+            }
+
+            if (componentDef.id === 'task-switching-trial') {
+                Object.assign(componentData, this.getTaskSwitchingDefaultsForNewComponent());
             }
 
             if (componentDef.id === 'pvt-trial') {
@@ -5382,6 +6397,10 @@ class JsonBuilder {
 
             if (componentDef.id === 'gabor-trial') {
                 Object.assign(componentData, this.getGaborDefaultsForNewComponent());
+            }
+
+            if (componentDef.id === 'continuous-image-presentation') {
+                Object.assign(componentData, this.getContinuousImageDefaultsForNewComponent());
             }
 
             if (componentDef.id === 'soc-dashboard') {
@@ -5397,11 +6416,20 @@ class JsonBuilder {
                 if (currentTaskType === 'gabor') {
                     Object.assign(componentData, this.getGaborDefaultsForNewBlock());
                 }
+                if (currentTaskType === 'continuous-image') {
+                    Object.assign(componentData, this.getContinuousImageDefaultsForNewBlock());
+                }
                 if (currentTaskType === 'stroop') {
                     Object.assign(componentData, this.getStroopDefaultsForNewBlock());
                 }
+                if (currentTaskType === 'emotional-stroop') {
+                    Object.assign(componentData, this.getEmotionalStroopDefaultsForNewBlock());
+                }
                 if (currentTaskType === 'simon') {
                     Object.assign(componentData, this.getSimonDefaultsForNewBlock());
+                }
+                if (currentTaskType === 'task-switching') {
+                    Object.assign(componentData, this.getTaskSwitchingDefaultsForNewBlock());
                 }
                 if (currentTaskType === 'pvt') {
                     Object.assign(componentData, this.getPvtDefaultsForNewBlock());
@@ -5760,6 +6788,17 @@ class JsonBuilder {
             };
         }
 
+        if (taskType === 'continuous-image') {
+            const d = this.getCurrentContinuousImageDefaults();
+            config.continuous_image_settings = {
+                mask_type: d.mask_type,
+                image_duration_ms: d.image_duration_ms,
+                transition_duration_ms: d.transition_duration_ms,
+                transition_frames: d.transition_frames,
+                choice_keys: d.choice_keys
+            };
+        }
+
         if (taskType === 'stroop') {
             const stimuli = this.getCurrentStroopStimuliFromUI();
             const n = Array.isArray(stimuli) ? stimuli.length : 0;
@@ -5792,6 +6831,40 @@ class JsonBuilder {
             };
         }
 
+        if (taskType === 'emotional-stroop') {
+            const stimuli = this.getCurrentStroopStimuliFromUI();
+            const n = Array.isArray(stimuli) ? stimuli.length : 0;
+
+            const parsed = this.parseEmotionalStroopWordListsFromUI();
+            const wordListCount = (parsed?.word_list_count === 3 ? 3 : 2);
+            const wordLists = Array.isArray(parsed?.word_lists) ? parsed.word_lists : [];
+            const wordOptions = Array.isArray(parsed?.word_options) ? parsed.word_options : this.parseEmotionalStroopWordOptionsFromUI();
+            const responseDevice = (document.getElementById('stroopDefaultResponseDevice')?.value || 'keyboard').toString();
+            const choiceKeys = this.parseStroopChoiceKeysFromUI(Math.max(2, n));
+
+            const fontSizePx = Number.parseInt(document.getElementById('stroopStimulusFontSizePx')?.value || '64', 10);
+            const stimMs = Number.parseInt(document.getElementById('stroopStimulusDurationMs')?.value || '0', 10);
+            const trialMs = Number.parseInt(document.getElementById('stroopTrialDurationMs')?.value || '2000', 10);
+            const itiMs = Number.parseInt(document.getElementById('stroopItiMs')?.value || '500', 10);
+
+            config.emotional_stroop_settings = {
+                word_list_count: wordListCount,
+                word_lists: wordLists,
+                // Convenience / legacy shape
+                word_options: Array.isArray(wordOptions) ? wordOptions : [],
+                stimuli: Array.isArray(stimuli) ? stimuli : [],
+
+                response_mode: 'color_naming',
+                response_device: responseDevice,
+                choice_keys: choiceKeys,
+
+                stimulus_font_size_px: Number.isFinite(fontSizePx) ? fontSizePx : 64,
+                stimulus_duration_ms: Number.isFinite(stimMs) ? stimMs : 0,
+                trial_duration_ms: Number.isFinite(trialMs) ? trialMs : 2000,
+                iti_ms: Number.isFinite(itiMs) ? itiMs : 500
+            };
+        }
+
         if (taskType === 'simon') {
             const stimuli = this.getCurrentSimonStimuliFromUI();
 
@@ -5814,6 +6887,72 @@ class JsonBuilder {
                 stimulus_duration_ms: Number.isFinite(stimMs) ? stimMs : 0,
                 trial_duration_ms: Number.isFinite(trialMs) ? trialMs : 1500,
                 iti_ms: Number.isFinite(itiMs) ? itiMs : 500
+            };
+        }
+
+        if (taskType === 'task-switching') {
+            const parseStringList = (raw) => {
+                return (raw ?? '')
+                    .toString()
+                    .split(',')
+                    .map(s => s.trim())
+                    .filter(Boolean);
+            };
+
+            const safeInt = (raw, fallback) => {
+                const v = Number.parseInt(raw, 10);
+                return Number.isFinite(v) ? v : fallback;
+            };
+
+            const mode = (document.getElementById('taskSwitchingStimulusSetMode')?.value || 'letters_numbers').toString();
+            const leftKey = (document.getElementById('taskSwitchingLeftKey')?.value || 'f').toString();
+            const rightKey = (document.getElementById('taskSwitchingRightKey')?.value || 'j').toString();
+            const position = (document.getElementById('taskSwitchingStimulusPosition')?.value || 'top').toString();
+            const borderEnabled = !!document.getElementById('taskSwitchingBorderEnabled')?.checked;
+
+            const cueTypeRaw = (document.getElementById('taskSwitchingCueType')?.value || 'explicit').toString().trim();
+            const cueType = (cueTypeRaw === 'position' || cueTypeRaw === 'color' || cueTypeRaw === 'explicit') ? cueTypeRaw : 'explicit';
+            const task1CueText = (document.getElementById('taskSwitchingTask1CueText')?.value || 'LETTERS').toString();
+            const task2CueText = (document.getElementById('taskSwitchingTask2CueText')?.value || 'NUMBERS').toString();
+            const cueFontSizePx = safeInt(document.getElementById('taskSwitchingCueFontSizePx')?.value, 28);
+            const cueDurationMs = safeInt(document.getElementById('taskSwitchingCueDurationMs')?.value, 0);
+            const cueGapMs = safeInt(document.getElementById('taskSwitchingCueGapMs')?.value, 0);
+            const cueColorHex = (document.getElementById('taskSwitchingCueColorHex')?.value || '#FFFFFF').toString();
+
+            const task1Pos = (document.getElementById('taskSwitchingTask1Position')?.value || 'left').toString();
+            const task2Pos = (document.getElementById('taskSwitchingTask2Position')?.value || 'right').toString();
+            const task1ColorHex = (document.getElementById('taskSwitchingTask1ColorHex')?.value || '#FFFFFF').toString();
+            const task2ColorHex = (document.getElementById('taskSwitchingTask2ColorHex')?.value || '#FFFFFF').toString();
+
+            const task1A = parseStringList(document.getElementById('taskSwitchingTask1CategoryA')?.value);
+            const task1B = parseStringList(document.getElementById('taskSwitchingTask1CategoryB')?.value);
+            const task2A = parseStringList(document.getElementById('taskSwitchingTask2CategoryA')?.value);
+            const task2B = parseStringList(document.getElementById('taskSwitchingTask2CategoryB')?.value);
+
+            config.task_switching_settings = {
+                stimulus_set_mode: (mode === 'custom') ? 'custom' : 'letters_numbers',
+                stimulus_position: position,
+                border_enabled: borderEnabled,
+                left_key: leftKey,
+                right_key: rightKey,
+
+                cue_type: cueType,
+                task_1_cue_text: task1CueText,
+                task_2_cue_text: task2CueText,
+                cue_font_size_px: cueFontSizePx,
+                cue_duration_ms: cueDurationMs,
+                cue_gap_ms: cueGapMs,
+                cue_color_hex: cueColorHex,
+
+                task_1_position: task1Pos,
+                task_2_position: task2Pos,
+                task_1_color_hex: task1ColorHex,
+                task_2_color_hex: task2ColorHex,
+
+                tasks: [
+                    { category_a_tokens: task1A, category_b_tokens: task1B },
+                    { category_a_tokens: task2A, category_b_tokens: task2B }
+                ]
             };
         }
 
@@ -6044,6 +7183,56 @@ class JsonBuilder {
         return out;
     }
 
+    parseEmotionalStroopWordOptionsFromUI() {
+        // Back-compat helper: return a single flattened list of all word lists.
+        // Prefer the word-list UI when present.
+        const parsed = this.parseEmotionalStroopWordListsFromUI();
+        if (parsed && Array.isArray(parsed.word_options)) return parsed.word_options;
+
+        const raw = document.getElementById('emotionalStroopWordList1Words')?.value;
+        return (raw ?? '')
+            .toString()
+            .split(',')
+            .map(s => s.trim())
+            .filter(Boolean);
+    }
+
+    parseEmotionalStroopWordListsFromUI() {
+        const parseList = (raw) => {
+            return (raw ?? '')
+                .toString()
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean);
+        };
+
+        const countRaw = Number.parseInt(document.getElementById('emotionalStroopWordListCount')?.value || '2', 10);
+        const count = Number.isFinite(countRaw) ? (countRaw === 3 ? 3 : 2) : 2;
+
+        const lists = [];
+        const l1Label = (document.getElementById('emotionalStroopWordList1Label')?.value || 'Neutral').toString().trim() || 'Neutral';
+        const l1Words = parseList(document.getElementById('emotionalStroopWordList1Words')?.value);
+        lists.push({ label: l1Label, words: l1Words });
+
+        const l2Label = (document.getElementById('emotionalStroopWordList2Label')?.value || 'Negative').toString().trim() || 'Negative';
+        const l2Words = parseList(document.getElementById('emotionalStroopWordList2Words')?.value);
+        lists.push({ label: l2Label, words: l2Words });
+
+        if (count === 3) {
+            const l3Label = (document.getElementById('emotionalStroopWordList3Label')?.value || 'Positive').toString().trim() || 'Positive';
+            const l3Words = parseList(document.getElementById('emotionalStroopWordList3Words')?.value);
+            lists.push({ label: l3Label, words: l3Words });
+        }
+
+        const wordOptions = lists.flatMap((l) => Array.isArray(l.words) ? l.words : []).filter(Boolean);
+
+        return {
+            word_list_count: count,
+            word_lists: lists,
+            word_options: Array.from(new Set(wordOptions))
+        };
+    }
+
     /**
      * Build a preview payload for the current Stroop defaults.
      */
@@ -6090,6 +7279,52 @@ class JsonBuilder {
                 choice_keys: choiceKeys,
                 congruent_key: congruentKey,
                 incongruent_key: incongruentKey
+            }
+        };
+    }
+
+    /**
+     * Build a preview payload for the current Emotional Stroop defaults.
+     */
+    getCurrentEmotionalStroopDefaults() {
+        const stimuli = this.getCurrentStroopStimuliFromUI();
+        const n = stimuli.length;
+        const listsParsed = this.parseEmotionalStroopWordListsFromUI();
+        const wordLists = listsParsed?.word_lists || [];
+        const words = listsParsed?.word_options || [];
+
+        const responseDevice = (document.getElementById('stroopDefaultResponseDevice')?.value || 'keyboard').toString();
+        const choiceKeys = this.parseStroopChoiceKeysFromUI(Math.max(2, n));
+
+        const fontSizePx = Number.parseInt(document.getElementById('stroopStimulusFontSizePx')?.value || '64', 10);
+        const stimMs = Number.parseInt(document.getElementById('stroopStimulusDurationMs')?.value || '0', 10);
+        const trialMs = Number.parseInt(document.getElementById('stroopTrialDurationMs')?.value || '2000', 10);
+        const itiMs = Number.parseInt(document.getElementById('stroopItiMs')?.value || '500', 10);
+
+        return {
+            type: 'emotional-stroop-trial',
+            name: 'Emotional Stroop Defaults',
+
+            word: (words[0] || 'HAPPY').toString(),
+            word_list_label: (wordLists[0]?.label || '').toString(),
+            word_list_index: 1,
+            ink_color_name: (stimuli[0]?.name || 'BLUE').toString(),
+
+            response_mode: 'color_naming',
+            response_device: responseDevice,
+            choice_keys: choiceKeys,
+
+            stimulus_font_size_px: Number.isFinite(fontSizePx) ? fontSizePx : 64,
+            stimulus_duration_ms: Number.isFinite(stimMs) ? stimMs : 0,
+            trial_duration_ms: Number.isFinite(trialMs) ? trialMs : 2000,
+            iti_ms: Number.isFinite(itiMs) ? itiMs : 500,
+
+            // Non-standard field: helps preview use ink palette context.
+            stroop_settings: {
+                stimuli,
+                response_mode: 'color_naming',
+                response_device: responseDevice,
+                choice_keys: choiceKeys
             }
         };
     }
@@ -6430,6 +7665,191 @@ class JsonBuilder {
         };
     }
 
+    sampleTaskSwitchingStimulusPairFromUI() {
+        const parseStringList = (raw) => {
+            return (raw ?? '')
+                .toString()
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean);
+        };
+
+        const pick = (arr, fallback) => {
+            if (!Array.isArray(arr) || arr.length === 0) return fallback;
+            const idx = Math.floor(Math.random() * arr.length);
+            return (arr[Math.max(0, Math.min(arr.length - 1, idx))] ?? fallback);
+        };
+
+        const mode = (document.getElementById('taskSwitchingStimulusSetMode')?.value || 'letters_numbers').toString();
+
+        const builtIn = {
+            task1A: ['A', 'E', 'I', 'O', 'U'],
+            task1B: ['B', 'C', 'D', 'F', 'G', 'H', 'J', 'K'],
+            task2A: ['1', '3', '5', '7', '9'],
+            task2B: ['2', '4', '6', '8']
+        };
+
+        const tokens = (() => {
+            if (mode !== 'custom') return builtIn;
+
+            const task1A = parseStringList(document.getElementById('taskSwitchingTask1CategoryA')?.value);
+            const task1B = parseStringList(document.getElementById('taskSwitchingTask1CategoryB')?.value);
+            const task2A = parseStringList(document.getElementById('taskSwitchingTask2CategoryA')?.value);
+            const task2B = parseStringList(document.getElementById('taskSwitchingTask2CategoryB')?.value);
+
+            return {
+                task1A: (task1A.length > 0) ? task1A : builtIn.task1A,
+                task1B: (task1B.length > 0) ? task1B : builtIn.task1B,
+                task2A: (task2A.length > 0) ? task2A : builtIn.task2A,
+                task2B: (task2B.length > 0) ? task2B : builtIn.task2B
+            };
+        })();
+
+        const task1Pool = [...(tokens.task1A || []), ...(tokens.task1B || [])].filter(Boolean);
+        const task2Pool = [...(tokens.task2A || []), ...(tokens.task2B || [])].filter(Boolean);
+
+        const stimulusTask1 = (pick(task1Pool, 'A') ?? 'A').toString();
+        const stimulusTask2 = (pick(task2Pool, '1') ?? '1').toString();
+        const combined = `${stimulusTask1} ${stimulusTask2}`.trim();
+
+        return {
+            stimulus_task_1: stimulusTask1,
+            stimulus_task_2: stimulusTask2,
+            stimulus: combined
+        };
+    }
+
+    getTaskSwitchingDefaultsForNewComponent() {
+        const pair = this.sampleTaskSwitchingStimulusPairFromUI();
+
+        const cueTypeRaw = (document.getElementById('taskSwitchingCueType')?.value || 'explicit').toString().trim();
+        const cueType = (cueTypeRaw === 'position' || cueTypeRaw === 'color' || cueTypeRaw === 'explicit') ? cueTypeRaw : 'explicit';
+
+        return {
+            task_index: 1,
+            ...pair,
+            stimulus_position: (document.getElementById('taskSwitchingStimulusPosition')?.value || 'top').toString(),
+            border_enabled: !!document.getElementById('taskSwitchingBorderEnabled')?.checked,
+            left_key: (document.getElementById('taskSwitchingLeftKey')?.value || 'f').toString(),
+            right_key: (document.getElementById('taskSwitchingRightKey')?.value || 'j').toString(),
+
+            cue_type: cueType,
+            task_1_position: (document.getElementById('taskSwitchingTask1Position')?.value || 'left').toString(),
+            task_2_position: (document.getElementById('taskSwitchingTask2Position')?.value || 'right').toString(),
+            task_1_color_hex: (document.getElementById('taskSwitchingTask1ColorHex')?.value || '#FFFFFF').toString(),
+            task_2_color_hex: (document.getElementById('taskSwitchingTask2ColorHex')?.value || '#FFFFFF').toString(),
+            stimulus_color_hex: '#FFFFFF',
+            task_1_cue_text: (document.getElementById('taskSwitchingTask1CueText')?.value || 'LETTERS').toString(),
+            task_2_cue_text: (document.getElementById('taskSwitchingTask2CueText')?.value || 'NUMBERS').toString(),
+            cue_font_size_px: Number.parseInt(document.getElementById('taskSwitchingCueFontSizePx')?.value || '28', 10),
+            cue_duration_ms: Number.parseInt(document.getElementById('taskSwitchingCueDurationMs')?.value || '0', 10),
+            cue_gap_ms: Number.parseInt(document.getElementById('taskSwitchingCueGapMs')?.value || '0', 10),
+            cue_color_hex: (document.getElementById('taskSwitchingCueColorHex')?.value || '#FFFFFF').toString(),
+
+            stimulus_duration_ms: 0,
+            trial_duration_ms: 2000,
+            iti_ms: 500
+        };
+    }
+
+    getTaskSwitchingDefaultsForNewBlock() {
+        const cap = this.getExperimentWideLengthCapForBlocks();
+        const defaultLen = this.getExperimentWideBlockLengthDefault();
+
+        const safeInt = (raw, fallback) => {
+            const v = Number.parseInt(raw, 10);
+            return Number.isFinite(v) ? v : fallback;
+        };
+
+        const blockLen = (() => {
+            const raw = safeInt(defaultLen, 40);
+            const len = Number.isFinite(raw) ? Math.max(1, raw) : 40;
+            if (Number.isFinite(cap) && cap > 0) return Math.min(len, cap);
+            return len;
+        })();
+
+        return {
+            block_component_type: 'task-switching-trial',
+            block_length: blockLen,
+            seed: '',
+
+            // New block-level task switching controls
+            ts_trial_type: 'switch',
+            ts_single_task_index: 1,
+            ts_cue_type: (() => {
+                const raw = (document.getElementById('taskSwitchingCueType')?.value || 'explicit').toString().trim();
+                return (raw === 'position' || raw === 'color' || raw === 'explicit') ? raw : 'explicit';
+            })(),
+
+            ts_task_1_position: (document.getElementById('taskSwitchingTask1Position')?.value || 'left').toString(),
+            ts_task_2_position: (document.getElementById('taskSwitchingTask2Position')?.value || 'right').toString(),
+            ts_task_1_color_hex: (document.getElementById('taskSwitchingTask1ColorHex')?.value || '#FFFFFF').toString(),
+            ts_task_2_color_hex: (document.getElementById('taskSwitchingTask2ColorHex')?.value || '#FFFFFF').toString(),
+            ts_task_1_cue_text: (document.getElementById('taskSwitchingTask1CueText')?.value || 'LETTERS').toString(),
+            ts_task_2_cue_text: (document.getElementById('taskSwitchingTask2CueText')?.value || 'NUMBERS').toString(),
+            ts_cue_font_size_px: safeInt(document.getElementById('taskSwitchingCueFontSizePx')?.value, 28),
+            ts_cue_duration_ms: safeInt(document.getElementById('taskSwitchingCueDurationMs')?.value, 0),
+            ts_cue_gap_ms: safeInt(document.getElementById('taskSwitchingCueGapMs')?.value, 0),
+            ts_cue_color_hex: (document.getElementById('taskSwitchingCueColorHex')?.value || '#FFFFFF').toString(),
+
+            // Appearance/response defaults seeded from the Task Switching defaults panel
+            ts_stimulus_position: (document.getElementById('taskSwitchingStimulusPosition')?.value || 'top').toString(),
+            ts_stimulus_color_hex: '#FFFFFF',
+            ts_border_enabled: !!document.getElementById('taskSwitchingBorderEnabled')?.checked,
+            ts_left_key: (document.getElementById('taskSwitchingLeftKey')?.value || 'f').toString(),
+            ts_right_key: (document.getElementById('taskSwitchingRightKey')?.value || 'j').toString(),
+
+            // Timing windows seeded from defaults panel
+            ts_stimulus_duration_min: 0,
+            ts_stimulus_duration_max: 0,
+            ts_trial_duration_min: 2000,
+            ts_trial_duration_max: 2000,
+            ts_iti_min: 500,
+            ts_iti_max: 500
+        };
+    }
+
+    getCurrentTaskSwitchingDefaults() {
+        const position = (document.getElementById('taskSwitchingStimulusPosition')?.value || 'top').toString();
+        const borderEnabled = !!document.getElementById('taskSwitchingBorderEnabled')?.checked;
+        const leftKey = (document.getElementById('taskSwitchingLeftKey')?.value || 'f').toString();
+        const rightKey = (document.getElementById('taskSwitchingRightKey')?.value || 'j').toString();
+
+        const cueTypeRaw = (document.getElementById('taskSwitchingCueType')?.value || 'explicit').toString().trim();
+        const cueType = (cueTypeRaw === 'position' || cueTypeRaw === 'color' || cueTypeRaw === 'explicit') ? cueTypeRaw : 'explicit';
+
+        const pair = this.sampleTaskSwitchingStimulusPairFromUI();
+
+        return {
+            type: 'task-switching-trial',
+            name: 'Task Switching Defaults',
+
+            task_index: 1,
+            ...pair,
+            stimulus_position: position,
+            border_enabled: borderEnabled,
+            left_key: leftKey,
+            right_key: rightKey,
+
+            cue_type: cueType,
+            task_1_position: (document.getElementById('taskSwitchingTask1Position')?.value || 'left').toString(),
+            task_2_position: (document.getElementById('taskSwitchingTask2Position')?.value || 'right').toString(),
+            task_1_color_hex: (document.getElementById('taskSwitchingTask1ColorHex')?.value || '#FFFFFF').toString(),
+            task_2_color_hex: (document.getElementById('taskSwitchingTask2ColorHex')?.value || '#FFFFFF').toString(),
+            stimulus_color_hex: '#FFFFFF',
+            task_1_cue_text: (document.getElementById('taskSwitchingTask1CueText')?.value || 'LETTERS').toString(),
+            task_2_cue_text: (document.getElementById('taskSwitchingTask2CueText')?.value || 'NUMBERS').toString(),
+            cue_font_size_px: Number.parseInt(document.getElementById('taskSwitchingCueFontSizePx')?.value || '28', 10),
+            cue_duration_ms: Number.parseInt(document.getElementById('taskSwitchingCueDurationMs')?.value || '0', 10),
+            cue_gap_ms: Number.parseInt(document.getElementById('taskSwitchingCueGapMs')?.value || '0', 10),
+            cue_color_hex: (document.getElementById('taskSwitchingCueColorHex')?.value || '#FFFFFF').toString(),
+
+            stimulus_duration_ms: 0,
+            trial_duration_ms: 2000,
+            iti_ms: 500
+        };
+    }
+
     getStroopDefaultsForNewComponent() {
         const stimuli = this.getCurrentStroopStimuliFromUI();
         const n = stimuli.length;
@@ -6484,6 +7904,79 @@ class JsonBuilder {
             stroop_trial_duration_max: Number.isFinite(trialMs) ? trialMs : 2000,
             stroop_iti_min: Number.isFinite(itiMs) ? itiMs : 500,
             stroop_iti_max: Number.isFinite(itiMs) ? itiMs : 500
+        };
+    }
+
+    getEmotionalStroopDefaultsForNewComponent() {
+        const stimuli = this.getCurrentStroopStimuliFromUI();
+        const n = stimuli.length;
+        const choiceKeys = this.parseStroopChoiceKeysFromUI(Math.max(2, n));
+        const listsParsed = this.parseEmotionalStroopWordListsFromUI();
+        const words = listsParsed?.word_options || [];
+        const wordLists = listsParsed?.word_lists || [];
+
+        return {
+            word: (words[0] || 'HAPPY').toString(),
+            word_list_label: (wordLists[0]?.label || '').toString(),
+            word_list_index: 1,
+            ink_color_name: (stimuli[0]?.name || 'BLUE').toString(),
+
+            response_device: 'inherit',
+            choice_keys: choiceKeys,
+
+            stimulus_font_size_px: Number.parseInt(document.getElementById('stroopStimulusFontSizePx')?.value || '64', 10),
+            stimulus_duration_ms: Number.parseInt(document.getElementById('stroopStimulusDurationMs')?.value || '0', 10),
+            trial_duration_ms: Number.parseInt(document.getElementById('stroopTrialDurationMs')?.value || '2000', 10),
+            iti_ms: Number.parseInt(document.getElementById('stroopItiMs')?.value || '500', 10)
+        };
+    }
+
+    getEmotionalStroopDefaultsForNewBlock() {
+        const stimuli = this.getCurrentStroopStimuliFromUI();
+        const names = (Array.isArray(stimuli) ? stimuli : [])
+            .map(s => (s?.name ?? '').toString().trim())
+            .filter(Boolean);
+        const inkList = names.join(',');
+
+        const parsed = this.parseEmotionalStroopWordListsFromUI();
+        const lists = Array.isArray(parsed?.word_lists) ? parsed.word_lists : [];
+        const flattened = Array.isArray(parsed?.word_options) ? parsed.word_options : [];
+        const wordList = flattened.join(',');
+
+        const n = Math.max(2, names.length);
+        const choiceKeys = this.parseStroopChoiceKeysFromUI(n).join(',');
+
+        const stimMs = Number.parseInt(document.getElementById('stroopStimulusDurationMs')?.value || '0', 10);
+        const trialMs = Number.parseInt(document.getElementById('stroopTrialDurationMs')?.value || '2000', 10);
+        const itiMs = Number.parseInt(document.getElementById('stroopItiMs')?.value || '500', 10);
+
+        return {
+            block_component_type: 'emotional-stroop-trial',
+
+            emostroop_word_list_count: (parsed?.word_list_count === 3 ? 3 : 2),
+
+            emostroop_word_list_1_label: (lists[0]?.label || 'Neutral').toString(),
+            emostroop_word_list_1_words: (Array.isArray(lists[0]?.words) ? lists[0].words.join(',') : 'CHAIR,TABLE,WINDOW'),
+
+            emostroop_word_list_2_label: (lists[1]?.label || 'Negative').toString(),
+            emostroop_word_list_2_words: (Array.isArray(lists[1]?.words) ? lists[1].words.join(',') : 'SAD,ANGRY,FEAR'),
+
+            emostroop_word_list_3_label: (lists[2]?.label || 'Positive').toString(),
+            emostroop_word_list_3_words: (Array.isArray(lists[2]?.words) ? lists[2].words.join(',') : 'HAPPY,JOY,LOVE'),
+
+            // Back-compat / convenience: flattened pool (preview may still use it if needed)
+            emostroop_word_options: wordList || 'HAPPY,SAD,ANGRY,CHAIR',
+            emostroop_ink_color_options: inkList || 'RED,GREEN,BLUE,YELLOW',
+
+            emostroop_response_device: 'inherit',
+            emostroop_choice_keys: choiceKeys,
+
+            emostroop_stimulus_duration_min: Number.isFinite(stimMs) ? stimMs : 0,
+            emostroop_stimulus_duration_max: Number.isFinite(stimMs) ? stimMs : 0,
+            emostroop_trial_duration_min: Number.isFinite(trialMs) ? trialMs : 2000,
+            emostroop_trial_duration_max: Number.isFinite(trialMs) ? trialMs : 2000,
+            emostroop_iti_min: Number.isFinite(itiMs) ? itiMs : 500,
+            emostroop_iti_max: Number.isFinite(itiMs) ? itiMs : 500
         };
     }
 
@@ -6568,6 +8061,192 @@ class JsonBuilder {
         rest.desktop_icons = [];
         rest.subtasks = [];
         return rest;
+    }
+
+    getCurrentContinuousImageDefaults() {
+        const safeInt = (raw, fallback, { min = null, max = null } = {}) => {
+            const v = Number.parseInt(raw ?? '', 10);
+            if (!Number.isFinite(v)) return fallback;
+            const clampedMin = (min === null) ? v : Math.max(min, v);
+            return (max === null) ? clampedMin : Math.min(max, clampedMin);
+        };
+
+        const normalizeCipMaskType = (raw) => {
+            const t0 = (raw ?? '').toString().trim();
+            const t = t0.toLowerCase();
+
+            // New UI values
+            if (t === 'pure_noise') return 'pure_noise';
+            if (t === 'noise_and_shuffle') return 'noise_and_shuffle';
+            if (t === 'advanced_transform') return 'advanced_transform';
+
+            // Friendly labels
+            if (t === 'pure noise') return 'pure_noise';
+            if (t === 'noise and shuffle') return 'noise_and_shuffle';
+            if (t === 'advanced transform') return 'advanced_transform';
+
+            // Legacy values
+            if (t === 'noise') return 'noise_and_shuffle';
+            if (t === 'sprite') return 'pure_noise';
+            if (t === 'blank') return 'pure_noise';
+
+            return 'noise_and_shuffle';
+        };
+
+        const maskTypeRaw = (document.getElementById('cipDefaultMaskType')?.value || 'noise_and_shuffle').toString();
+        const maskType = normalizeCipMaskType(maskTypeRaw);
+        const maskNoiseAmp = safeInt(document.getElementById('cipDefaultMaskNoiseAmp')?.value, 24, { min: 0, max: 128 });
+        const maskBlockSize = safeInt(document.getElementById('cipDefaultMaskBlockSize')?.value, 12, { min: 1, max: 128 });
+
+        return {
+            mask_type: maskType,
+            mask_noise_amp: maskNoiseAmp,
+            mask_block_size: maskBlockSize,
+            image_duration_ms: safeInt(document.getElementById('cipDefaultImageDurationMs')?.value, 750, { min: 0, max: 60000 }),
+            transition_duration_ms: safeInt(document.getElementById('cipDefaultTransitionDurationMs')?.value, 250, { min: 0, max: 60000 }),
+            transition_frames: safeInt(document.getElementById('cipDefaultTransitionFrames')?.value, 8, { min: 2, max: 60 }),
+            choice_keys: (document.getElementById('cipDefaultChoiceKeys')?.value || 'f,j').toString().trim() || 'f,j'
+        };
+    }
+
+    getContinuousImageDefaultsForNewComponent() {
+        const d = this.getCurrentContinuousImageDefaults();
+        return {
+            image_duration_ms: d.image_duration_ms,
+            transition_duration_ms: d.transition_duration_ms,
+            transition_frames: d.transition_frames,
+            choices: d.choice_keys
+        };
+    }
+
+    getContinuousImageDefaultsForNewBlock() {
+        const d = this.getCurrentContinuousImageDefaults();
+        return {
+            block_component_type: 'continuous-image-presentation',
+            cip_mask_type: d.mask_type,
+            cip_mask_noise_amp: d.mask_noise_amp,
+            cip_mask_block_size: d.mask_block_size,
+            cip_image_duration_ms: d.image_duration_ms,
+            cip_transition_duration_ms: d.transition_duration_ms,
+            cip_transition_frames: d.transition_frames,
+            cip_choice_keys: d.choice_keys
+        };
+    }
+
+    stopCipDefaultsPreview() {
+        const timers = Array.isArray(this._cipPreviewTimeouts) ? this._cipPreviewTimeouts : [];
+        for (const id of timers) {
+            try {
+                clearTimeout(id);
+            } catch {
+                // no-op
+            }
+        }
+        this._cipPreviewTimeouts = [];
+
+        const imageLayer = document.getElementById('cipPreviewImageLayer');
+        const maskLayer = document.getElementById('cipPreviewMaskLayer');
+        if (imageLayer) imageLayer.style.opacity = '0';
+        if (maskLayer) maskLayer.style.opacity = '1';
+    }
+
+    renderCipPreviewMask(maskType) {
+        const maskLayer = document.getElementById('cipPreviewMaskLayer');
+        const canvas = document.getElementById('cipPreviewMaskCanvas');
+        if (!maskLayer) return;
+
+        const t = (maskType ?? '').toString().trim().toLowerCase();
+        const isNoisyMask = (t === 'noise') || (t === 'pure_noise') || (t === 'noise_and_shuffle') || (t === 'advanced_transform');
+
+        if (canvas && isNoisyMask) {
+            canvas.style.display = 'block';
+            const ctx = canvas.getContext && canvas.getContext('2d');
+            if (ctx) {
+                const w = canvas.width || 240;
+                const h = canvas.height || 140;
+                const img = ctx.createImageData(w, h);
+
+                const rawAmp = Number.parseInt(document.getElementById('cipDefaultMaskNoiseAmp')?.value ?? '24', 10);
+                const amp = Number.isFinite(rawAmp) ? Math.max(0, Math.min(128, rawAmp)) : 24;
+
+                for (let i = 0; i < img.data.length; i += 4) {
+                    const v = Math.max(0, Math.min(255, Math.round(128 + (Math.random() * 2 - 1) * amp)));
+                    img.data[i] = v;
+                    img.data[i + 1] = v;
+                    img.data[i + 2] = v;
+                    img.data[i + 3] = 255;
+                }
+                ctx.putImageData(img, 0, 0);
+            }
+
+            maskLayer.style.backgroundImage = 'none';
+            maskLayer.style.backgroundColor = '#111';
+            return;
+        }
+
+        if (canvas) {
+            canvas.style.display = 'none';
+        }
+
+        if (t === 'blank') {
+            maskLayer.style.backgroundImage = 'none';
+            maskLayer.style.backgroundColor = '#000';
+            return;
+        }
+
+        maskLayer.style.backgroundColor = '#111';
+        maskLayer.style.backgroundSize = '20px 20px';
+        maskLayer.style.backgroundImage = 'repeating-linear-gradient(45deg, rgba(255,255,255,0.12), rgba(255,255,255,0.12) 10px, rgba(255,255,255,0.02) 10px, rgba(255,255,255,0.02) 20px)';
+    }
+
+    playCipDefaultsPreview() {
+        this.stopCipDefaultsPreview();
+
+        const d = this.getCurrentContinuousImageDefaults();
+        const preview = document.getElementById('cipDefaultsPreview');
+        const imageLayer = document.getElementById('cipPreviewImageLayer');
+        const maskLayer = document.getElementById('cipPreviewMaskLayer');
+
+        if (!preview || !imageLayer || !maskLayer) {
+            return;
+        }
+
+        this.renderCipPreviewMask(d.mask_type);
+
+        const frames = Math.max(2, Number.parseInt(d.transition_frames ?? 8, 10) || 8);
+        const transitionMs = Math.max(0, Number.parseInt(d.transition_duration_ms ?? 250, 10) || 250);
+        const imageMs = Math.max(0, Number.parseInt(d.image_duration_ms ?? 750, 10) || 750);
+
+        const stepMs = Math.max(1, Math.floor(transitionMs / frames));
+
+        const setMix = (alphaImage) => {
+            const a = Math.max(0, Math.min(1, alphaImage));
+            imageLayer.style.opacity = `${a}`;
+            maskLayer.style.opacity = `${1 - a}`;
+        };
+
+        const timeouts = [];
+
+        for (let i = 0; i <= frames; i += 1) {
+            const t = i * stepMs;
+            timeouts.push(setTimeout(() => setMix(i / frames), t));
+        }
+
+        const afterTransition = frames * stepMs;
+        timeouts.push(setTimeout(() => setMix(1), afterTransition));
+
+        const afterHold = afterTransition + imageMs;
+        timeouts.push(setTimeout(() => setMix(1), afterHold));
+
+        for (let i = 0; i <= frames; i += 1) {
+            const t = afterHold + i * stepMs;
+            timeouts.push(setTimeout(() => setMix(1 - (i / frames)), t));
+        }
+
+        const end = afterHold + frames * stepMs;
+        timeouts.push(setTimeout(() => setMix(0), end));
+
+        this._cipPreviewTimeouts = timeouts;
     }
 
     getGaborDefaultsForNewComponent() {
@@ -7025,12 +8704,40 @@ class JsonBuilder {
     }
 
     transformBlock(blockComponent) {
-        const componentType = blockComponent.block_component_type || 'rdm-trial';
-        const isGaborQuestBlock = componentType === 'gabor-quest';
-        const exportComponentType = isGaborQuestBlock ? 'gabor-trial' : componentType;
+        const componentTypeRaw = (
+            blockComponent.block_component_type
+            || blockComponent.component_type
+            || blockComponent.blockComponentType
+            || blockComponent.componentType
+            || 'rdm-trial'
+        );
         const lengthRaw = blockComponent.block_length;
         const length = Math.max(1, parseInt(lengthRaw ?? 1));
         const samplingMode = blockComponent.sampling_mode || 'per-trial';
+
+        // Block editors sometimes store values under `parameter_values`.
+        // Prefer top-level keys when present (they reflect the current editor UI), but fall back to nested.
+        const blockParams = (blockComponent && typeof blockComponent === 'object')
+            ? ((blockComponent.parameter_values && typeof blockComponent.parameter_values === 'object')
+                ? { ...blockComponent.parameter_values, ...blockComponent }
+                : blockComponent)
+            : {};
+
+        // If the inner type wasn't on block_component_type, it may be stored in parameter_values/component_type.
+        // Keep local componentType in sync for downstream branch selection.
+        const innerTypeFromParams = (
+            blockParams.block_component_type
+            || blockParams.component_type
+            || blockParams.blockComponentType
+            || blockParams.componentType
+            || null
+        );
+        const resolvedComponentType = (typeof innerTypeFromParams === 'string' && innerTypeFromParams.trim() !== '')
+            ? innerTypeFromParams
+            : componentTypeRaw;
+
+        const isGaborQuestBlock = resolvedComponentType === 'gabor-quest';
+        const exportComponentType = isGaborQuestBlock ? 'gabor-trial' : resolvedComponentType;
 
         const seedStr = (blockComponent.seed ?? '').toString().trim();
         const seed = seedStr === '' ? null : Number.parseInt(seedStr, 10);
@@ -7065,7 +8772,7 @@ class JsonBuilder {
             return Array.from(new Set(nums));
         };
 
-        if (componentType === 'rdm-trial') {
+        if (resolvedComponentType === 'rdm-trial') {
             addWindow('coherence', blockComponent.coherence_min, blockComponent.coherence_max);
             addWindow('speed', blockComponent.speed_min, blockComponent.speed_max);
 
@@ -7077,7 +8784,7 @@ class JsonBuilder {
             if (typeof blockComponent.dot_color === 'string' && blockComponent.dot_color.trim() !== '') {
                 values.dot_color = blockComponent.dot_color;
             }
-        } else if (componentType === 'rdm-practice') {
+        } else if (resolvedComponentType === 'rdm-practice') {
             addWindow('coherence', blockComponent.practice_coherence_min, blockComponent.practice_coherence_max);
             addWindow('feedback_duration', blockComponent.practice_feedback_duration_min, blockComponent.practice_feedback_duration_max);
 
@@ -7089,7 +8796,7 @@ class JsonBuilder {
             if (typeof blockComponent.dot_color === 'string' && blockComponent.dot_color.trim() !== '') {
                 values.dot_color = blockComponent.dot_color;
             }
-        } else if (componentType === 'rdm-adaptive') {
+        } else if (resolvedComponentType === 'rdm-adaptive') {
             addWindow('initial_coherence', blockComponent.adaptive_initial_coherence_min, blockComponent.adaptive_initial_coherence_max);
             addWindow('step_size', blockComponent.adaptive_step_size_min, blockComponent.adaptive_step_size_max);
 
@@ -7105,7 +8812,7 @@ class JsonBuilder {
             if (typeof blockComponent.dot_color === 'string' && blockComponent.dot_color.trim() !== '') {
                 values.dot_color = blockComponent.dot_color;
             }
-        } else if (componentType === 'rdm-dot-groups') {
+        } else if (resolvedComponentType === 'rdm-dot-groups') {
             addWindow('group_1_percentage', blockComponent.group_1_percentage_min, blockComponent.group_1_percentage_max);
             addWindow('group_1_coherence', blockComponent.group_1_coherence_min, blockComponent.group_1_coherence_max);
             addWindow('group_1_speed', blockComponent.group_1_speed_min, blockComponent.group_1_speed_max);
@@ -7136,7 +8843,7 @@ class JsonBuilder {
 
             if (g1Color) values.group_1_color = g1Color;
             if (g2Color) values.group_2_color = g2Color;
-        } else if (componentType === 'flanker-trial') {
+        } else if (resolvedComponentType === 'flanker-trial') {
             // Generic task fields; interpreter defines how these are rendered/scored.
             const parseStringList = (raw) => {
                 if (raw === undefined || raw === null) return [];
@@ -7199,7 +8906,7 @@ class JsonBuilder {
             addWindow('stimulus_duration_ms', blockComponent.flanker_stimulus_duration_min, blockComponent.flanker_stimulus_duration_max);
             addWindow('trial_duration_ms', blockComponent.flanker_trial_duration_min, blockComponent.flanker_trial_duration_max);
             addWindow('iti_ms', blockComponent.flanker_iti_min, blockComponent.flanker_iti_max);
-        } else if (componentType === 'sart-trial') {
+        } else if (resolvedComponentType === 'sart-trial') {
             const parseIntList = (raw) => {
                 if (raw === undefined || raw === null) return [];
                 return raw
@@ -7230,7 +8937,7 @@ class JsonBuilder {
             addWindow('mask_duration_ms', blockComponent.sart_mask_duration_min, blockComponent.sart_mask_duration_max);
             addWindow('trial_duration_ms', blockComponent.sart_trial_duration_min, blockComponent.sart_trial_duration_max);
             addWindow('iti_ms', blockComponent.sart_iti_min, blockComponent.sart_iti_max);
-        } else if (componentType === 'gabor-trial' || componentType === 'gabor-quest') {
+        } else if (resolvedComponentType === 'gabor-trial' || resolvedComponentType === 'gabor-quest') {
             const parseStringList = (raw) => {
                 if (raw === undefined || raw === null) return [];
                 return raw
@@ -7358,7 +9065,7 @@ class JsonBuilder {
         }
 
         // Aperture border (outline) settings apply to all RDM-derived block component types.
-        if (componentType && componentType.startsWith('rdm-')) {
+        if (resolvedComponentType && resolvedComponentType.startsWith('rdm-')) {
             const modeRaw = (blockComponent.show_aperture_outline_mode ?? 'inherit').toString().trim();
             const widthRaw = Number(blockComponent.aperture_outline_width);
             const colorRaw = (typeof blockComponent.aperture_outline_color === 'string') ? blockComponent.aperture_outline_color.trim() : '';
@@ -7381,7 +9088,7 @@ class JsonBuilder {
                     : {};
                 values.aperture_parameters = { ...existing, ...ap };
             }
-        } else if (componentType === 'stroop-trial') {
+        } else if (resolvedComponentType === 'stroop-trial') {
             const parseStringList = (raw) => {
                 if (raw === undefined || raw === null) return [];
                 return raw
@@ -7427,7 +9134,58 @@ class JsonBuilder {
             addWindow('stimulus_duration_ms', blockComponent.stroop_stimulus_duration_min, blockComponent.stroop_stimulus_duration_max);
             addWindow('trial_duration_ms', blockComponent.stroop_trial_duration_min, blockComponent.stroop_trial_duration_max);
             addWindow('iti_ms', blockComponent.stroop_iti_min, blockComponent.stroop_iti_max);
-        } else if (componentType === 'simon-trial') {
+        } else if (resolvedComponentType === 'emotional-stroop-trial') {
+            const parseStringList = (raw) => {
+                if (raw === undefined || raw === null) return [];
+                return raw
+                    .toString()
+                    .split(',')
+                    .map(s => s.trim())
+                    .filter(Boolean);
+            };
+
+            const countRaw = Number.parseInt((blockComponent.emostroop_word_list_count ?? '2').toString(), 10);
+            const count = Number.isFinite(countRaw) ? (countRaw === 3 ? 3 : 2) : 2;
+
+            const lists = [];
+            const l1Label = (blockComponent.emostroop_word_list_1_label ?? 'Neutral').toString().trim() || 'Neutral';
+            const l1Words = parseStringList(blockComponent.emostroop_word_list_1_words);
+            lists.push({ label: l1Label, words: l1Words });
+
+            const l2Label = (blockComponent.emostroop_word_list_2_label ?? 'Negative').toString().trim() || 'Negative';
+            const l2Words = parseStringList(blockComponent.emostroop_word_list_2_words);
+            lists.push({ label: l2Label, words: l2Words });
+
+            if (count === 3) {
+                const l3Label = (blockComponent.emostroop_word_list_3_label ?? 'Positive').toString().trim() || 'Positive';
+                const l3Words = parseStringList(blockComponent.emostroop_word_list_3_words);
+                lists.push({ label: l3Label, words: l3Words });
+            }
+
+            values.word_lists = lists;
+
+            // Back-compat / convenience: also export a flattened pool
+            const wordsFlat = lists.flatMap((l) => Array.isArray(l.words) ? l.words : []);
+            const legacyWords = (wordsFlat.length > 0) ? wordsFlat : parseStringList(blockComponent.emostroop_word_options);
+            if (legacyWords.length > 0) values.word = Array.from(new Set(legacyWords));
+
+            // Ink colors are named entries from the experiment-wide ink palette.
+            const inks = parseStringList(blockComponent.emostroop_ink_color_options);
+            if (inks.length > 0) values.ink_color_name = Array.from(new Set(inks));
+
+            const dev = (blockComponent.emostroop_response_device ?? 'inherit').toString().trim();
+            if (dev && dev !== 'inherit') values.response_device = dev;
+
+            // Only export response mappings when the block explicitly overrides to keyboard.
+            if (dev === 'keyboard') {
+                const choiceKeys = parseStringList(blockComponent.emostroop_choice_keys);
+                if (choiceKeys.length > 0) values.choice_keys = choiceKeys;
+            }
+
+            addWindow('stimulus_duration_ms', blockComponent.emostroop_stimulus_duration_min, blockComponent.emostroop_stimulus_duration_max);
+            addWindow('trial_duration_ms', blockComponent.emostroop_trial_duration_min, blockComponent.emostroop_trial_duration_max);
+            addWindow('iti_ms', blockComponent.emostroop_iti_min, blockComponent.emostroop_iti_max);
+        } else if (resolvedComponentType === 'simon-trial') {
             const parseStringList = (raw) => {
                 if (raw === undefined || raw === null) return [];
                 return raw
@@ -7457,7 +9215,70 @@ class JsonBuilder {
             addWindow('stimulus_duration_ms', blockComponent.simon_stimulus_duration_min, blockComponent.simon_stimulus_duration_max);
             addWindow('trial_duration_ms', blockComponent.simon_trial_duration_min, blockComponent.simon_trial_duration_max);
             addWindow('iti_ms', blockComponent.simon_iti_min, blockComponent.simon_iti_max);
-        } else if (componentType === 'pvt-trial') {
+        } else if (resolvedComponentType === 'task-switching-trial') {
+            const trialType = (blockComponent.ts_trial_type ?? '').toString().trim();
+            if (trialType) {
+                const tt = trialType.toLowerCase();
+                values.trial_type = (tt === 'single') ? 'single' : 'switch';
+            }
+
+            const singleTaskIndex = Number.parseInt(blockComponent.ts_single_task_index, 10);
+            if (Number.isFinite(singleTaskIndex)) {
+                values.single_task_index = (singleTaskIndex === 2) ? 2 : 1;
+            }
+
+            const cueType = (blockComponent.ts_cue_type ?? '').toString().trim();
+            if (cueType) {
+                const ct = cueType.toLowerCase();
+                values.cue_type = (ct === 'position' || ct === 'color' || ct === 'explicit') ? ct : 'explicit';
+            }
+
+            const t1Pos = (blockComponent.ts_task_1_position ?? '').toString().trim();
+            const t2Pos = (blockComponent.ts_task_2_position ?? '').toString().trim();
+            if (t1Pos) values.task_1_position = t1Pos;
+            if (t2Pos) values.task_2_position = t2Pos;
+
+            const t1Color = (blockComponent.ts_task_1_color_hex ?? '').toString().trim();
+            const t2Color = (blockComponent.ts_task_2_color_hex ?? '').toString().trim();
+            if (t1Color) values.task_1_color_hex = t1Color;
+            if (t2Color) values.task_2_color_hex = t2Color;
+
+            const t1Cue = (blockComponent.ts_task_1_cue_text ?? '').toString();
+            const t2Cue = (blockComponent.ts_task_2_cue_text ?? '').toString();
+            if (t1Cue.trim() !== '') values.task_1_cue_text = t1Cue;
+            if (t2Cue.trim() !== '') values.task_2_cue_text = t2Cue;
+
+            const cueFont = Number.parseInt(blockComponent.ts_cue_font_size_px, 10);
+            if (Number.isFinite(cueFont)) values.cue_font_size_px = Math.max(8, Math.min(96, cueFont));
+
+            const cueDur = Number.parseInt(blockComponent.ts_cue_duration_ms, 10);
+            if (Number.isFinite(cueDur)) values.cue_duration_ms = Math.max(0, cueDur);
+
+            const cueGap = Number.parseInt(blockComponent.ts_cue_gap_ms, 10);
+            if (Number.isFinite(cueGap)) values.cue_gap_ms = Math.max(0, cueGap);
+
+            const cueColor = (blockComponent.ts_cue_color_hex ?? '').toString().trim();
+            if (cueColor) values.cue_color_hex = cueColor;
+
+            const stimPos = (blockComponent.ts_stimulus_position ?? '').toString().trim();
+            if (stimPos) values.stimulus_position = stimPos;
+
+            const stimColor = (blockComponent.ts_stimulus_color_hex ?? '').toString().trim();
+            if (stimColor) values.stimulus_color_hex = stimColor;
+
+            if (blockComponent.ts_border_enabled !== undefined) {
+                values.border_enabled = !!blockComponent.ts_border_enabled;
+            }
+
+            const lk = (blockComponent.ts_left_key ?? '').toString().trim();
+            const rk = (blockComponent.ts_right_key ?? '').toString().trim();
+            if (lk) values.left_key = lk;
+            if (rk) values.right_key = rk;
+
+            addWindow('stimulus_duration_ms', blockComponent.ts_stimulus_duration_min, blockComponent.ts_stimulus_duration_max);
+            addWindow('trial_duration_ms', blockComponent.ts_trial_duration_min, blockComponent.ts_trial_duration_max);
+            addWindow('iti_ms', blockComponent.ts_iti_min, blockComponent.ts_iti_max);
+        } else if (resolvedComponentType === 'pvt-trial') {
             const dev = (blockComponent.pvt_response_device ?? 'inherit').toString().trim();
             if (dev && dev !== 'inherit') values.response_device = dev;
 
@@ -7470,6 +9291,86 @@ class JsonBuilder {
             addWindow('foreperiod_ms', blockComponent.pvt_foreperiod_min, blockComponent.pvt_foreperiod_max);
             addWindow('trial_duration_ms', blockComponent.pvt_trial_duration_min, blockComponent.pvt_trial_duration_max);
             addWindow('iti_ms', blockComponent.pvt_iti_min, blockComponent.pvt_iti_max);
+        } else if (resolvedComponentType === 'html-keyboard-response') {
+            const stim = (blockComponent.stimulus_html ?? blockComponent.stimulus ?? '').toString();
+            if (stim.trim() !== '') {
+                values.stimulus_html = stim;
+            }
+            const prompt = (blockComponent.prompt ?? '').toString();
+            if (prompt.trim() !== '') {
+                values.prompt = prompt;
+            }
+            const choices = (blockComponent.choices ?? '').toString().trim();
+            if (choices !== '') {
+                values.choices = choices;
+            }
+        } else if (resolvedComponentType === 'html-button-response') {
+            const stim = (blockComponent.stimulus_html ?? blockComponent.stimulus ?? '').toString();
+            if (stim.trim() !== '') {
+                values.stimulus_html = stim;
+            }
+            const prompt = (blockComponent.prompt ?? '').toString();
+            if (prompt.trim() !== '') {
+                values.prompt = prompt;
+            }
+            const btnChoices = (blockComponent.button_choices ?? blockComponent.choices ?? '').toString().trim();
+            if (btnChoices !== '') {
+                // Interpreter accepts either `choices` or `button_choices`.
+                values.choices = btnChoices;
+            }
+            const btnHtml = (blockComponent.button_html ?? '').toString();
+            if (btnHtml.trim() !== '') {
+                values.button_html = btnHtml;
+            }
+        } else if (resolvedComponentType === 'image-keyboard-response') {
+            const img = (blockComponent.stimulus_image ?? blockComponent.stimulus ?? '').toString().trim();
+            if (img !== '') {
+                values.stimulus_image = img;
+            }
+            const imgsRaw = (blockComponent.stimulus_images ?? '').toString();
+            if (imgsRaw.trim() !== '') {
+                values.stimulus_images = imgsRaw;
+            }
+            const prompt = (blockComponent.prompt ?? '').toString();
+            if (prompt.trim() !== '') {
+                values.prompt = prompt;
+            }
+            const choices = (blockComponent.choices ?? '').toString().trim();
+            if (choices !== '') {
+                values.choices = choices;
+            }
+        } else if (resolvedComponentType === 'continuous-image-presentation') {
+            // Continuous Image Presentation (CIP): export the per-block cip_* fields, including hidden URL lists.
+            // IMPORTANT: the Interpreter consumes these from block.parameter_values (not from top-level config defaults).
+            const safeInt = (raw, fallback = null, { min = null, max = null } = {}) => {
+                if (raw === undefined || raw === null || raw === '') return fallback;
+                const v = Number.parseInt(raw, 10);
+                if (!Number.isFinite(v)) return fallback;
+                const clampedMin = (min === null) ? v : Math.max(min, v);
+                return (max === null) ? clampedMin : Math.min(max, clampedMin);
+            };
+
+            const safeStr = (raw) => (raw === undefined || raw === null) ? '' : raw.toString();
+
+            // Always include these keys (even if empty) so JSON preview/export reflects true state.
+            values.cip_asset_code = safeStr(blockParams.cip_asset_code).trim();
+            values.cip_mask_type = safeStr(blockParams.cip_mask_type).trim() || 'noise_and_shuffle';
+            values.cip_mask_noise_amp = safeInt(blockParams.cip_mask_noise_amp, 24, { min: 0, max: 128 });
+            values.cip_mask_block_size = safeInt(blockParams.cip_mask_block_size, 12, { min: 1, max: 128 });
+            values.cip_repeat_mode = safeStr(blockParams.cip_repeat_mode).trim() || 'no_repeats';
+            values.cip_images_per_block = safeInt(blockParams.cip_images_per_block, 0, { min: 0, max: 50000 });
+
+            values.cip_image_duration_ms = safeInt(blockParams.cip_image_duration_ms, 750, { min: 0, max: 60000 });
+            values.cip_transition_duration_ms = safeInt(blockParams.cip_transition_duration_ms, 250, { min: 0, max: 60000 });
+            values.cip_transition_frames = safeInt(blockParams.cip_transition_frames, 8, { min: 2, max: 60 });
+            values.cip_choice_keys = safeStr(blockParams.cip_choice_keys).trim() || 'f,j';
+
+            values.cip_asset_filenames = safeStr(blockParams.cip_asset_filenames);
+
+            // Hidden/persisted lists (populated by the CIP asset modal)
+            values.cip_image_urls = safeStr(blockParams.cip_image_urls);
+            values.cip_mask_to_image_sprite_urls = safeStr(blockParams.cip_mask_to_image_sprite_urls);
+            values.cip_image_to_mask_sprite_urls = safeStr(blockParams.cip_image_to_mask_sprite_urls);
         }
 
         const out = {
@@ -7485,7 +9386,7 @@ class JsonBuilder {
         }
 
         // Continuous-mode transitions for generated trials (fixed per block)
-        if (this.experimentType === 'continuous') {
+        if (this.experimentType === 'continuous' && resolvedComponentType !== 'continuous-image-presentation') {
             const defaults = this.getDefaultTransitionSettings();
             const duration = (blockComponent.transition_duration !== undefined && blockComponent.transition_duration !== null && blockComponent.transition_duration !== '')
                 ? parseInt(blockComponent.transition_duration)
@@ -7501,7 +9402,7 @@ class JsonBuilder {
         }
 
         // Optional per-block response override
-        if (componentType && componentType.startsWith('rdm-')) {
+        if (resolvedComponentType && resolvedComponentType.startsWith('rdm-')) {
             const override = this.buildRDMResponseParametersOverride(blockComponent);
             if (override) {
                 out.response_parameters_override = override;
@@ -8261,6 +10162,13 @@ class JsonBuilder {
                 this.showValidationResult('warning', `No token found for code ${naming.code} (${String(taskType).toUpperCase()}). Creating a new token...`);
                 record = await this.createTokenStoreConfig(baseUrl);
                 this.setTokenStoreRecordForCodeAndTask(naming.code, taskType, record, { filename: naming.filename });
+            }
+
+            // Rewrite bare filenames like "img1.png" to previously uploaded Token Store URLs (if available).
+            try {
+                config = this.rewriteBareAssetFilenamesToTokenStoreUrls(config, { code: naming.code, taskType });
+            } catch (e) {
+                console.warn('Bare-filename asset rewrite failed (continuing):', e);
             }
 
             // Upload cached assets referenced by asset://... and rewrite config to use unguessable Worker URLs.

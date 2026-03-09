@@ -94,8 +94,12 @@ class ComponentPreview {
             // Instructions component - show the actual stimulus text
             const stimulusText = componentData.stimulus || 'No instructions text provided';
             this.showInstructionsPreview(stimulusText, componentData);
+        } else if (componentType === 'html-button-response') {
+            this.showHtmlButtonResponsePreview(componentData);
         } else if (componentType === 'image-keyboard-response') {
             this.showImageKeyboardResponsePreview(componentData);
+        } else if (componentType === 'continuous-image-presentation') {
+            this.showContinuousImagePresentationPreview(componentData);
         } else if (componentType === 'visual-angle-calibration') {
             this.showVisualAngleCalibrationPreview(componentData);
         } else if (componentType === 'reward-settings') {
@@ -106,10 +110,12 @@ class ComponentPreview {
             this.showGaborPreview(componentData);
         } else if (componentType === 'sart-trial') {
             this.showSartPreview(componentData);
-        } else if (componentType === 'stroop-trial') {
+        } else if (componentType === 'stroop-trial' || componentType === 'emotional-stroop-trial') {
             this.showStroopPreview(componentData);
         } else if (componentType === 'simon-trial') {
             this.showSimonPreview(componentData);
+        } else if (componentType === 'task-switching-trial') {
+            this.showTaskSwitchingPreview(componentData);
         } else if (componentType === 'pvt-trial') {
             this.showPvtPreview(componentData);
         } else if (componentType === 'nback-trial-sequence') {
@@ -326,7 +332,7 @@ class ComponentPreview {
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;')
-                .replace(/\"/g, '&quot;')
+                .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#39;');
         };
 
@@ -594,6 +600,98 @@ class ComponentPreview {
                     sampled._previewContextNote = `Block sample → ${baseType} (length ${length}, ${sampling})`;
                     sampled._blockPreviewSource = componentData._blockPreviewSource;
                     this.showSimonPreview(sampled);
+                };
+            }
+        }
+
+        modal.show();
+    }
+
+    showTaskSwitchingPreview(componentData) {
+        const previewModal = this.getPreviewModal();
+        if (!previewModal) return;
+        const { modalEl, modal } = previewModal;
+
+        const modalBody = modalEl.querySelector('.modal-body');
+        if (!modalBody) return;
+
+        const escape = (s) => {
+            return (s ?? '')
+                .toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        };
+
+        const stim1 = (componentData?.stimulus_task_1 ?? '').toString().trim();
+        const stim2 = (componentData?.stimulus_task_2 ?? '').toString().trim();
+        const fallbackStimulus = (componentData?.stimulus ?? 'A').toString();
+        const stimulus = (stim1 && stim2) ? `${stim1} ${stim2}` : fallbackStimulus;
+        const position = (componentData?.stimulus_position ?? 'top').toString();
+        const borderEnabled = !!componentData?.border_enabled;
+        const leftKey = (componentData?.left_key ?? 'f').toString();
+        const rightKey = (componentData?.right_key ?? 'j').toString();
+        const taskIndex = Number.isFinite(Number(componentData?.task_index)) ? Number(componentData.task_index) : 1;
+
+        const noteText = (componentData?._previewContextNote ?? '').toString();
+        const hasBlockSource = !!componentData?._blockPreviewSource;
+
+        const posCss = (() => {
+            const m = 18;
+            if (position === 'left') return `left:${m}px; top:50%; transform:translateY(-50%);`;
+            if (position === 'right') return `right:${m}px; top:50%; transform:translateY(-50%);`;
+            if (position === 'bottom') return `left:50%; bottom:${m}px; transform:translateX(-50%);`;
+            return `left:50%; top:${m}px; transform:translateX(-50%);`;
+        })();
+
+        modalBody.innerHTML = `
+            <div class="p-3">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h5 class="mb-1">Task Switching Preview</h5>
+                        <div class="small text-muted">Lightweight renderer</div>
+                        ${noteText ? `<div class="small text-muted">${escape(noteText)}</div>` : ''}
+                    </div>
+                    <div class="text-end small text-muted">
+                        <div><strong>Task:</strong> ${escape(taskIndex)}</div>
+                        <div><strong>Position:</strong> ${escape(position)}</div>
+                    </div>
+                </div>
+
+                <div class="border rounded mt-3 p-4 position-relative" style="background:#111; color:#fff; min-height: 260px;">
+                    <div class="position-absolute" style="${posCss}">
+                        <div style="min-width:72px; min-height:72px; display:flex; align-items:center; justify-content:center; font-size:56px; font-weight:700; ${borderEnabled ? 'border:2px solid rgba(255,255,255,0.35); border-radius:12px; padding:8px 12px;' : ''}">
+                            ${escape(stimulus)}
+                        </div>
+                    </div>
+
+                    <div class="small text-muted position-absolute" style="left:18px; bottom:18px;">
+                        Keys: <span class="badge bg-secondary">${escape(leftKey)}</span> / <span class="badge bg-secondary">${escape(rightKey)}</span>
+                    </div>
+                </div>
+
+                <div class="mt-2 small text-muted">Static preview (runtime determines correctness based on configured task rule).</div>
+
+                <div class="mt-3 small text-muted d-flex justify-content-between align-items-center">
+                    <div></div>
+                    ${hasBlockSource ? `<button type="button" class="btn btn-sm btn-outline-secondary" id="taskSwitchingResampleBtn"><i class="fas fa-dice"></i> Resample</button>` : ''}
+                </div>
+            </div>
+        `;
+
+        if (hasBlockSource) {
+            const btn = modalBody.querySelector('#taskSwitchingResampleBtn');
+            if (btn) {
+                btn.onclick = () => {
+                    const sampled = this.sampleComponentFromBlock(componentData._blockPreviewSource);
+                    const baseType = componentData._blockPreviewSource.block_component_type || componentData._blockPreviewSource.component_type || 'task-switching-trial';
+                    const length = componentData._blockPreviewSource.block_length ?? componentData._blockPreviewSource.length ?? 0;
+                    const sampling = componentData._blockPreviewSource.sampling_mode || 'per-trial';
+                    sampled._previewContextNote = `Block sample → ${baseType} (length ${length}, ${sampling})`;
+                    sampled._blockPreviewSource = componentData._blockPreviewSource;
+                    this.showTaskSwitchingPreview(sampled);
                 };
             }
         }
@@ -880,9 +978,20 @@ class ComponentPreview {
     }
 
     resolveMaybeAssetUrl(raw) {
-        const s = (raw ?? '').toString();
+        const s = (raw ?? '').toString().trim();
+        if (!s) return '';
+
+        // Already-resolvable URL-like strings.
+        if (/^(https?:|data:|blob:)/i.test(s)) return s;
+
+        // Local cache placeholder: asset://<componentId>/<field>
         const m = /^asset:\/\/([^/]+)\/([^/]+)$/.exec(s);
-        if (!m) return s;
+        if (!m) {
+            // Token Store uploaded assets: allow referring to images by filename
+            // after using the Builder's "Upload Assets" (folder) feature.
+            const tokenUrl = this.resolveTokenStoreAssetUrlByFilename(s);
+            return tokenUrl || s;
+        }
 
         try {
             const cid = m[1];
@@ -893,6 +1002,47 @@ class ComponentPreview {
             // ignore
         }
 
+        return '';
+    }
+
+    resolveTokenStoreAssetUrlByFilename(name) {
+        try {
+            const raw = (name ?? '').toString().trim();
+            if (!raw) return '';
+            if (/^(https?:|data:|blob:|asset:)/i.test(raw)) return '';
+
+            // Folder uploads store by File.name (basename). Accept paths by taking the basename.
+            const filename = raw.split(/[\\/]/).pop();
+            if (!filename) return '';
+
+            const code = (localStorage.getItem('cogflow_last_export_code') || localStorage.getItem('psychjson_last_export_code') || '').toString().trim();
+            if (!code) return '';
+
+            const taskTypeRaw = (document.getElementById('taskType')?.value || '').toString().trim().toLowerCase();
+            const taskType = taskTypeRaw || 'task';
+
+            const key = 'cogflow_token_store_asset_index_v1';
+            const legacyKey = 'psychjson_token_store_asset_index_v1';
+            const rawIndex = (localStorage.getItem(key) || localStorage.getItem(legacyKey) || '').toString();
+            const index = rawIndex ? JSON.parse(rawIndex) : {};
+            const byCode = (index && typeof index === 'object') ? index[code] : null;
+            const byTask = (byCode && typeof byCode === 'object' && byCode.by_task && typeof byCode.by_task === 'object') ? byCode.by_task : null;
+            if (!byTask) return '';
+
+            // Prefer current task type.
+            const entry = byTask?.[taskType]?.files?.[filename];
+            const url = entry?.url ? String(entry.url).trim() : '';
+            if (url) return url;
+
+            // Fallback: find the filename under any task bucket for this code.
+            for (const t of Object.keys(byTask)) {
+                const e = byTask?.[t]?.files?.[filename];
+                const u = e?.url ? String(e.url).trim() : '';
+                if (u) return u;
+            }
+        } catch {
+            // ignore
+        }
         return '';
     }
 
@@ -1546,6 +1696,8 @@ class ComponentPreview {
 
         const isHex = (s) => typeof s === 'string' && /^#([0-9a-fA-F]{6})$/.test(s.trim());
 
+        const isEmotional = (componentData?.type === 'emotional-stroop-trial');
+
         const fallbackStimuli = (() => {
             try {
                 const list = window.jsonBuilderInstance?.getCurrentStroopStimuliFromUI?.();
@@ -1591,6 +1743,7 @@ class ComponentPreview {
         // current experiment-wide Stroop defaults in the Builder UI.
         const uiDefaults = (() => {
             try {
+                if (isEmotional) return window.jsonBuilderInstance?.getCurrentEmotionalStroopDefaults?.() || null;
                 return window.jsonBuilderInstance?.getCurrentStroopDefaults?.() || null;
             } catch {
                 return null;
@@ -1603,7 +1756,9 @@ class ComponentPreview {
                 ? uiDefaults.stroop_settings
                 : {};
 
-        const responseModeRaw = resolveInherit(componentData?.response_mode, defaults?.response_mode || uiDefaults?.response_mode || 'color_naming');
+        const responseModeRaw = isEmotional
+            ? 'color_naming'
+            : resolveInherit(componentData?.response_mode, defaults?.response_mode || uiDefaults?.response_mode || 'color_naming');
         const responseDevice = resolveInherit(componentData?.response_device, defaults?.response_device || uiDefaults?.response_device || 'keyboard');
         // Mouse mode always behaves like color naming (click the color); don't show keyboard-only congruency mapping.
         const responseMode = (responseDevice === 'mouse') ? 'color_naming' : responseModeRaw;
@@ -1645,7 +1800,7 @@ class ComponentPreview {
                 `;
             }
 
-            if (responseMode === 'congruency') {
+            if (!isEmotional && responseMode === 'congruency') {
                 return `
                     <div class="small text-muted">
                         <div><b>Keyboard:</b> <span class="badge bg-secondary">${escape(congruentKey)}</span> = Congruent</div>
@@ -1681,14 +1836,14 @@ class ComponentPreview {
             <div class="p-3">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
-                        <h5 class="mb-1">Stroop Preview</h5>
+                        <h5 class="mb-1">${isEmotional ? 'Emotional Stroop' : 'Stroop'} Preview</h5>
                         <div class="small text-muted">Lightweight renderer</div>
                         ${noteText ? `<div class="small text-muted">${escape(noteText)}</div>` : ''}
                     </div>
                     <div class="text-end small text-muted">
                         <div><strong>Word:</strong> ${escape(word)}</div>
                         <div><strong>Ink:</strong> ${escape(inkName)} <span style="display:inline-block; width:12px; height:12px; border-radius:3px; background:${escape(inkHex)}; border:1px solid rgba(255,255,255,0.18);"></span></div>
-                        <div><strong>Congruency:</strong> ${escape(congruencyLabel)}</div>
+                        ${isEmotional ? '' : `<div><strong>Congruency:</strong> ${escape(congruencyLabel)}</div>`}
                         <div><strong>Response:</strong> ${escape(responseMode)} (${escape(responseDevice)})</div>
                     </div>
                 </div>
@@ -2136,6 +2291,11 @@ class ComponentPreview {
             return;
         }
 
+        if (baseType === 'continuous-image-presentation') {
+            this.showContinuousImagePresentationBlockPreview(componentData);
+            return;
+        }
+
         // Render a randomly sampled parameter set from the block window so users can
         // quickly sanity-check the block configuration.
         const sampled = this.sampleComponentFromBlock(componentData);
@@ -2165,8 +2325,18 @@ class ComponentPreview {
             return;
         }
 
+        if (baseType === 'emotional-stroop-trial') {
+            this.showStroopPreview(sampled);
+            return;
+        }
+
         if (baseType === 'simon-trial') {
             this.showSimonPreview(sampled);
+            return;
+        }
+
+        if (baseType === 'task-switching-trial') {
+            this.showTaskSwitchingPreview(sampled);
             return;
         }
 
@@ -2175,7 +2345,656 @@ class ComponentPreview {
             return;
         }
 
+        if (baseType === 'html-keyboard-response') {
+            const stimulusText = (sampled.stimulus ?? sampled.stimulus_html ?? '').toString() || 'No HTML stimulus provided';
+            this.showInstructionsPreview(stimulusText, sampled);
+            return;
+        }
+
+        if (baseType === 'html-button-response') {
+            this.showHtmlButtonResponsePreview(sampled);
+            return;
+        }
+
+        if (baseType === 'image-keyboard-response') {
+            this.showImageKeyboardResponsePreview(sampled);
+            return;
+        }
+
         this.showRDMPreview(sampled);
+    }
+
+    stopContinuousImagePresentationPreview() {
+        const timers = Array.isArray(this._cipPreviewTimeouts) ? this._cipPreviewTimeouts : [];
+        for (const id of timers) {
+            try {
+                clearTimeout(id);
+            } catch {
+                // ignore
+            }
+        }
+        this._cipPreviewTimeouts = [];
+
+        // Cancel any in-flight sprite animations (RAF loops).
+        this._cipPreviewPlayToken = (Number(this._cipPreviewPlayToken) || 0) + 1;
+        if (Number.isFinite(Number(this._cipPreviewRafId))) {
+            try {
+                cancelAnimationFrame(this._cipPreviewRafId);
+            } catch {
+                // ignore
+            }
+        }
+        this._cipPreviewRafId = null;
+
+        // Reset visibility if the modal is currently open.
+        const imageLayer = document.getElementById('cipPreviewModalImageLayer');
+        const maskLayer = document.getElementById('cipPreviewModalMaskLayer');
+        const spriteLayer = document.getElementById('cipPreviewModalSpriteLayer');
+        const spriteCanvas = document.getElementById('cipPreviewModalSpriteCanvas');
+        if (imageLayer) imageLayer.style.opacity = '0';
+        if (maskLayer) maskLayer.style.opacity = '1';
+        if (spriteLayer) spriteLayer.style.opacity = '0';
+        if (spriteCanvas) {
+            spriteCanvas.style.display = 'none';
+            const ctx = spriteCanvas.getContext && spriteCanvas.getContext('2d');
+            if (ctx) {
+                ctx.clearRect(0, 0, spriteCanvas.width, spriteCanvas.height);
+            }
+        }
+    }
+
+    renderCipPreviewMaskInto(maskLayer, canvas, maskType) {
+        if (!maskLayer) return;
+
+        const t0 = (maskType ?? '').toString().trim();
+        const t = t0.toLowerCase();
+        const normalized =
+            (t === 'blank') ? 'blank'
+            : (t === 'noise' || t === 'pure_noise' || t === 'noise_and_shuffle' || t === 'advanced_transform') ? 'noise'
+            : (t === 'sprite') ? 'sprite'
+            : 'noise';
+
+        if (canvas && normalized === 'noise') {
+            canvas.style.display = 'block';
+            const ctx = canvas.getContext && canvas.getContext('2d');
+            if (ctx) {
+                const w = canvas.width || 320;
+                const h = canvas.height || 200;
+                const img = ctx.createImageData(w, h);
+                for (let i = 0; i < img.data.length; i += 4) {
+                    const v = Math.floor(Math.random() * 256);
+                    img.data[i] = v;
+                    img.data[i + 1] = v;
+                    img.data[i + 2] = v;
+                    img.data[i + 3] = 255;
+                }
+                ctx.putImageData(img, 0, 0);
+            }
+
+            maskLayer.style.backgroundImage = 'none';
+            maskLayer.style.backgroundColor = '#111';
+            return;
+        }
+
+        if (canvas) {
+            canvas.style.display = 'none';
+        }
+
+        if (normalized === 'blank') {
+            maskLayer.style.backgroundImage = 'none';
+            maskLayer.style.backgroundColor = '#000';
+            return;
+        }
+
+        // sprite (placeholder): simple patterned mask
+        maskLayer.style.backgroundColor = '#111';
+        maskLayer.style.backgroundSize = '20px 20px';
+        maskLayer.style.backgroundImage = 'repeating-linear-gradient(45deg, rgba(255,255,255,0.12), rgba(255,255,255,0.12) 10px, rgba(255,255,255,0.02) 10px, rgba(255,255,255,0.02) 20px)';
+    }
+
+    playContinuousImagePresentationPreview({
+        maskType,
+        transitionMs,
+        frames,
+        imageMs,
+        maskToImageSpriteUrl = '',
+        imageToMaskSpriteUrl = '',
+        imageUrl = '',
+        sequenceItems = null
+    }) {
+        this.stopContinuousImagePresentationPreview();
+
+        const imageLayer = document.getElementById('cipPreviewModalImageLayer');
+        const maskLayer = document.getElementById('cipPreviewModalMaskLayer');
+        const spriteLayer = document.getElementById('cipPreviewModalSpriteLayer');
+        const canvas = document.getElementById('cipPreviewModalMaskCanvas');
+        const spriteCanvas = document.getElementById('cipPreviewModalSpriteCanvas');
+        if (!imageLayer || !maskLayer) return;
+
+        if (imageUrl) {
+            const cssUrl = (imageUrl ?? '').toString().trim().replace(/"/g, '%22');
+            imageLayer.style.backgroundImage = `url("${cssUrl}")`;
+            imageLayer.style.backgroundSize = 'contain';
+            imageLayer.style.backgroundPosition = 'center';
+            imageLayer.style.backgroundRepeat = 'no-repeat';
+        } else {
+            // Revert to the placeholder background defined in the HTML.
+            imageLayer.style.backgroundImage = '';
+            imageLayer.style.backgroundSize = '';
+            imageLayer.style.backgroundPosition = '';
+            imageLayer.style.backgroundRepeat = '';
+        }
+
+        const f = Math.max(2, Number.parseInt(frames ?? 8, 10) || 8);
+        const tMs = Math.max(0, Number.parseInt(transitionMs ?? 250, 10) || 250);
+        const iMs = Math.max(0, Number.parseInt(imageMs ?? 750, 10) || 750);
+        const stepMs = Math.max(1, Math.floor(tMs / f));
+
+        const items = Array.isArray(sequenceItems) && sequenceItems.length > 0
+            ? sequenceItems
+            : null;
+
+        // If sprite URLs are provided, we should use them regardless of maskType.
+        // `maskType` controls how the shared mask is *generated*, not whether we have sprites.
+        const firstM2I = (items ? (items[0]?.maskToImageSpriteUrl ?? '') : maskToImageSpriteUrl).toString().trim();
+        const firstI2M = (items ? (items[0]?.imageToMaskSpriteUrl ?? '') : imageToMaskSpriteUrl).toString().trim();
+        const hasSprites = firstM2I !== '' && firstI2M !== '' && !!spriteCanvas;
+
+        if (hasSprites) {
+            // Sprite-sheet preview (canvas blit): deterministic per-frame drawing.
+            if (canvas) canvas.style.display = 'none';
+            if (spriteLayer) spriteLayer.style.opacity = '0';
+
+            // Keep the mask label visible without covering the sprite.
+            maskLayer.style.opacity = '1';
+            maskLayer.style.backgroundImage = 'none';
+            maskLayer.style.backgroundColor = 'transparent';
+            imageLayer.style.opacity = '0';
+
+            spriteCanvas.style.display = 'block';
+            const spriteCtx = spriteCanvas.getContext && spriteCanvas.getContext('2d');
+            if (!spriteCtx) return;
+
+            const token = (Number(this._cipPreviewPlayToken) || 0) + 1;
+            this._cipPreviewPlayToken = token;
+
+            const ensureCanvasSize = () => {
+                const dpr = window.devicePixelRatio || 1;
+                const w = Math.max(1, Math.floor((spriteCanvas.clientWidth || spriteCanvas.width || 360) * dpr));
+                const h = Math.max(1, Math.floor((spriteCanvas.clientHeight || spriteCanvas.height || 220) * dpr));
+                if (spriteCanvas.width !== w || spriteCanvas.height !== h) {
+                    spriteCanvas.width = w;
+                    spriteCanvas.height = h;
+                }
+            };
+
+            const loadImage = (url) => {
+                const u = (url ?? '').toString().trim();
+                if (!u) return Promise.resolve(null);
+                const cache = (this._cipPreviewAssetCache && this._cipPreviewAssetCache instanceof Map)
+                    ? this._cipPreviewAssetCache
+                    : null;
+                if (cache && cache.has(u)) return Promise.resolve(cache.get(u));
+
+                return new Promise((resolve) => {
+                    try {
+                        const img = new Image();
+                        img.decoding = 'async';
+                        img.onload = () => {
+                            try {
+                                if (cache) cache.set(u, img);
+                            } catch {
+                                // ignore
+                            }
+                            resolve(img);
+                        };
+                        img.onerror = () => resolve(null);
+                        img.src = u;
+                    } catch {
+                        resolve(null);
+                    }
+                });
+            };
+
+            const drawFrame = (img, frameIndex) => {
+                if (!img) return;
+                ensureCanvasSize();
+                const fw = Math.floor(img.width / f);
+                const fh = img.height;
+                const idx = Math.max(0, Math.min(f - 1, frameIndex | 0));
+                const sx = idx * fw;
+                spriteCtx.clearRect(0, 0, spriteCanvas.width, spriteCanvas.height);
+                try {
+                    // Draw with aspect-ratio preserved (like CSS background-size: contain)
+                    const cw = spriteCanvas.width;
+                    const ch = spriteCanvas.height;
+                    const scale = Math.min(cw / Math.max(1, fw), ch / Math.max(1, fh));
+                    const dw = Math.max(1, Math.floor(fw * scale));
+                    const dh = Math.max(1, Math.floor(fh * scale));
+                    const dx = Math.floor((cw - dw) / 2);
+                    const dy = Math.floor((ch - dh) / 2);
+                    spriteCtx.drawImage(img, sx, 0, fw, fh, dx, dy, dw, dh);
+                } catch {
+                    // ignore
+                }
+            };
+
+            const playSprite = async (url, durationMs) => {
+                const img = await loadImage(url);
+                if (this._cipPreviewPlayToken !== token) return;
+                if (!img) return;
+
+                const dur = Math.max(0, Number.parseInt(durationMs ?? 0, 10) || 0);
+                if (dur <= 0) {
+                    drawFrame(img, f - 1);
+                    return;
+                }
+
+                const start = performance.now();
+                return new Promise((resolve) => {
+                    const tick = () => {
+                        if (this._cipPreviewPlayToken !== token) return resolve();
+                        const now = performance.now();
+                        const elapsed = now - start;
+                        const p = Math.max(0, Math.min(1, elapsed / dur));
+                        const idx = Math.min(f - 1, Math.floor(p * f));
+                        drawFrame(img, idx);
+                        if (elapsed >= dur) return resolve();
+                        this._cipPreviewRafId = requestAnimationFrame(tick);
+                    };
+                    this._cipPreviewRafId = requestAnimationFrame(tick);
+                });
+            };
+
+            const setImageUrl = (url) => {
+                const u = (url ?? '').toString().trim();
+                if (!u) return;
+                const cssUrl = u.replace(/"/g, '%22');
+                imageLayer.style.backgroundImage = `url("${cssUrl}")`;
+                imageLayer.style.backgroundSize = 'contain';
+                imageLayer.style.backgroundPosition = 'center';
+                imageLayer.style.backgroundRepeat = 'no-repeat';
+            };
+
+            const seqItems = items ? items : [{ imageUrl, maskToImageSpriteUrl, imageToMaskSpriteUrl }];
+            const maskHoldMs = Math.max(0, stepMs);
+
+            (async () => {
+                for (const it of seqItems) {
+                    if (this._cipPreviewPlayToken !== token) return;
+
+                    const m2i = (it?.maskToImageSpriteUrl ?? maskToImageSpriteUrl).toString().trim();
+                    const i2m = (it?.imageToMaskSpriteUrl ?? imageToMaskSpriteUrl).toString().trim();
+                    const imgUrl = (it?.imageUrl ?? imageUrl).toString().trim();
+
+                    // Mask hold: show frame 0 of mask->image sprite (it starts at the shared mask).
+                    imageLayer.style.opacity = '0';
+                    maskLayer.style.opacity = '1';
+                    spriteCanvas.style.display = 'block';
+                    const m2iImg = await loadImage(m2i);
+                    if (this._cipPreviewPlayToken !== token) return;
+                    if (m2iImg) drawFrame(m2iImg, 0);
+                    if (maskHoldMs > 0) await new Promise(r => setTimeout(r, maskHoldMs));
+
+                    // mask -> image transition
+                    await playSprite(m2i, tMs);
+                    if (this._cipPreviewPlayToken !== token) return;
+
+                    // show image
+                    setImageUrl(imgUrl);
+                    spriteCanvas.style.display = 'none';
+                    imageLayer.style.opacity = '1';
+                    maskLayer.style.opacity = '0';
+                    if (iMs > 0) await new Promise(r => setTimeout(r, iMs));
+                    if (this._cipPreviewPlayToken !== token) return;
+
+                    // image -> mask transition
+                    imageLayer.style.opacity = '0';
+                    maskLayer.style.opacity = '1';
+                    spriteCanvas.style.display = 'block';
+                    await playSprite(i2m, tMs);
+                    if (this._cipPreviewPlayToken !== token) return;
+                }
+            })();
+
+            return;
+        }
+
+        // Fallback: placeholder (mask pattern/noise + opacity stepping)
+        this.renderCipPreviewMaskInto(maskLayer, canvas, maskType);
+        if (spriteLayer) spriteLayer.style.opacity = '0';
+
+        const setMix = (alphaImage) => {
+            const a = Math.max(0, Math.min(1, alphaImage));
+            imageLayer.style.opacity = `${a}`;
+            maskLayer.style.opacity = `${1 - a}`;
+        };
+
+        // Start fully masked
+        setMix(0);
+
+        const timeouts = [];
+
+        // mask -> image
+        for (let i = 0; i <= f; i += 1) {
+            const t = i * stepMs;
+            timeouts.push(setTimeout(() => setMix(i / f), t));
+        }
+
+        const afterTransition = f * stepMs;
+        // hold image
+        timeouts.push(setTimeout(() => setMix(1), afterTransition));
+        // image -> mask
+        const afterHold = afterTransition + iMs;
+        for (let i = 0; i <= f; i += 1) {
+            const t = afterHold + i * stepMs;
+            timeouts.push(setTimeout(() => setMix(1 - (i / f)), t));
+        }
+
+        this._cipPreviewTimeouts = timeouts;
+    }
+
+    showContinuousImagePresentationBlockPreview(blockData) {
+        // Normalize: some exports store block fields under parameter_values.
+        const src = (blockData && typeof blockData === 'object' && blockData.parameter_values && typeof blockData.parameter_values === 'object')
+            ? { ...blockData, ...blockData.parameter_values }
+            : (blockData || {});
+
+        const derived = {
+            type: 'continuous-image-presentation',
+            name: (src?.name ?? 'CIP Block Preview').toString(),
+            preview_mode: 'block',
+            mask_type: (src?.cip_mask_type ?? 'sprite').toString(),
+            image_duration_ms: src?.cip_image_duration_ms,
+            transition_duration_ms: src?.cip_transition_duration_ms,
+            transition_frames: src?.cip_transition_frames,
+            choices: (src?.cip_choice_keys ?? '').toString(),
+
+            images_per_block: src?.cip_images_per_block,
+
+            // Optional: generated assets for preview
+            image_urls: (src?.cip_image_urls ?? '').toString(),
+            mask_to_image_sprite_urls: (src?.cip_mask_to_image_sprite_urls ?? '').toString(),
+            image_to_mask_sprite_urls: (src?.cip_image_to_mask_sprite_urls ?? '').toString()
+        };
+
+        this.showContinuousImagePresentationPreview(derived, { contextNote: 'Block preview (uses CIP block timings)' });
+    }
+
+    showContinuousImagePresentationPreview(componentData, { contextNote = '' } = {}) {
+        const previewModal = this.getPreviewModal();
+        if (!previewModal) return;
+        const { modalEl, modal } = previewModal;
+
+        const modalBody = modalEl.querySelector('.modal-body');
+        if (!modalBody) return;
+
+        const escape = (s) => {
+            return (s ?? '')
+                .toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        };
+
+        const maskType = (componentData?.mask_type ?? componentData?.cip_mask_type ?? 'sprite').toString();
+        const imageMs = componentData?.image_duration_ms ?? componentData?.cip_image_duration_ms ?? 750;
+        const transitionMs = componentData?.transition_duration_ms ?? componentData?.cip_transition_duration_ms ?? 250;
+        const frames = componentData?.transition_frames ?? componentData?.cip_transition_frames ?? 8;
+        const keys = (componentData?.choices ?? componentData?.cip_choice_keys ?? '').toString();
+
+        const parseUrlList = (raw) => {
+            if (raw === undefined || raw === null) return [];
+            return raw
+                .toString()
+                .split(/[\n,]+/)
+                .map(s => s.trim())
+                .filter(Boolean);
+        };
+
+        const imageUrls = parseUrlList(componentData?.image_urls ?? componentData?.cip_image_urls);
+        const maskToImageSpriteUrls = parseUrlList(componentData?.mask_to_image_sprite_urls ?? componentData?.cip_mask_to_image_sprite_urls);
+        const imageToMaskSpriteUrls = parseUrlList(componentData?.image_to_mask_sprite_urls ?? componentData?.cip_image_to_mask_sprite_urls);
+
+        const sampleTransitionSet = () => {
+            const hasPaired =
+                imageUrls.length > 0 &&
+                maskToImageSpriteUrls.length === imageUrls.length &&
+                imageToMaskSpriteUrls.length === imageUrls.length;
+
+            if (hasPaired) {
+                const idx = Math.floor(Math.random() * imageUrls.length);
+                return {
+                    imageUrl: imageUrls[idx] || '',
+                    maskToImageSpriteUrl: maskToImageSpriteUrls[idx] || '',
+                    imageToMaskSpriteUrl: imageToMaskSpriteUrls[idx] || ''
+                };
+            }
+
+            const pick = (arr) => {
+                if (!Array.isArray(arr) || arr.length === 0) return '';
+                const idx = Math.floor(Math.random() * arr.length);
+                return arr[idx] || '';
+            };
+
+            return {
+                imageUrl: pick(imageUrls),
+                maskToImageSpriteUrl: pick(maskToImageSpriteUrls),
+                imageToMaskSpriteUrl: pick(imageToMaskSpriteUrls)
+            };
+        };
+
+        const sampleSequence = () => {
+            const mode = (componentData?.preview_mode ?? '').toString();
+            if (mode !== 'block') return [];
+
+            const hasPaired =
+                imageUrls.length > 0 &&
+                maskToImageSpriteUrls.length === imageUrls.length &&
+                imageToMaskSpriteUrls.length === imageUrls.length;
+
+            if (!hasPaired) return [];
+
+            const idxs = imageUrls.map((_, i) => i);
+            // Fisher-Yates shuffle
+            for (let i = idxs.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                const tmp = idxs[i];
+                idxs[i] = idxs[j];
+                idxs[j] = tmp;
+            }
+
+            const nRaw = Number.parseInt(componentData?.images_per_block ?? componentData?.cip_images_per_block ?? 0, 10);
+            const n = (Number.isFinite(nRaw) && nRaw > 0) ? Math.min(nRaw, idxs.length) : idxs.length;
+            return idxs.slice(0, Math.max(1, n)).map((idx) => ({
+                imageUrl: imageUrls[idx] || '',
+                maskToImageSpriteUrl: maskToImageSpriteUrls[idx] || '',
+                imageToMaskSpriteUrl: imageToMaskSpriteUrls[idx] || ''
+            }));
+        };
+
+        const initialSample = sampleTransitionSet();
+        const initialSequence = sampleSequence();
+
+        const note = (componentData?._previewContextNote ?? contextNote ?? '').toString();
+
+        modalBody.innerHTML = `
+            <div class="p-3">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <div class="h5 mb-0">Continuous Image Presentation (CIP)</div>
+                        ${note ? `<div class="small text-muted">${escape(note)}</div>` : ''}
+                    </div>
+                    <div class="small text-muted text-end">
+                        Mask: <strong>${escape(maskType)}</strong><br/>
+                        Transition: ${escape(transitionMs)} ms (${escape(frames)} frames)<br/>
+                        Image: ${escape(imageMs)} ms
+                        ${keys ? `<br/>Keys: <span class="badge bg-secondary">${escape(keys)}</span>` : ''}
+                    </div>
+                </div>
+
+                <div class="position-relative border rounded overflow-hidden" style="height:220px; background:#111;">
+                    <div id="cipPreviewModalSpriteLayer" style="position:absolute; inset:0; opacity:0; background-color:#111;"></div>
+                    <canvas id="cipPreviewModalSpriteCanvas" width="360" height="220" style="position:absolute; inset:0; width:100%; height:100%; display:none;"></canvas>
+                    <div id="cipPreviewModalImageLayer" style="position:absolute; inset:0; opacity:0; background-size: 24px 24px; background-image: linear-gradient(45deg, rgba(255,255,255,0.10) 25%, transparent 25%), linear-gradient(-45deg, rgba(255,255,255,0.10) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.10) 75%), linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.10) 75%); background-position: 0 0, 0 12px, 12px -12px, -12px 0px;">
+                        <div style="position:absolute; inset:auto 12px 12px 12px; color:#fff; font-size:12px; opacity:0.85;">IMAGE</div>
+                    </div>
+                    <div id="cipPreviewModalMaskLayer" style="position:absolute; inset:0; opacity:1; background-size: 20px 20px; background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.12), rgba(255,255,255,0.12) 10px, rgba(255,255,255,0.02) 10px, rgba(255,255,255,0.02) 20px);">
+                        <canvas id="cipPreviewModalMaskCanvas" width="360" height="220" style="position:absolute; inset:0; width:100%; height:100%; display:none;"></canvas>
+                        <div style="position:absolute; inset:auto 12px 12px 12px; color:#fff; font-size:12px; opacity:0.85;">MASK</div>
+                    </div>
+                    <div id="cipPreviewLoading" style="position:absolute; inset:0; display:none; align-items:center; justify-content:center; text-align:center; padding:12px; background: rgba(0,0,0,0.55); color:#fff; font-size:13px; z-index:5;">
+                        Loading preview assets…
+                    </div>
+                </div>
+
+                <div class="small text-muted mt-2">Preview plays one mask→image→mask cycle using the current timings (uses sprite sheets when available; otherwise placeholder visuals).</div>
+                <div class="d-flex justify-content-end mt-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="cipPreviewResampleBtn">Resample</button>
+                </div>
+            </div>
+        `;
+
+        // Stop any prior timers, and ensure we stop when the modal closes.
+        this.stopContinuousImagePresentationPreview();
+        try {
+            modalEl.addEventListener('hidden.bs.modal', () => this.stopContinuousImagePresentationPreview(), { once: true });
+        } catch {
+            // ignore
+        }
+
+        modal.show();
+
+        const loadingEl = document.getElementById('cipPreviewLoading');
+        const showLoading = (msg) => {
+            if (loadingEl) {
+                loadingEl.textContent = (msg ?? 'Loading preview assets…').toString();
+                loadingEl.style.display = 'flex';
+            }
+        };
+        const hideLoading = () => {
+            if (loadingEl) loadingEl.style.display = 'none';
+        };
+
+        const preloadImage = (url) => {
+            const u = (url ?? '').toString().trim();
+            if (!u) return Promise.resolve({ ok: true, url: '' });
+            return new Promise((resolve) => {
+                try {
+                    if (!this._cipPreviewAssetCache || !(this._cipPreviewAssetCache instanceof Map)) {
+                        this._cipPreviewAssetCache = new Map();
+                    }
+                    const img = new Image();
+                    img.decoding = 'async';
+                    img.loading = 'eager';
+                    img.onload = () => {
+                        try {
+                            this._cipPreviewAssetCache.set(u, img);
+                        } catch {
+                            // ignore
+                        }
+                        resolve({ ok: true, url: u });
+                    };
+                    img.onerror = () => resolve({ ok: false, url: u });
+                    img.src = u;
+                } catch {
+                    resolve({ ok: false, url: u });
+                }
+            });
+        };
+
+        const preloadAll = async (urls) => {
+            const uniq = Array.from(new Set((urls || []).map(s => (s ?? '').toString().trim()).filter(Boolean)));
+            const results = await Promise.all(uniq.map(preloadImage));
+            const failed = results.filter(r => !r.ok).map(r => r.url);
+            return { ok: failed.length === 0, failed };
+        };
+
+        const playWithPreload = async ({ sample, sequence }) => {
+            const token = (Number(this._cipPreviewLoadToken) || 0) + 1;
+            this._cipPreviewLoadToken = token;
+
+            const items = (Array.isArray(sequence) && sequence.length > 0)
+                ? sequence
+                : [sample];
+
+            const urlsToLoad = [];
+            for (const it of items) {
+                urlsToLoad.push(it?.imageUrl ?? '');
+                urlsToLoad.push(it?.maskToImageSpriteUrl ?? '');
+                urlsToLoad.push(it?.imageToMaskSpriteUrl ?? '');
+            }
+
+            showLoading(`Loading ${urlsToLoad.filter(Boolean).length} assets…`);
+            const { ok, failed } = await preloadAll(urlsToLoad);
+            if (this._cipPreviewLoadToken !== token) return;
+            hideLoading();
+
+            if (!ok) {
+                console.warn('CIP preview: some assets failed to preload:', failed);
+            }
+
+            this.playContinuousImagePresentationPreview({
+                maskType,
+                transitionMs,
+                frames,
+                imageMs,
+                maskToImageSpriteUrl: sample?.maskToImageSpriteUrl ?? '',
+                imageToMaskSpriteUrl: sample?.imageToMaskSpriteUrl ?? '',
+                imageUrl: sample?.imageUrl ?? '',
+                sequenceItems: (Array.isArray(sequence) && sequence.length > 0) ? sequence : null
+            });
+        };
+
+        playWithPreload({ sample: initialSample, sequence: initialSequence });
+
+        const resampleBtn = document.getElementById('cipPreviewResampleBtn');
+        if (resampleBtn) {
+            resampleBtn.addEventListener('click', () => {
+                const seq = sampleSequence();
+                const one = sampleTransitionSet();
+                playWithPreload({ sample: one, sequence: (Array.isArray(seq) && seq.length > 0) ? seq : null });
+            });
+        }
+    }
+
+    showHtmlButtonResponsePreview(componentData) {
+        const previewModal = this.getPreviewModal();
+        if (!previewModal) return;
+        const { modalEl, modal } = previewModal;
+
+        const modalBody = modalEl.querySelector('.modal-body');
+        if (!modalBody) return;
+
+        const stimulus = (componentData?.stimulus ?? componentData?.stimulus_html ?? '').toString();
+        const prompt = (componentData?.prompt ?? '').toString();
+        const rawChoices = (componentData?.button_choices ?? componentData?.choices ?? 'Continue');
+
+        const labels = Array.isArray(rawChoices)
+            ? rawChoices.map(x => (x ?? '').toString()).filter(s => s.trim() !== '')
+            : rawChoices
+                .toString()
+                .split(/[\n,]+/)
+                .map(s => s.trim())
+                .filter(Boolean);
+
+        const btns = (labels.length > 0 ? labels : ['Continue']).slice(0, 8).map((label) => {
+            return `<button type="button" class="btn btn-outline-light" disabled>${label}</button>`;
+        }).join(' ');
+
+        const body = `
+            <h5 style="margin:0 0 10px 0;">HTML + Button Response</h5>
+            <div class="p-3 border rounded" style="background: rgba(255,255,255,0.06);">
+                <div>${stimulus || '<span class="text-warning">No HTML stimulus provided.</span>'}</div>
+                ${prompt ? `<div style="margin-top:12px; opacity:0.9;">${prompt}</div>` : ''}
+                <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">${btns}</div>
+            </div>
+        `;
+
+        modalBody.innerHTML = this.wrapCenteredPreview(body);
+        modal.show();
     }
 
     showNbackBlockGeneratorPreview(blockData) {
@@ -2794,15 +3613,37 @@ class ComponentPreview {
             const iti = randInt(src.pvt_iti_min, src.pvt_iti_max);
             if (iti !== null) sampled.iti_ms = iti;
         } else if (componentType === 'stroop-trial') {
-            const words = parseStringList(src.stroop_word_options);
-            const inksExplicit = parseStringList(src.stroop_ink_color_options);
+            const uiStimulusNames = (() => {
+                try {
+                    const list = window.jsonBuilderInstance?.getCurrentStroopStimuliFromUI?.();
+                    return (Array.isArray(list) ? list : [])
+                        .map(s => (s?.name ?? '').toString().trim())
+                        .filter(Boolean);
+                } catch {
+                    return [];
+                }
+            })();
+
+            const wordsRaw = parseStringList(src.stroop_word_options);
+            const words = (wordsRaw.length > 0) ? wordsRaw : uiStimulusNames;
+
+            const normalize = (s) => (s ?? '').toString().trim().toLowerCase();
+            const allowedInkSet = new Set((Array.isArray(words) ? words : []).map(normalize).filter(Boolean));
+
+            const inksExplicitRaw = parseStringList(src.stroop_ink_color_options);
+            const inksExplicitSanitized = (inksExplicitRaw.length > 0)
+                ? inksExplicitRaw.filter((n) => allowedInkSet.has(normalize(n)))
+                : [];
+
+            const inksExplicit = (inksExplicitSanitized.length > 0) ? inksExplicitSanitized : [];
             const inks = (inksExplicit.length > 0) ? inksExplicit : words;
 
-            const congruencyOptions = parseStringList(src.stroop_congruency_options);
+            const congruencyOptionsRaw = parseStringList(src.stroop_congruency_options);
+            const congruencyOptions = (congruencyOptionsRaw.length > 0) ? congruencyOptionsRaw : ['auto'];
             const congruency = pickFromList(congruencyOptions, 'auto');
 
-            const pickedWord = pickFromList(words, 'RED');
-            let pickedInk = pickFromList(inks, pickedWord);
+            const pickedWord = pickFromList(words, uiStimulusNames[0] || 'RED');
+            let pickedInk = pickFromList(inks, pickedWord || uiStimulusNames[0] || 'BLUE');
 
             if (congruency === 'congruent') {
                 pickedInk = pickedWord;
@@ -2830,6 +3671,79 @@ class ComponentPreview {
             if (trialMs !== null) sampled.trial_duration_ms = trialMs;
 
             const iti = randInt(src.stroop_iti_min, src.stroop_iti_max);
+            if (iti !== null) sampled.iti_ms = iti;
+        } else if (componentType === 'emotional-stroop-trial') {
+            const uiStimulusNames = (() => {
+                try {
+                    const list = window.jsonBuilderInstance?.getCurrentStroopStimuliFromUI?.();
+                    return (Array.isArray(list) ? list : [])
+                        .map(s => (s?.name ?? '').toString().trim())
+                        .filter(Boolean);
+                } catch {
+                    return [];
+                }
+            })();
+
+            const normalize = (s) => (s ?? '').toString().trim().toLowerCase();
+            const allowedInkSet = new Set(uiStimulusNames.map(normalize).filter(Boolean));
+
+            const countRaw = Number.parseInt((src.emostroop_word_list_count ?? '2').toString(), 10);
+            const count = Number.isFinite(countRaw) ? (countRaw === 3 ? 3 : 2) : 2;
+
+            const list1 = {
+                label: (src.emostroop_word_list_1_label ?? 'Neutral').toString().trim() || 'Neutral',
+                words: parseStringList(src.emostroop_word_list_1_words)
+            };
+            const list2 = {
+                label: (src.emostroop_word_list_2_label ?? 'Negative').toString().trim() || 'Negative',
+                words: parseStringList(src.emostroop_word_list_2_words)
+            };
+            const list3 = {
+                label: (src.emostroop_word_list_3_label ?? 'Positive').toString().trim() || 'Positive',
+                words: parseStringList(src.emostroop_word_list_3_words)
+            };
+
+            const wordLists = [list1, list2, ...(count === 3 ? [list3] : [])]
+                .map((l, i) => ({
+                    index: i + 1,
+                    label: (l.label || '').toString(),
+                    words: Array.isArray(l.words) ? l.words : []
+                }))
+                .filter(l => l.words.length > 0);
+
+            const legacyWordsRaw = parseStringList(src.emostroop_word_options);
+            const fallbackWords = (legacyWordsRaw.length > 0) ? legacyWordsRaw : ['HAPPY', 'SAD', 'ANGRY', 'CHAIR'];
+
+            const chosenList = (wordLists.length > 0)
+                ? pickFromList(wordLists, wordLists[0])
+                : null;
+
+            const words = chosenList ? chosenList.words : fallbackWords;
+
+            const inksRaw = parseStringList(src.emostroop_ink_color_options);
+            const inksSanitized = (inksRaw.length > 0)
+                ? inksRaw.filter((n) => allowedInkSet.size === 0 || allowedInkSet.has(normalize(n)))
+                : [];
+            const inks = (inksSanitized.length > 0) ? inksSanitized : (uiStimulusNames.length > 0 ? uiStimulusNames : ['RED', 'GREEN', 'BLUE', 'YELLOW']);
+
+            sampled.word = pickFromList(words, words[0] || 'HAPPY');
+            if (chosenList) {
+                sampled.word_list_label = chosenList.label;
+                sampled.word_list_index = chosenList.index;
+            }
+            sampled.ink_color_name = pickFromList(inks, inks[0] || 'BLUE');
+
+            sampled.response_mode = 'color_naming';
+            sampled.response_device = (src.emostroop_response_device || 'inherit').toString();
+            sampled.choice_keys = parseStringList(src.emostroop_choice_keys);
+
+            const stimMs = randInt(src.emostroop_stimulus_duration_min, src.emostroop_stimulus_duration_max);
+            if (stimMs !== null) sampled.stimulus_duration_ms = stimMs;
+
+            const trialMs = randInt(src.emostroop_trial_duration_min, src.emostroop_trial_duration_max);
+            if (trialMs !== null) sampled.trial_duration_ms = trialMs;
+
+            const iti = randInt(src.emostroop_iti_min, src.emostroop_iti_max);
             if (iti !== null) sampled.iti_ms = iti;
         } else if (componentType === 'gabor-trial' || componentType === 'gabor-quest') {
             const locs = parseStringList(blockData.gabor_target_location_options);
@@ -2868,6 +3782,122 @@ class ComponentPreview {
             if (stimMs !== null) sampled.stimulus_duration_ms = stimMs;
             const maskMs = randInt(blockData.gabor_mask_duration_min, blockData.gabor_mask_duration_max);
             if (maskMs !== null) sampled.mask_duration_ms = maskMs;
+        } else if (componentType === 'task-switching-trial') {
+            const trialType = (src?.ts_trial_type ?? src?.trial_type ?? 'switch').toString().trim().toLowerCase();
+            const cueType = (src?.ts_cue_type ?? src?.cue_type ?? 'explicit').toString().trim().toLowerCase();
+
+            const normalizePos = (raw, fallback) => {
+                const s = (raw ?? '').toString().trim().toLowerCase();
+                if (s === 'left' || s === 'right' || s === 'top' || s === 'bottom') return s;
+                return fallback;
+            };
+
+            const taskIndex = (() => {
+                if (trialType === 'single') {
+                    const raw = Number.parseInt((src?.ts_single_task_index ?? src?.single_task_index ?? 1).toString(), 10);
+                    return (raw === 2) ? 2 : 1;
+                }
+                return (rng() < 0.5) ? 1 : 2;
+            })();
+            sampled.task_index = taskIndex;
+
+            const parseUiList = (id) => {
+                try {
+                    return (document.getElementById(id)?.value ?? '')
+                        .toString()
+                        .split(',')
+                        .map(s => s.trim())
+                        .filter(Boolean);
+                } catch {
+                    return [];
+                }
+            };
+
+            const uiMode = (document.getElementById('taskSwitchingStimulusSetMode')?.value || 'letters_numbers').toString();
+            const builtIn = {
+                task1: ['A', 'B', 'C', 'D', 'E', 'F', 'G'],
+                task2: ['1', '2', '3', '4', '5', '6', '7', '8', '9']
+            };
+
+            const t1Pool = (() => {
+                if (uiMode !== 'custom') return builtIn.task1;
+                const a = parseUiList('taskSwitchingTask1CategoryA');
+                const b = parseUiList('taskSwitchingTask1CategoryB');
+                const pool = [...a, ...b].filter(Boolean);
+                return (pool.length > 0) ? pool : builtIn.task1;
+            })();
+
+            const t2Pool = (() => {
+                if (uiMode !== 'custom') return builtIn.task2;
+                const a = parseUiList('taskSwitchingTask2CategoryA');
+                const b = parseUiList('taskSwitchingTask2CategoryB');
+                const pool = [...a, ...b].filter(Boolean);
+                return (pool.length > 0) ? pool : builtIn.task2;
+            })();
+
+            const stimulusTask1 = (pickFromList(t1Pool, 'A') ?? 'A').toString();
+            const stimulusTask2 = (pickFromList(t2Pool, '1') ?? '1').toString();
+
+            sampled.stimulus_task_1 = stimulusTask1;
+            sampled.stimulus_task_2 = stimulusTask2;
+            sampled.stimulus = `${stimulusTask1} ${stimulusTask2}`.trim();
+
+            if (cueType === 'position') {
+                const p1 = normalizePos(src?.ts_task_1_position ?? src?.task_1_position, 'left');
+                const p2 = normalizePos(src?.ts_task_2_position ?? src?.task_2_position, 'right');
+                sampled.stimulus_position = (taskIndex === 2) ? p2 : p1;
+            } else {
+                sampled.stimulus_position = normalizePos(src?.ts_stimulus_position ?? src?.stimulus_position, 'top');
+            }
+
+            sampled.border_enabled = !!(src?.ts_border_enabled ?? src?.border_enabled ?? false);
+            sampled.left_key = (src?.ts_left_key ?? src?.left_key ?? 'f').toString();
+            sampled.right_key = (src?.ts_right_key ?? src?.right_key ?? 'j').toString();
+
+            if (cueType === 'color') {
+                const c1 = (src?.ts_task_1_color_hex ?? src?.task_1_color_hex ?? '').toString().trim();
+                const c2 = (src?.ts_task_2_color_hex ?? src?.task_2_color_hex ?? '').toString().trim();
+                sampled.stimulus_color_hex = (taskIndex === 2) ? (c2 || '#FFFFFF') : (c1 || '#FFFFFF');
+            } else {
+                const c = (src?.ts_stimulus_color_hex ?? src?.stimulus_color_hex ?? '').toString().trim();
+                if (c) sampled.stimulus_color_hex = c;
+            }
+
+            const stimMs = randInt(src?.ts_stimulus_duration_min ?? src?.stimulus_duration_min, src?.ts_stimulus_duration_max ?? src?.stimulus_duration_max);
+            if (stimMs !== null) sampled.stimulus_duration_ms = stimMs;
+            const trialMs = randInt(src?.ts_trial_duration_min ?? src?.trial_duration_min, src?.ts_trial_duration_max ?? src?.trial_duration_max);
+            if (trialMs !== null) sampled.trial_duration_ms = trialMs;
+            const iti = randInt(src?.ts_iti_min ?? src?.iti_min, src?.ts_iti_max ?? src?.iti_max);
+            if (iti !== null) sampled.iti_ms = iti;
+        } else if (componentType === 'html-keyboard-response') {
+            const stim = (src?.stimulus_html ?? src?.stimulus ?? '').toString();
+            sampled.stimulus = stim || '<p>Press a key to continue.</p>';
+            sampled.prompt = (src?.prompt ?? '').toString();
+            sampled.choices = (src?.choices ?? 'ALL_KEYS');
+        } else if (componentType === 'html-button-response') {
+            const stim = (src?.stimulus_html ?? src?.stimulus ?? '').toString();
+            sampled.stimulus = stim || '<p>Click a button to continue.</p>';
+            sampled.prompt = (src?.prompt ?? '').toString();
+            // Builder exports button labels as a single string in `choices`.
+            sampled.choices = (src?.button_choices ?? src?.choices ?? 'Continue');
+            if (src?.button_html !== undefined) sampled.button_html = src.button_html;
+        } else if (componentType === 'image-keyboard-response') {
+            const listRaw = (src?.stimulus_images ?? '').toString();
+            const list = listRaw
+                ? listRaw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean)
+                : [];
+
+            const chosen = (list.length > 0)
+                ? pickFromList(list, '')
+                : (() => {
+                    const v = (src?.stimulus_image ?? src?.stimulus ?? '');
+                    if (Array.isArray(v)) return pickFromList(v, '');
+                    return (v ?? '').toString();
+                })();
+
+            sampled.stimulus = chosen;
+            sampled.prompt = (src?.prompt ?? '').toString();
+            sampled.choices = (src?.choices ?? 'ALL_KEYS');
         }
 
         return sampled;
