@@ -2,12 +2,16 @@
 
 Migrate Builder + Interpreter from JATOS/Token-Store dependence to a Kubernetes-first Django+PostgreSQL platform with strict compliance controls, while keeping JATOS as an operational fallback during transition. Build a separate monorepo (`cogflow-platform`) that contains backend services, integrated Builder/Interpreter frontends, asset storage pipeline, and a basic researcher portal in MVP. The Builder publish flow will be automated so new compiled studies are auto-registered and immediately visible on the researcher dashboard without token copy/paste.
 
+Add an optional LSL-capable deployment profile for labs that need device synchronization (EEG, physiology). This profile uses a separate local app branded as `Home Gear` (technical name: `CogFlow Local Runtime`) that runs the Interpreter locally (Dockerized), bridges experiment markers to native `liblsl`, and syncs metadata/results back to the cloud platform.
+
 **Steps**
 1. Phase 0 - Architecture baseline and contracts
-1.1 Define target system boundaries and API contracts for `Config API`, `Asset API`, `Result Ingest API`, `Auth API`, and `Study/Run API`.
+1.1 Define target system boundaries and API contracts for `Config API`, `Asset API`, `Result Ingest API`, `Auth API`, `Study/Run API`, and `Home Gear Sync API`.
 1.2 Freeze a compatibility contract for existing Builder export JSON and Interpreter runtime inputs to prevent regressions.
 1.3 Define deployment profiles for Kubernetes environments (`dev`, `staging`, `prod`) including secrets, TLS, backups, and observability.
-1.4 Produce ADRs for storage model (PostgreSQL + object storage), token strategy (JWT + refresh), and JATOS fallback behavior.
+1.4 Define deployment modes: `cloud_only`, `hybrid_lsl`, `local_only_sync_later`.
+1.5 Produce ADRs for local bridge protocol (localhost WebSocket/HTTP), marker schema, and timing guarantees.
+1.6 Produce ADRs for storage model (PostgreSQL + object storage), token strategy (JWT + refresh), and JATOS fallback behavior.
 
 2. Phase 1 - Create separate platform codebase (blocks Phases 2-5)
 2.1 Create new repository `cogflow-platform` with top-level apps: `backend/`, `frontend/builder/`, `frontend/interpreter/`, `frontend/portal/`, `infra/`, `docs/`.
@@ -31,6 +35,8 @@ Migrate Builder + Interpreter from JATOS/Token-Store dependence to a Kubernetes-
 4.4 Add new "Platform Publish" flow in Builder: publish config + assets to Django backend, auto-create/update study records, and return launch metadata (study/run links, IDs).
 4.5 Add asynchronous publication orchestration: after successful compile/publish, emit a backend event/job that materializes the study card on the researcher dashboard immediately.
 4.6 Keep SharePoint export path optional/legacy; do not expand feature scope during MVP.
+4.7 Add Builder study-level runtime options: `Runtime Mode` (`cloud`, `jatos`, `home_gear_lsl`) and optional `LSL Marker Profile` assignment.
+4.8 Add Builder action `Pack Experiment To Go` that exports a signed Home Gear package (Docker profile + config + assets manifest + launch script).
 
 5. Phase 4 - Decouple Interpreter runtime with dual backend mode (depends on 2)
 5.1 Introduce `RuntimeBackend` abstraction in Interpreter for parameter resolution, result submission, and completion behavior.
@@ -38,25 +44,40 @@ Migrate Builder + Interpreter from JATOS/Token-Store dependence to a Kubernetes-
 5.3 Move JATOS-specific calls behind backend interface: parameter reads, file upload fallback, submitResultData, next-component/end-study.
 5.4 Implement Django run lifecycle endpoints: start run, heartbeat, submit results, mark completion/failure.
 5.5 Preserve local standalone mode for developer testing.
+5.6 Add marker emission hooks in Interpreter for lifecycle and trial events (`run_start`, `block_start`, `trial_start`, `stimulus_onset`, `response`, `trial_end`, `run_end`) with deterministic event IDs.
 
-6. Phase 5 - Researcher portal MVP (depends on 2; parallel with late 3/4 UI work)
-6.1 Build minimal portal auth and role-aware navigation.
-6.2 Implement study management views: create study, assign configs, generate launch links/tokens, monitor run status.
-6.3 Implement result browser and export actions (CSV/JSON) with filters.
-6.4 Implement admin/compliance views for audit events, retention schedules, and data deletion requests.
+6. Phase 4B - Home Gear (LSL local app) for lab synchronization (depends on 2 and 4)
+6.1 Create `edge-runner/` app (Dockerized) with services:
+- Local Interpreter host
+- LSL Bridge service (Python `pylsl` or native bridge)
+- Home Gear Sync agent (secure uplink to Django backend)
+6.2 Implement localhost bridge protocol so browser Interpreter can stream markers/events to Home Gear without exposing device APIs to the public web.
+6.3 Implement native LSL outlet publishing from the bridge with configurable stream name/type/source-id and clock correction metadata.
+6.4 Implement optional inbound LSL subscriptions (future gate) for closed-loop triggers; keep disabled in MVP.
+6.5 Implement resilient result and marker queueing on Home Gear for offline labs, with signed replay to cloud when connectivity returns.
+6.6 Implement secure run leasing from cloud to edge (`claim run`, `heartbeat`, `complete`, `abort`) so cloud resources coordinate scheduling while execution remains local.
+6.7 Provide one-command local launch profile for labs (`docker compose up`) with documented USB/network permissions and host-time sync checks.
 
-7. Phase 6 - JATOS fallback and migration orchestration (depends on 3/4/5)
-7.1 Add feature flags for runtime backend selection per study (`jatos`, `django`, `hybrid`).
-7.2 Provide migration utility to import existing Builder outputs and map Token Store/JATOS metadata into platform records.
-7.3 Support hybrid launches where needed: Django portal coordinates studies while Interpreter can still run under JATOS.
-7.4 Define and run staged cutover playbook: pilot labs -> broader rollout -> optional JATOS deprecation milestone.
+7. Phase 5 - Researcher portal MVP (depends on 2; parallel with late 3/4 UI work)
+7.1 Build minimal portal auth and role-aware navigation.
+7.2 Implement study management views: create study, assign configs, generate launch links/tokens, monitor run status.
+7.3 Add execution mode controls per study (`cloud`, `jatos`, `home_gear_lsl`) and site-level policy guardrails.
+7.4 Implement result browser and export actions (CSV/JSON) with filters.
+7.5 Implement admin/compliance views for audit events, retention schedules, and data deletion requests.
 
-8. Phase 7 - Verification, hardening, and release readiness (continuous; final gate after 6)
-8.1 Contract tests: Builder publish payloads and Interpreter result payload compatibility.
-8.2 End-to-end tests: Builder publish -> Interpreter run -> results persisted -> portal visualization/export.
-8.3 Security tests: authz matrix, token expiry/rotation, audit completeness, retention enforcement, delete workflow validation.
-8.4 Performance tests: concurrent participant runs and result ingestion throughput for Kubernetes sizing.
-8.5 Disaster recovery validation: PostgreSQL backups/restore drills and object storage recovery checks.
+8. Phase 6 - JATOS fallback and migration orchestration (depends on 3/4/5)
+8.1 Add feature flags for runtime backend selection per study (`jatos`, `django`, `home_gear_lsl`, `hybrid`).
+8.2 Provide migration utility to import existing Builder outputs and map Token Store/JATOS metadata into platform records.
+8.3 Support hybrid launches where needed: Django portal coordinates studies while Interpreter can still run under JATOS or Home Gear.
+8.4 Define and run staged cutover playbook: pilot labs -> broader rollout -> optional JATOS deprecation milestone.
+
+9. Phase 7 - Verification, hardening, and release readiness (continuous; final gate after 6)
+9.1 Contract tests: Builder publish payloads and Interpreter result payload compatibility.
+9.2 End-to-end tests: Builder publish -> Interpreter run -> results persisted -> portal visualization/export.
+9.3 Security tests: authz matrix, token expiry/rotation, audit completeness, retention enforcement, delete workflow validation.
+9.4 Performance tests: concurrent participant runs and result ingestion throughput for Kubernetes sizing.
+9.5 LSL timing tests: marker timestamp drift, event ordering, dropped-marker rate, and NTP/PTP clock discipline checks.
+9.6 Disaster recovery validation: PostgreSQL backups/restore drills and object storage recovery checks.
 
 **Relevant files**
 - `cogflow-builder-app/src/JsonBuilder.js` - primary export logic; extract storage adapters and publish flow.
@@ -68,14 +89,16 @@ Migrate Builder + Interpreter from JATOS/Token-Store dependence to a Kubernetes-
 - `cogflow-interpreter-app/index.html` - standalone/local runtime mode to preserve.
 - `cogflow-interpreter-app/index_jatos.html` - retained for fallback runtime path.
 - `cogflow-builder-app/token-store-worker/src/index.js` - reference behavior for replacement API parity and migration tooling.
+- `cogflow-platform/edge-runner/` - Home Gear local runtime bundle for LSL bridge and cloud sync.
 
 **Verification**
 1. Backend API contract validation against OpenAPI for configs/assets/results/auth/studies.
 2. Integration test: publish from Builder to Django, retrieve in Interpreter, execute full trial, persist results.
 3. Dual-mode regression test: same config executes in `JatosRuntimeBackend` and `DjangoRuntimeBackend` with equivalent result schema.
-4. Portal test: researcher creates study, launches participant session, views results, exports dataset.
-5. Compliance test pack: audit log generation for create/update/delete and result access; retention and deletion jobs execute as configured; researcher-only decrypt access is enforced and verified.
-6. Kubernetes operational checks: health probes, autoscaling behavior, rolling deploy safety, backup/restore success.
+4. LSL hybrid test: cloud schedules run -> Home Gear claims run -> Interpreter emits markers -> LSL outlet observed by lab recorder -> results sync to cloud.
+5. Portal test: researcher creates study, launches participant session, views results, exports dataset.
+6. Compliance test pack: audit log generation for create/update/delete and result access; retention and deletion jobs execute as configured; researcher-only decrypt access is enforced and verified.
+7. Kubernetes operational checks: health probes, autoscaling behavior, rolling deploy safety, backup/restore success.
 
 **Decisions**
 - Included scope:
@@ -85,14 +108,48 @@ Migrate Builder + Interpreter from JATOS/Token-Store dependence to a Kubernetes-
   - Automated Builder publish flow that auto-creates/updates study records and dashboard visibility (no token copy/paste for researchers).
   - Strict compliance controls in MVP (audit + retention + encryption strategy).
   - Privacy model using salted hashes for identifiers and encryption for sensitive result payloads with researcher-scoped decrypt access.
+  - Optional local Home Gear mode for labs requiring native LSL synchronization.
   - JATOS fallback retained during migration.
 - Excluded scope (for later phases unless explicitly reprioritized):
   - Full multi-tenant commercialization model.
   - Real-time adaptive closed-loop runtime over WebSockets.
   - Deep third-party survey integrations (Qualtrics/REDCap) beyond ID/link placeholders.
   - Full SSO rollout unless selected at decision gate.
+  - General remote hardware control from cloud-hosted browser sessions (not feasible without local bridge/agent).
 - Open decision gate:
   - Auth MVP choice is unresolved. Recommendation: start with Django auth + JWT in MVP, add OIDC/SSO in Phase 5.5 if required by pilot institutions.
+  - LSL implementation language/runtime is unresolved. Recommendation: Python `pylsl` bridge in Home Gear MVP, evaluate Rust/Go bridge only if throughput/latency tests fail.
+
+## LSL Integration Feasibility (Researcher Question)
+
+Answer in short: yes, but as a hybrid architecture, not pure cloud-browser execution.
+
+- Current version: no native LSL integration exists in Builder/Interpreter.
+- Constraint: browser-only cloud runtimes cannot directly access local EEG/LSL device streams safely/reliably.
+- Feasible path: run experiment runtime locally (Dockerized Home Gear) and keep cloud as control plane (publish, auth, scheduling, monitoring, dataset aggregation).
+
+Recommended deployment options:
+- `cloud_only`: non-lab remote studies, no LSL.
+- `hybrid_lsl`: cloud-managed study with local execution + LSL marker streaming via Home Gear.
+- `local_only_sync_later`: fully local execution during acquisition with deferred encrypted upload.
+
+This preserves standardization (Builder + platform governance) while allowing labs to keep precise equipment synchronization.
+
+## Home Gear Delivery After Migration (Implementation Timing)
+
+`Home Gear` should begin only after the migration core is stable, not in parallel with all MVP foundations.
+
+Recommended sequence:
+- Stage A (Migration complete): finish cloud platform MVP gates (publish, run, submit, portal, privacy controls).
+- Stage B (Home Gear alpha, 2-3 weeks): implement `Pack Experiment To Go`, local runtime packaging, and one-way LSL marker outlet.
+- Stage C (Lab pilot, 2-4 weeks): run with 1-2 partner labs, validate marker timing and reliability, and harden install/run docs.
+- Stage D (General availability): expose `home_gear_lsl` as supported execution mode in portal policies.
+
+Minimum readiness gate before Stage B:
+- Stable API contract for publish/start/submit.
+- Signed config/assets package format.
+- Run-leasing endpoint support.
+- Security review of local-to-cloud sync tokens.
 
 **Further Considerations**
 1. Migration window strategy recommendation:
