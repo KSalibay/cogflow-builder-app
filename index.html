@@ -11,13 +11,21 @@
     <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
 
     <script>
-        // Apply Accessibility Mode early to avoid a flash of default styling
+        // Apply Accessibility Mode + Theme early to avoid flash of wrong styling
         (function () {
             try {
                 const enabled = localStorage.getItem('cogflow_builder_a11y') === '1';
                 if (enabled) document.documentElement.classList.add('cf-a11y');
             } catch (e) {
                 // Ignore storage errors (privacy mode, etc.)
+            }
+
+            try {
+                const savedTheme = localStorage.getItem('cogflow_builder_theme');
+                const theme = (savedTheme === 'dark' || savedTheme === 'light') ? savedTheme : 'light';
+                document.documentElement.setAttribute('data-cf-theme', theme);
+            } catch (e) {
+                document.documentElement.setAttribute('data-cf-theme', 'light');
             }
         })();
     </script>
@@ -42,6 +50,9 @@
                 <img src="img/logo_builder_light.png" alt="CogFlow Builder" class="cf-brand-logo">
             </span>
             <div class="d-flex">
+                <button class="btn btn-outline-light me-2 cf-theme-toggle" id="pageThemeToggle" title="Toggle Builder theme">
+                    <i class="fas fa-circle-half-stroke"></i> Theme: Light
+                </button>
                 <button class="btn btn-outline-light me-2" id="loadTemplateBtn">
                     <i class="fas fa-folder-open"></i> Load Template
                 </button>
@@ -385,8 +396,69 @@
     <script src="src/schemas/UnifiedSchema.js?v=20260113-10"></script>
 
     <script>
+        function setBuilderTheme(theme) {
+            const t = (theme === 'dark') ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-cf-theme', t);
+            try {
+                localStorage.setItem('cogflow_builder_theme', t);
+            } catch (e) {
+                // Ignore storage errors
+            }
+
+            const btn = document.getElementById('pageThemeToggle');
+            if (btn) {
+                btn.innerHTML = `<i class="fas fa-circle-half-stroke"></i> Theme: ${t === 'dark' ? 'Dark' : 'Light'}`;
+            }
+        }
+
+        function installDebugRemnantCleaner() {
+            const looksLikeDebugRemnant = (el) => {
+                try {
+                    const text = (el && el.textContent ? el.textContent : '').toLowerCase();
+                    if (!text) return false;
+                    return text.includes('study result visibility mode') || /^\s*worker\s*:\s*\d+\s*$/i.test(text);
+                } catch {
+                    return false;
+                }
+            };
+
+            const removeDebugRemnants = () => {
+                const all = Array.from(document.querySelectorAll('body *'));
+                all.forEach((el) => {
+                    if (!looksLikeDebugRemnant(el)) return;
+                    if (el.closest('.navbar, .card, .modal, #componentPreviewModal')) return;
+                    try {
+                        const style = window.getComputedStyle(el);
+                        const isBottomLeft = style && style.position === 'fixed' && style.left !== 'auto' && style.bottom !== 'auto';
+                        const isTiny = style && Number.parseFloat(style.fontSize || '0') <= 12;
+                        if (isBottomLeft || isTiny) el.remove();
+                    } catch {
+                        // ignore
+                    }
+                });
+            };
+
+            removeDebugRemnants();
+            const obs = new MutationObserver(() => removeDebugRemnants());
+            obs.observe(document.body, { childList: true, subtree: true });
+        }
+
         // Initialize the application
         document.addEventListener('DOMContentLoaded', function() {
+            const initialTheme = document.documentElement.getAttribute('data-cf-theme') || 'light';
+            setBuilderTheme(initialTheme);
+
+            const pageThemeToggle = document.getElementById('pageThemeToggle');
+            if (pageThemeToggle && pageThemeToggle.dataset.bound !== '1') {
+                pageThemeToggle.dataset.bound = '1';
+                pageThemeToggle.addEventListener('click', () => {
+                    const current = document.documentElement.getAttribute('data-cf-theme') || 'light';
+                    setBuilderTheme(current === 'dark' ? 'light' : 'dark');
+                });
+            }
+
+            installDebugRemnantCleaner();
+
             const jsonBuilder = new JsonBuilder();
             jsonBuilder.initialize();
             

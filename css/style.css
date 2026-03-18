@@ -52,6 +52,28 @@
     --bs-link-hover-color: #2f3551;
 }
 
+/* Manual page theme selection (independent from OS settings) */
+html[data-cf-theme="light"] {
+    color-scheme: light;
+}
+
+html[data-cf-theme="dark"] {
+    color-scheme: dark;
+
+    /* Keep the original CogFlow palette identity with dark-toned counterparts */
+    --cf-bg: #262c41;
+    --cf-surface: #2f3550;
+    --cf-surface-muted: #3a405a;
+    --cf-text: #dfe8e1;
+    --cf-muted: rgba(223, 232, 225, 0.78);
+    --cf-border: rgba(186, 199, 190, 0.28);
+
+    --bs-body-bg: var(--cf-bg);
+    --bs-body-color: var(--cf-text);
+    --bs-link-color: #d9b6cc;
+    --bs-link-hover-color: #e8cddd;
+}
+
 html, body {
     height: 100%;
 }
@@ -112,6 +134,10 @@ body {
 .navbar .btn {
     font-size: 0.85rem;
     padding: 0.35rem 0.65rem;
+}
+
+.cf-theme-toggle {
+    min-width: 126px;
 }
 
 .cf-brand-text {
@@ -486,6 +512,12 @@ body {
 
 .form-check-label {
     font-size: 0.75rem;
+}
+
+/* Parameter modal: align switch rows with other input fields (small left indent) */
+#parameterModal .parameter-row .form-check.form-switch {
+    padding-left: 1.75rem;
+    margin-left: 0.35rem;
 }
 
 /* Compact sections */
@@ -956,36 +988,71 @@ body {
     }
 }
 
-/* Dark Mode Support (optional) */
-@media (prefers-color-scheme: dark) {
-    body {
-        background-color: #212529;
-        color: #ffffff;
-    }
-    
-    .card {
-        background-color: #343a40;
-        border-color: #495057;
-    }
-    
-    .timeline-container {
-        background-color: #343a40;
-        border-color: #495057;
-    }
-    
-    .timeline-component {
-        background-color: #495057;
-        border-color: #6c757d;
-    }
-    
-    .json-preview {
-        background-color: #2d3436;
-        border-color: #495057;
-    }
-    
-    .json-preview code {
-        color: #ffffff;
-    }
+/* Manual dark-theme overrides */
+html[data-cf-theme="dark"] .card {
+    background-color: var(--cf-surface);
+    border-color: var(--cf-border);
+}
+
+html[data-cf-theme="dark"] .bg-light {
+    background-color: var(--cf-surface-muted) !important;
+}
+
+html[data-cf-theme="dark"] .card-header h5,
+html[data-cf-theme="dark"] .fw-bold,
+html[data-cf-theme="dark"] h6 {
+    color: var(--cf-text);
+}
+
+html[data-cf-theme="dark"] .text-muted,
+html[data-cf-theme="dark"] small.text-muted {
+    color: var(--cf-muted) !important;
+}
+
+html[data-cf-theme="dark"] .form-control,
+html[data-cf-theme="dark"] .form-select,
+html[data-cf-theme="dark"] textarea,
+html[data-cf-theme="dark"] input[type="text"],
+html[data-cf-theme="dark"] input[type="number"] {
+    background-color: #404766;
+    color: var(--cf-text);
+    border-color: rgba(186, 199, 190, 0.35);
+}
+
+html[data-cf-theme="dark"] .form-control:focus,
+html[data-cf-theme="dark"] .form-select:focus {
+    border-color: rgba(174, 140, 163, 0.95);
+    box-shadow: 0 0 0 0.2rem rgba(174, 140, 163, 0.28);
+}
+
+html[data-cf-theme="dark"] .timeline-container {
+    background-color: #2b3148;
+    border-color: var(--cf-border);
+}
+
+html[data-cf-theme="dark"] .timeline-component,
+html[data-cf-theme="dark"] .timeline-item {
+    background-color: #3a405a;
+    border-color: rgba(186, 199, 190, 0.30);
+    color: var(--cf-text);
+}
+
+html[data-cf-theme="dark"] .json-preview {
+    background-color: #252a3e;
+    border-color: rgba(186, 199, 190, 0.28);
+}
+
+html[data-cf-theme="dark"] .json-preview code,
+html[data-cf-theme="dark"] pre,
+html[data-cf-theme="dark"] code {
+    color: #dfe8e1;
+}
+
+html[data-cf-theme="dark"] .btn-outline-secondary {
+    --bs-btn-color: var(--cf-text);
+    --bs-btn-border-color: rgba(186, 199, 190, 0.45);
+    --bs-btn-hover-bg: rgba(186, 199, 190, 0.12);
+    --bs-btn-hover-border-color: rgba(186, 199, 190, 0.62);
 }
 
 /* Loading States */

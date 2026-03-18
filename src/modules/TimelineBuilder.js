@@ -1186,7 +1186,7 @@ class TimelineBuilder {
             if (innerType === 'flanker-trial') return 'flanker';
             if (innerType === 'sart-trial') return 'sart';
             if (innerType === 'nback-block') return 'nback';
-            if (innerType === 'gabor-trial' || innerType === 'gabor-quest') return 'gabor';
+            if (innerType === 'gabor-trial' || innerType === 'gabor-quest' || innerType === 'gabor-learning') return 'gabor';
             if (innerType === 'continuous-image-presentation') return 'continuous-image';
             return null;
         };
@@ -1277,7 +1277,7 @@ class TimelineBuilder {
                 : (hintTask === 'task-switching')
                     ? ['task-switching-trial']
                 : (hintTask === 'gabor')
-                    ? ['gabor-trial', 'gabor-quest']
+                    ? ['gabor-trial', 'gabor-quest', 'gabor-learning']
                 : (hintTask === 'continuous-image')
                     ? ['continuous-image-presentation']
                 : (hintTask === 'stroop')
@@ -1599,6 +1599,7 @@ class TimelineBuilder {
                 const blockTypeLabel = (v) => {
                     if (v === 'gabor-trial') return 'Gabor (fixed)';
                     if (v === 'gabor-quest') return 'Gabor (QUEST)';
+                    if (v === 'gabor-learning') return 'Gabor (Learning)';
                     return v;
                 };
 
@@ -2053,7 +2054,7 @@ class TimelineBuilder {
                     : (currentTaskType === 'nback')
                         ? ['nback-block']
                     : (currentTaskType === 'gabor')
-                        ? ['gabor-trial', 'gabor-quest']
+                        ? ['gabor-trial', 'gabor-quest', 'gabor-learning']
                     : (currentTaskType === 'continuous-image')
                         ? ['continuous-image-presentation']
                     : ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups'];
@@ -2107,7 +2108,7 @@ class TimelineBuilder {
         const updateGaborBlockKeyVisibility = () => {
             if (!blockTypeEl) return;
             const selected = blockTypeEl.value;
-            if (selected !== 'gabor-trial' && selected !== 'gabor-quest') return;
+            if (selected !== 'gabor-trial' && selected !== 'gabor-quest' && selected !== 'gabor-learning') return;
 
             const taskEl = formContainer.querySelector('#param_gabor_response_task');
             const task = (taskEl ? taskEl.value : 'discriminate_tilt').toString();
@@ -2122,21 +2123,44 @@ class TimelineBuilder {
         const updateGaborQuestVisibility = () => {
             if (!blockTypeEl) return;
             const selected = blockTypeEl.value;
-            if (selected !== 'gabor-trial' && selected !== 'gabor-quest') {
-                // Ensure hidden when switching block types
-                [
-                    'gabor_quest_parameter',
-                    'gabor_quest_target_performance',
-                    'gabor_quest_start_value',
-                    'gabor_quest_start_sd',
-                    'gabor_quest_beta',
-                    'gabor_quest_delta',
-                    'gabor_quest_gamma',
-                    'gabor_quest_min_value',
-                    'gabor_quest_max_value'
-                ].forEach(p => setParamVisible(p, false));
+            const questParams = [
+                'gabor_quest_parameter',
+                'gabor_quest_target_performance',
+                'gabor_quest_start_value',
+                'gabor_quest_start_sd',
+                'gabor_quest_beta',
+                'gabor_quest_delta',
+                'gabor_quest_gamma',
+                'gabor_quest_min_value',
+                'gabor_quest_max_value',
+                'gabor_quest_trials_coarse',
+                'gabor_quest_trials_fine',
+                'gabor_quest_staircase_per_location',
+                'gabor_quest_store_location_threshold'
+            ];
+            const learningParams = [
+                'gabor_learning_streak_length',
+                'gabor_learning_target_accuracy',
+                'gabor_learning_max_trials',
+                'gabor_show_feedback',
+                'gabor_feedback_duration_ms'
+            ];
+            if (selected !== 'gabor-trial' && selected !== 'gabor-quest' && selected !== 'gabor-learning') {
+                // Ensure all hidden when switching to a non-Gabor block type
+                questParams.forEach(p => setParamVisible(p, false));
+                learningParams.forEach(p => setParamVisible(p, false));
                 return;
             }
+
+            // Learning mode: show learning params, hide QUEST params
+            if (selected === 'gabor-learning') {
+                questParams.forEach(p => setParamVisible(p, false));
+                learningParams.forEach(p => setParamVisible(p, true));
+                return;
+            }
+
+            // gabor-trial / gabor-quest: hide learning params, show QUEST when mode = quest
+            learningParams.forEach(p => setParamVisible(p, false));
 
             const modeEl = formContainer.querySelector('#param_gabor_adaptive_mode');
             // If the user picked the QUEST block type, force quest mode so the fields appear.
@@ -2147,17 +2171,7 @@ class TimelineBuilder {
             const mode = (modeEl ? modeEl.value : 'none').toString();
             const showQuest = (mode === 'quest');
 
-            [
-                'gabor_quest_parameter',
-                'gabor_quest_target_performance',
-                'gabor_quest_start_value',
-                'gabor_quest_start_sd',
-                'gabor_quest_beta',
-                'gabor_quest_delta',
-                'gabor_quest_gamma',
-                'gabor_quest_min_value',
-                'gabor_quest_max_value'
-            ].forEach(p => setParamVisible(p, showQuest));
+            questParams.forEach(p => setParamVisible(p, showQuest));
         };
 
         const updateGaborCueVisibility = () => {
@@ -2165,7 +2179,7 @@ class TimelineBuilder {
             const selected = blockTypeEl.value;
 
             // If switching away from Gabor, ensure these are hidden.
-            if (selected !== 'gabor-trial' && selected !== 'gabor-quest') {
+            if (selected !== 'gabor-trial' && selected !== 'gabor-quest' && selected !== 'gabor-learning') {
                 [
                     'gabor_spatial_cue_options',
                     'gabor_spatial_cue_probability',
@@ -2313,7 +2327,7 @@ class TimelineBuilder {
             }
 
             // Gabor block: show the correct key fields based on response task.
-            if (selected === 'gabor-trial' || selected === 'gabor-quest') {
+            if (selected === 'gabor-trial' || selected === 'gabor-quest' || selected === 'gabor-learning') {
                 updateGaborBlockKeyVisibility();
                 updateGaborQuestVisibility();
                 updateGaborCueVisibility();

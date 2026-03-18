@@ -1690,6 +1690,11 @@ class JSPsychSchemas {
                         type: this.parameterTypes.FLOAT,
                         default: 0.22,
                         description: 'Patch border opacity (0–1)'
+                    },
+                    contrast: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.95,
+                        description: 'Gabor patch contrast (0–1)'
                     }
                 }
             },
@@ -1860,7 +1865,7 @@ class JSPsychSchemas {
                     block_component_type: {
                         type: this.parameterTypes.SELECT,
                         default: 'rdm-trial',
-                        options: ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups', 'flanker-trial', 'sart-trial', 'simon-trial', 'pvt-trial', 'task-switching-trial', 'stroop-trial', 'emotional-stroop-trial', 'gabor-trial', 'gabor-quest', 'nback-block', 'html-button-response', 'html-keyboard-response', 'image-keyboard-response', 'continuous-image-presentation'],
+                        options: ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups', 'flanker-trial', 'sart-trial', 'simon-trial', 'pvt-trial', 'task-switching-trial', 'stroop-trial', 'emotional-stroop-trial', 'gabor-trial', 'gabor-quest', 'gabor-learning', 'nback-block', 'html-button-response', 'html-keyboard-response', 'image-keyboard-response', 'continuous-image-presentation'],
                         required: true,
                         description: 'What component type this block generates'
                     },
@@ -2938,7 +2943,7 @@ class JSPsychSchemas {
                     gabor_quest_parameter: {
                         type: this.parameterTypes.SELECT,
                         default: 'target_tilt_deg',
-                        options: ['target_tilt_deg', 'spatial_frequency_cyc_per_px'],
+                        options: ['target_tilt_deg', 'spatial_frequency_cyc_per_px', 'contrast'],
                         blockTarget: 'gabor-trial,gabor-quest',
                         description: 'Gabor QUEST: which parameter to adapt'
                     },
@@ -2989,6 +2994,72 @@ class JSPsychSchemas {
                         default: 90,
                         blockTarget: 'gabor-trial,gabor-quest',
                         description: 'Gabor QUEST: maximum allowed value'
+                    },
+                    gabor_quest_trials_coarse: {
+                        type: this.parameterTypes.INT,
+                        default: 32,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor QUEST: trials in broad staircase phase'
+                    },
+                    gabor_quest_trials_fine: {
+                        type: this.parameterTypes.INT,
+                        default: 32,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor QUEST: trials in fine-tuning staircase phase (runs after coarse)'
+                    },
+                    gabor_quest_staircase_per_location: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor QUEST: run separate staircases for left and right target locations'
+                    },
+                    gabor_quest_store_location_threshold: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor QUEST: store per-location thresholds in window.cogflowState after block completes'
+                    },
+                    gabor_contrast_min: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.05,
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
+                        description: 'Gabor: contrast minimum (0–1)'
+                    },
+                    gabor_contrast_max: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.95,
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
+                        description: 'Gabor: contrast maximum (0–1)'
+                    },
+                    gabor_learning_streak_length: {
+                        type: this.parameterTypes.INT,
+                        default: 20,
+                        blockTarget: 'gabor-learning',
+                        description: 'Gabor Learning: number of recent trials to evaluate accuracy over'
+                    },
+                    gabor_learning_target_accuracy: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.9,
+                        blockTarget: 'gabor-learning',
+                        description: 'Gabor Learning: accuracy criterion to reach (0–1, e.g. 0.9 = 90%)'
+                    },
+                    gabor_learning_max_trials: {
+                        type: this.parameterTypes.INT,
+                        default: 200,
+                        blockTarget: 'gabor-learning',
+                        description: 'Gabor Learning: maximum number of trials before block ends regardless of accuracy'
+                    },
+                    gabor_show_feedback: {
+                        type: this.parameterTypes.BOOL,
+                        default: true,
+                        blockTarget: 'gabor-learning',
+                        description: 'Gabor: show correct/incorrect feedback after each trial'
+                    },
+                    gabor_feedback_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 800,
+                        blockTarget: 'gabor-learning',
+                        description: 'Gabor: duration of feedback display (ms)'
                     },
                     gabor_stimulus_duration_min: {
                         type: this.parameterTypes.INT,

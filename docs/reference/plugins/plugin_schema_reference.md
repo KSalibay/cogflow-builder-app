@@ -2,7 +2,10 @@
 
 Generated from `src/schemas/JSPsychSchemas.js`.
 
-Generated at: 2026-03-09T20:26:01Z
+Generated at: 2026-03-19T20:26:01Z (needs regeneration - manually updated)
+
+**Note:** This file should be regenerated using `node tools/generate_plugin_refdocs.js` after schema updates. Recent updates include:
+- March 19, 2026: Added `gabor-learning` block type support, added learning parameters (streak_length, target_accuracy, max_trials, show_feedback, feedback_duration_ms), added QUEST phase parameters (trials_coarse, trials_fine, staircase_per_location, store_location_threshold)
 
 ---
 
@@ -24,7 +27,7 @@ Generate many trials from parameter windows/ranges (compact representation for l
 | adaptive_target_performance | FLOAT | 0.82 | RDM Adaptive: target performance (fixed) | blockTarget: rdm-adaptive |
 | aperture_outline_color | COLOR | #FFFFFF | Outline color when overriding outline visibility | blockTarget: rdm-* |
 | aperture_outline_width | FLOAT | 2 | Outline width (px) when overriding outline visibility | blockTarget: rdm-* |
-| block_component_type | SELECT | rdm-trial | What component type this block generates | options: rdm-trial, rdm-practice, rdm-adaptive, rdm-dot-groups, flanker-trial, sart-trial, simon-trial, pvt-trial, task-switching-trial, stroop-trial, emotional-stroop-trial, gabor-trial, gabor-quest, nback-block, html-button-response, html-keyboard-response, image-keyboard-response, continuous-image-presentation \| required |
+| block_component_type | SELECT | rdm-trial | What component type this block generates | options: rdm-trial, rdm-practice, rdm-adaptive, rdm-dot-groups, flanker-trial, sart-trial, simon-trial, pvt-trial, task-switching-trial, stroop-trial, emotional-stroop-trial, gabor-trial, gabor-quest, gabor-learning, nback-block, html-button-response, html-keyboard-response, image-keyboard-response, continuous-image-presentation \| required |
 | block_length | INT | 100 | Number of trials/frames this block represents | required |
 | button_choices | STRING | Continue | Button labels (comma/newline separated) | blockTarget: html-button-response |
 | button_html | HTML_STRING |  | Optional custom button HTML template (advanced) | blockTarget: html-button-response |
@@ -69,7 +72,7 @@ Generate many trials from parameter windows/ranges (compact representation for l
 | flanker_target_stimulus_options | STRING | H | Flanker: comma-separated possible center stimuli (used when stimulus_type is letters/symbols/custom). Example: H,S,@. | blockTarget: flanker-trial |
 | flanker_trial_duration_max | INT | 2000 | Flanker: trial duration max (ms) | blockTarget: flanker-trial |
 | flanker_trial_duration_min | INT | 1000 | Flanker: trial duration min (ms) | blockTarget: flanker-trial |
-| gabor_adaptive_mode | SELECT | none | Gabor: optional adaptive staircase mode for this block | options: none, quest \| blockTarget: gabor-trial,gabor-quest |
+| gabor_adaptive_mode | SELECT | none | Gabor: optional adaptive staircase mode for this block (applies to gabor-trial, gabor-quest) | options: none, quest \| blockTarget: gabor-trial,gabor-quest |
 | gabor_distractor_orientation_options | STRING | 0,90 | Gabor: comma-separated distractor orientations (degrees) to sample from. Allowed range: 0 to 179. | blockTarget: gabor-trial,gabor-quest |
 | gabor_grating_waveform_options | STRING | sinusoidal | Gabor: comma-separated grating waveforms to sample from. Allowed: sinusoidal, square, triangle. | blockTarget: gabor-trial,gabor-quest |
 | gabor_left_key | STRING | f | Gabor: left key (discriminate_tilt) | blockTarget: gabor-trial,gabor-quest |
@@ -107,6 +110,17 @@ Generate many trials from parameter windows/ranges (compact representation for l
 | gabor_value_cue_enabled | BOOL | True | Gabor: enable sampling value cue presence per trial (when false: left/right_value forced to neutral) | blockTarget: gabor-trial,gabor-quest |
 | gabor_value_cue_probability | FLOAT | 1 | Gabor: probability a trial contains value cues (0–1) | blockTarget: gabor-trial,gabor-quest |
 | gabor_yes_key | STRING | f | Gabor: yes key (detect_target) | blockTarget: gabor-trial,gabor-quest |
+| gabor_learning_streak_length | INT | 20 | Gabor Learning: number of consecutive correct responses required to exit learning block | min: 1 \| max: 10000 \| blockTarget: gabor-learning |
+| gabor_learning_target_accuracy | FLOAT | 0.9 | Gabor Learning: target accuracy threshold (0–1) to exit learning block | min: 0 \| max: 1 \| blockTarget: gabor-learning |
+| gabor_learning_max_trials | INT | 200 | Gabor Learning: maximum number of trials in learning block | min: 1 \| max: 100000 \| blockTarget: gabor-learning |
+| gabor_show_feedback | BOOL | False | Gabor: show correctness feedback after response (applies to learning and quest blocks) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_feedback_duration_ms | INT | 800 | Gabor: post-trial feedback display duration (ms) | min: 0 \| max: 10000 \| blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_contrast_min | FLOAT | 0.05 | Gabor: contrast sampling range min (0–1) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_contrast_max | FLOAT | 0.95 | Gabor: contrast sampling range max (0–1) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_quest_trials_coarse | INT | 0 | Gabor QUEST: number of trials in coarse phase (0 = no coarse phase) | blockTarget: gabor-trial,gabor-quest |
+| gabor_quest_trials_fine | INT | 0 | Gabor QUEST: number of trials in fine phase (0 = no fine phase) | blockTarget: gabor-trial,gabor-quest |
+| gabor_quest_staircase_per_location | BOOL | False | Gabor QUEST: whether to maintain separate staircases for left/right target locations | blockTarget: gabor-trial,gabor-quest |
+| gabor_quest_store_location_threshold | BOOL | False | Gabor QUEST: whether to store per-location thresholds to window.cogflowState.gabor_thresholds | blockTarget: gabor-trial,gabor-quest |
 | group_1_coherence_max | FLOAT | 0.5 | RDM Groups: group 1 coherence max (0-1) | blockTarget: rdm-dot-groups |
 | group_1_coherence_min | FLOAT | 0.1 | RDM Groups: group 1 coherence min (0-1) | blockTarget: rdm-dot-groups |
 | group_1_color | COLOR | #FF0066 | RDM Groups: group 1 dot color (hex) | blockTarget: rdm-dot-groups |

@@ -51,7 +51,8 @@ Key features:
   - Upload cached assets during export and rewrite references to hosted URLs
   - Optional “Upload Assets (folder)” tool to reference images by filename
 - Data collection toggles and helper components (reaction time, accuracy, correctness, eye tracking, mouse tracking)
-- Theming (light/dark) and Accessibility Mode (persisted locally)
+- Theming (manual light/dark toggle; persisted locally via localStorage)
+- Accessibility Mode (persisted locally)
 
 ## Core concepts
 

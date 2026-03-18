@@ -1,0 +1,114 @@
+# CogFlow Builder & Interpreter Changelog
+
+## March 19, 2026
+
+### Visual & UX Improvements
+
+#### Gabor Patch Rendering
+- **Diamond cue redesign**: Replaced Unicode arrow (`←`/`→`/`↔`) with custom diamond shape rendered on canvas
+  - Diamond is now centered between patches (at patch-center vertical position)
+  - Removed separate fixation cross from top of canvas (integrated into diamond as internal cross)
+  - Applies to both Builder preview and Interpreter runtime rendering
+  - Implementation: `drawCueDiamond()` function mirrored in ComponentPreview.js and jspsych-gabor.js
+
+- **Patch layout improvements**:
+  - Increased horizontal separation: patch centers now at 0.30/0.70 of canvas width (previously 0.32/0.68)
+  - Replaced padded square frames with true circular stroke outlines at patch radius
+  - Results in cleaner, more compact stimuli with improved visual clarity
+
+#### Manual Theme Toggle System (Builder)
+- Replaced OS-driven `prefers-color-scheme` detection with manual user control
+- Light/dark toggle button added to navbar (both `index.html` and `index_jatos.html`)
+- Theme preference persists via localStorage (`cogflow_builder_theme` key)
+- Color palette: CogFlow palette-driven tokens for both themes
+  - Light: ash-grey, lilac-ash, olive-wood backgrounds with twilight-indigo text
+  - Dark: space-indigo base (#262c41) with ash-grey foreground (#dfe8e1)
+- Applies to all UI components: cards, forms, timeline, JSON preview, buttons, modals
+- Early bootstrap script prevents flash on page load
+- Added debug remnant cleaner (MutationObserver removes bottom-left artifacts)
+
+### Feature Completions
+
+#### Gabor-Learning Block Type
+- Full end-to-end implementation of accuracy-driven learning loops
+- Learning parameters exported and visible in Builder UI:
+  - `learning_streak_length` (default 20): number of consecutive correct responses for criterion
+  - `learning_target_accuracy` (default 0.9): accuracy threshold to exit loop
+  - `learning_max_trials` (default 200): maximum trials per learning block
+  - `show_feedback` (toggle): display "Correct"/"Incorrect" post-trial
+  - `feedback_duration_ms` (default 800): feedback display duration
+
+- **Builder side** (JsonBuilder.js):
+  - Added `gabor-learning` to allowed block types (line 5031)
+  - Extended export mapping to handle learning blocks (lines 8954–9110)
+  - All learning parameters exported to `parameter_values`
+
+- **Builder UI** (TimelineBuilder.js):
+  - Fixed visibility condition to include `gabor-learning` in Gabor parameter updates (line 2330)
+  - Learning parameters now properly shown in parameter modal
+
+- **Interpreter side** (timelineCompiler.js):
+  - Gabor-learning blocks create looped trial sequences (lines 2792–2859)
+  - Maintains rolling accuracy history (last N trials)
+  - Exits on streak accuracy ≥ target or max trials reached
+  - Trial data includes `gabor_learning_block: true` and `gabor_learning_trial` markers
+
+#### QUEST Adaptive Mode (Full Pipeline)
+- Complete QUEST staircase implementation for Gabor blocks
+- **Builder export** (JsonBuilder.js):
+  - Exports QUEST parameters to `values.adaptive` object with mode, parameter, performance target, SD/beta/delta/gamma coefficients
+  - Added contrast parameter option to QUEST control list
+  - Supports coarse/fine phase trials and per-location thresholds
+
+- **Interpreter compilation** (timelineCompiler.js):
+  - QUEST staircase initialized with parameters from Builder config (lines 632–685)
+  - Per-location support: separate staircases for left/right target locations
+  - Coarse→fine transition: reinitializes staircase at phase boundary with mean at previous phase threshold + tighter SD
+  - Stores per-location thresholds to `window.cogflowState.gabor_thresholds` when enabled
+
+- **Runtime execution** (jspsych-gabor.js):
+  - `on_start` hook calls `staircase.next()` to get adapted parameter value
+  - `on_finish` hook calls `staircase.update(correctness)` with trial outcome
+  - Trial data records `adaptive_mode`, `adaptive_parameter`, `adaptive_value`
+  - Supports tilt magnitude adaptation with randomized sign for discriminate_tilt task
+
+### Deployment Notes
+
+- All changes synced to JATOS asset aliases:
+  - `/cogflow/builder/` and `/cogflow/cogflow-builder-app/` for Builder
+  - Same pattern for Interpreter
+- Hard refresh (Ctrl+Shift+R) recommended after sync to clear cached assets
+- Theme preference persists across page reloads via localStorage
+- Learning/QUEST logic is fully integrated end-to-end; no additional configuration needed
+
+### Technical Details
+
+#### Files Modified
+
+**cogflow-builder-app:**
+- `index.html`: Added early theme bootstrap + toggle button
+- `index_jatos.html`: Added early theme bootstrap + toggle button (fixed top-right)
+- `css/style.css`: Added theme tokens, data-attribute-driven theming, dark mode overrides, toggle styling
+- `src/JsonBuilder.js`: Added gabor-learning to block types; extended export mapping for learning/QUEST
+- `src/modules/TimelineBuilder.js`: Fixed visibility condition for gabor-learning
+- `src/modules/ComponentPreview.js`: Updated diamond cue rendering; circular outlines; no center fixation
+- `src/schemas/JSPsychSchemas.js`: Added learning param definitions
+
+**cogflow-interpreter-app:**
+- `index_jatos.html`: Uses theme from Builder export (ui_settings.theme)
+- `src/jspsych-gabor.js`: Uses show_feedback + feedback_duration_ms post-trial
+- `src/timelineCompiler.js`: Gabor-learning loop logic + QUEST staircase management
+
+#### Testing Recommendations
+
+1. **Theme toggle**: Hard-refresh Builder, toggle light/dark, verify localStorage persistence
+2. **Gabor-learning**: Create learning block, set streak_length=5, verify loop exits when accuracy ≥ target
+3. **QUEST**: Create QUEST block with tilt parameter, verify on_start/on_finish adapts values
+4. **Per-location QUEST**: Enable staircase_per_location, verify separate thresholds logged
+5. **Gabor visual**: Compare diamond cue centering and patch spacing in preview vs runtime
+
+---
+
+## Earlier History
+
+_(Previous changelog entries to be populated)_

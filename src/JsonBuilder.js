@@ -2302,7 +2302,7 @@ class JsonBuilder {
             if (type === 'gabor-trial') return true;
             if (type === 'block') {
                 const innerType = getBlockInnerType();
-                return innerType === 'gabor-trial' || innerType === 'gabor-quest';
+                return innerType === 'gabor-trial' || innerType === 'gabor-quest' || innerType === 'gabor-learning';
             }
             return false;
         }
@@ -5028,7 +5028,7 @@ class JsonBuilder {
                     : (currentTaskType === 'pvt')
                         ? ['pvt-trial']
                     : (currentTaskType === 'gabor')
-                        ? ['gabor-trial', 'gabor-quest']
+                        ? ['gabor-trial', 'gabor-quest', 'gabor-learning']
                         : (currentTaskType === 'continuous-image')
                             ? ['continuous-image-presentation']
                         : (currentTaskType === 'stroop')
@@ -5125,7 +5125,7 @@ class JsonBuilder {
 
                 // Optional adaptive staircase per-block (stored in exported block.parameter_values.adaptive)
                 gabor_adaptive_mode: { type: 'select', default: 'none', options: ['none', 'quest'] },
-                gabor_quest_parameter: { type: 'select', default: 'target_tilt_deg', options: ['target_tilt_deg', 'spatial_frequency_cyc_per_px'] },
+                gabor_quest_parameter: { type: 'select', default: 'target_tilt_deg', options: ['target_tilt_deg', 'spatial_frequency_cyc_per_px', 'contrast'] },
                 gabor_quest_target_performance: { type: 'number', default: 0.82, min: 0.5, max: 0.99, step: 0.01 },
                 gabor_quest_start_value: { type: 'number', default: 45, step: 0.1 },
                 gabor_quest_start_sd: { type: 'number', default: 20, min: 0.001, step: 0.1 },
@@ -5134,6 +5134,20 @@ class JsonBuilder {
                 gabor_quest_gamma: { type: 'number', default: 0.5, min: 0, max: 1, step: 0.01 },
                 gabor_quest_min_value: { type: 'number', default: -90, step: 0.1 },
                 gabor_quest_max_value: { type: 'number', default: 90, step: 0.1 },
+                gabor_quest_trials_coarse: { type: 'number', default: 32, min: 0, max: 10000, step: 1 },
+                gabor_quest_trials_fine: { type: 'number', default: 32, min: 0, max: 10000, step: 1 },
+                gabor_quest_staircase_per_location: { type: 'boolean', default: false },
+                gabor_quest_store_location_threshold: { type: 'boolean', default: false },
+
+                gabor_contrast_min: { type: 'number', default: 0.05, min: 0, max: 1, step: 0.01 },
+                gabor_contrast_max: { type: 'number', default: 0.95, min: 0, max: 1, step: 0.01 },
+
+                gabor_learning_streak_length: { type: 'number', default: 20, min: 1, max: 10000, step: 1 },
+                gabor_learning_target_accuracy: { type: 'number', default: 0.9, min: 0, max: 1, step: 0.01 },
+                gabor_learning_max_trials: { type: 'number', default: 200, min: 1, max: 100000, step: 1 },
+                gabor_show_feedback: { type: 'boolean', default: true },
+                gabor_feedback_duration_ms: { type: 'number', default: 800, min: 0, max: 30000, step: 1 },
+
                 gabor_stimulus_duration_min: { type: 'number', default: 67, min: 0, max: 10000 },
                 gabor_stimulus_duration_max: { type: 'number', default: 67, min: 0, max: 10000 },
                 gabor_mask_duration_min: { type: 'number', default: 67, min: 0, max: 10000 },
@@ -8937,7 +8951,7 @@ class JsonBuilder {
             addWindow('mask_duration_ms', blockComponent.sart_mask_duration_min, blockComponent.sart_mask_duration_max);
             addWindow('trial_duration_ms', blockComponent.sart_trial_duration_min, blockComponent.sart_trial_duration_max);
             addWindow('iti_ms', blockComponent.sart_iti_min, blockComponent.sart_iti_max);
-        } else if (resolvedComponentType === 'gabor-trial' || resolvedComponentType === 'gabor-quest') {
+        } else if (resolvedComponentType === 'gabor-trial' || resolvedComponentType === 'gabor-quest' || resolvedComponentType === 'gabor-learning') {
             const parseStringList = (raw) => {
                 if (raw === undefined || raw === null) return [];
                 return raw
@@ -9008,6 +9022,7 @@ class JsonBuilder {
             }
 
             addWindow('spatial_frequency_cyc_per_px', blockComponent.gabor_spatial_frequency_min, blockComponent.gabor_spatial_frequency_max);
+            addWindow('contrast', blockComponent.gabor_contrast_min, blockComponent.gabor_contrast_max);
 
             addWindow('patch_diameter_deg', blockComponent.gabor_patch_diameter_deg_min, blockComponent.gabor_patch_diameter_deg_max);
 
@@ -9048,7 +9063,11 @@ class JsonBuilder {
                     delta: Number(blockComponent.gabor_quest_delta),
                     gamma: Number(blockComponent.gabor_quest_gamma),
                     min_value: Number(blockComponent.gabor_quest_min_value),
-                    max_value: Number(blockComponent.gabor_quest_max_value)
+                    max_value: Number(blockComponent.gabor_quest_max_value),
+                    quest_trials_coarse: Number(blockComponent.gabor_quest_trials_coarse),
+                    quest_trials_fine: Number(blockComponent.gabor_quest_trials_fine),
+                    staircase_per_location: !!blockComponent.gabor_quest_staircase_per_location,
+                    store_location_threshold: !!blockComponent.gabor_quest_store_location_threshold
                 };
 
                 // Clean up NaNs if the user left fields empty
@@ -9059,6 +9078,23 @@ class JsonBuilder {
                     }
                 });
             }
+
+            // Learning block controls
+            const streakLen = Number(blockComponent.gabor_learning_streak_length);
+            if (Number.isFinite(streakLen)) values.learning_streak_length = Math.max(1, Math.round(streakLen));
+
+            const targetAcc = Number(blockComponent.gabor_learning_target_accuracy);
+            if (Number.isFinite(targetAcc)) values.learning_target_accuracy = Math.max(0, Math.min(1, targetAcc));
+
+            const maxTrials = Number(blockComponent.gabor_learning_max_trials);
+            if (Number.isFinite(maxTrials)) values.learning_max_trials = Math.max(1, Math.round(maxTrials));
+
+            if (blockComponent.gabor_show_feedback !== undefined) {
+                values.show_feedback = !!blockComponent.gabor_show_feedback;
+            }
+
+            const fbDur = Number(blockComponent.gabor_feedback_duration_ms);
+            if (Number.isFinite(fbDur)) values.feedback_duration_ms = Math.max(0, Math.round(fbDur));
 
             addWindow('stimulus_duration_ms', blockComponent.gabor_stimulus_duration_min, blockComponent.gabor_stimulus_duration_max);
             addWindow('mask_duration_ms', blockComponent.gabor_mask_duration_min, blockComponent.gabor_mask_duration_max);
