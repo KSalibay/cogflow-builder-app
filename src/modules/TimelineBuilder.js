@@ -123,6 +123,9 @@ class TimelineBuilder {
                         <button class="btn btn-sm btn-outline-secondary" onclick="editComponent(this)" title="Edit">
                             <i class="fas fa-pencil-alt"></i>
                         </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="duplicateComponent(this)" title="Duplicate Below">
+                            <i class="fas fa-copy"></i>
+                        </button>
                         <button class="btn btn-sm btn-outline-danger" onclick="removeComponent(this)" title="Delete">
                             <i class="fas fa-trash"></i>
                         </button>

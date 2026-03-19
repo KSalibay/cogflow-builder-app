@@ -1,5 +1,34 @@
 # CogFlow Builder & Interpreter Changelog
 
+## March 20, 2026
+
+### Builder Updates
+
+#### Timeline Authoring UX
+- Added **Duplicate Below** action for timeline components in the Builder UI.
+- Added timeline layout stabilization styles in `css/style.css`:
+  - Full-width card row alignment (drag handle left, text center, actions right)
+  - Improved truncation/overflow handling for long card titles and labels
+
+#### Gabor Preview and Block Support
+- `ComponentPreview` now routes `gabor-learning` through Gabor preview rendering.
+- Preview sampling now respects cue-enabled toggles:
+  - `gabor_spatial_cue_enabled=false` forces spatial cue to `none`
+  - `gabor_value_cue_enabled=false` forces left/right values to `neutral`
+- Gabor preview ring layering updated so cue rings are drawn after patch pixels.
+
+#### Gabor Schema Expansion
+- Extended many Gabor block parameters to target `gabor-learning` in addition to `gabor-trial` and `gabor-quest`.
+- Added new cue/value learning parameters in `src/schemas/JSPsychSchemas.js`:
+  - `gabor_spatial_cue_validity_probability`
+  - `gabor_value_target_value`
+  - `gabor_reward_availability_high`
+  - `gabor_reward_availability_low`
+  - `gabor_reward_availability_neutral`
+
+#### Documentation
+- Regenerated `docs/reference/plugins/plugin_schema_reference.md` from current schema definitions.
+
 ## March 19, 2026
 
 ### Visual & UX Improvements

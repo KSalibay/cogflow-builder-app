@@ -2792,145 +2792,176 @@ class JSPsychSchemas {
                         type: this.parameterTypes.SELECT,
                         default: 'discriminate_tilt',
                         options: ['detect_target', 'discriminate_tilt'],
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: response task mode for generated trials'
                     },
                     gabor_left_key: {
                         type: this.parameterTypes.STRING,
                         default: 'f',
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: left key (discriminate_tilt)'
                     },
                     gabor_right_key: {
                         type: this.parameterTypes.STRING,
                         default: 'j',
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: right key (discriminate_tilt)'
                     },
                     gabor_yes_key: {
                         type: this.parameterTypes.STRING,
                         default: 'f',
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: yes key (detect_target)'
                     },
                     gabor_no_key: {
                         type: this.parameterTypes.STRING,
                         default: 'j',
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: no key (detect_target)'
                     },
                     gabor_target_location_options: {
                         type: this.parameterTypes.STRING,
                         default: 'left,right',
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: comma-separated target locations to sample from. Allowed: left, right.'
                     },
                     gabor_target_tilt_options: {
                         type: this.parameterTypes.STRING,
                         default: '-45,45',
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: comma-separated target tilts (degrees) to sample from. Allowed range: -90 to 90.'
                     },
                     gabor_distractor_orientation_options: {
                         type: this.parameterTypes.STRING,
                         default: '0,90',
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: comma-separated distractor orientations (degrees) to sample from. Allowed range: 0 to 179.'
                     },
                     gabor_spatial_cue_enabled: {
                         type: this.parameterTypes.BOOL,
                         default: true,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: enable sampling spatial cue presence per trial (when false: spatial_cue forced to none)'
                     },
                     gabor_spatial_cue_options: {
                         type: this.parameterTypes.STRING,
                         default: 'none,left,right,both',
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: comma-separated spatial cue options to sample from. Allowed: none, left, right, both.'
                     },
                     gabor_spatial_cue_probability: {
                         type: this.parameterTypes.FLOAT,
                         default: 1,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: probability a trial contains a spatial cue (0–1)'
+                    },
+                    gabor_spatial_cue_validity_probability: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 1,
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
+                        description: 'Gabor: probability that a unilateral spatial cue (left/right) is valid for target side (0–1)'
                     },
                     gabor_value_cue_enabled: {
                         type: this.parameterTypes.BOOL,
                         default: true,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: enable sampling value cue presence per trial (when false: left/right_value forced to neutral)'
                     },
                     gabor_left_value_options: {
                         type: this.parameterTypes.STRING,
                         default: 'neutral,high,low',
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: comma-separated left value cue options to sample from. Allowed: neutral, high, low.'
                     },
                     gabor_right_value_options: {
                         type: this.parameterTypes.STRING,
                         default: 'neutral,high,low',
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: comma-separated right value cue options to sample from. Allowed: neutral, high, low.'
                     },
                     gabor_value_cue_probability: {
                         type: this.parameterTypes.FLOAT,
                         default: 1,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: probability a trial contains value cues (0–1)'
+                    },
+                    gabor_value_target_value: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'any',
+                        options: ['any', 'high', 'low', 'neutral'],
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
+                        description: 'Gabor Value Learning: when set, force target location to side carrying this value cue'
+                    },
+                    gabor_reward_availability_high: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.8,
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
+                        description: 'Gabor Value Learning: reward-available probability when target appears on HIGH value cue (0–1)'
+                    },
+                    gabor_reward_availability_low: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.8,
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
+                        description: 'Gabor Value Learning: reward-available probability when target appears on LOW value cue (0–1)'
+                    },
+                    gabor_reward_availability_neutral: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0,
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
+                        description: 'Gabor Value Learning: reward-available probability when target appears on NEUTRAL value cue (0–1)'
                     },
                     gabor_spatial_frequency_min: {
                         type: this.parameterTypes.FLOAT,
                         default: 0.06,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: spatial frequency min (cycles per pixel)'
                     },
                     gabor_spatial_frequency_max: {
                         type: this.parameterTypes.FLOAT,
                         default: 0.06,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: spatial frequency max (cycles per pixel)'
                     },
                     gabor_patch_diameter_deg_min: {
                         type: this.parameterTypes.FLOAT,
                         default: 6,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: patch diameter min (degrees of visual angle)'
                     },
                     gabor_patch_diameter_deg_max: {
                         type: this.parameterTypes.FLOAT,
                         default: 6,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: patch diameter max (degrees of visual angle)'
                     },
                     gabor_grating_waveform_options: {
                         type: this.parameterTypes.STRING,
                         default: 'sinusoidal',
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: comma-separated grating waveforms to sample from. Allowed: sinusoidal, square, triangle.'
                     },
                     gabor_patch_border_enabled: {
                         type: this.parameterTypes.BOOL,
                         default: true,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: draw circular patch border (applies to stimulus + mask + placeholders)'
                     },
                     gabor_patch_border_width_px: {
                         type: this.parameterTypes.INT,
                         default: 2,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: patch border line width (px)'
                     },
                     gabor_patch_border_color: {
                         type: this.parameterTypes.COLOR,
                         default: '#FFFFFF',
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: patch border color'
                     },
                     gabor_patch_border_opacity: {
                         type: this.parameterTypes.FLOAT,
                         default: 0.22,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: patch border opacity (0–1)'
                     },
                     gabor_adaptive_mode: {
@@ -3064,25 +3095,25 @@ class JSPsychSchemas {
                     gabor_stimulus_duration_min: {
                         type: this.parameterTypes.INT,
                         default: 67,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: stimulus duration min (ms)'
                     },
                     gabor_stimulus_duration_max: {
                         type: this.parameterTypes.INT,
                         default: 67,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: stimulus duration max (ms)'
                     },
                     gabor_mask_duration_min: {
                         type: this.parameterTypes.INT,
                         default: 67,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: mask duration min (ms)'
                     },
                     gabor_mask_duration_max: {
                         type: this.parameterTypes.INT,
                         default: 67,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: mask duration max (ms)'
                     },
                     group_1_coherence_min: {

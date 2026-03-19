@@ -42,6 +42,9 @@ Key features:
 - Task-scoped component library (task-appropriate components and fields)
 - Blocks (compact “generate many trials” representation with per-trial sampling)
 - Preview modal for many components (including representative Block sampling)
+- Timeline authoring ergonomics:
+  - Component-level **Duplicate Below** action
+  - Stable row alignment and truncation behavior for long timeline labels
 - Export paths:
   - Local JSON download
   - Token Store export (Cloudflare Worker; optional R2 assets) + JATOS Component Properties bundle generation
@@ -138,6 +141,14 @@ The generated snapshot of those schemas (including parameter tables) is:
 
 - [docs/reference/plugins/plugin_schema_reference.md](docs/reference/plugins/plugin_schema_reference.md)
 
+Recent schema additions include Gabor cue/value learning controls such as:
+
+- `gabor_spatial_cue_validity_probability`
+- `gabor_value_target_value`
+- `gabor_reward_availability_high`
+- `gabor_reward_availability_low`
+- `gabor_reward_availability_neutral`
+
 How to regenerate that snapshot:
 
 - Browser generator (no Node required): [tools/generate_plugin_refdocs.html](tools/generate_plugin_refdocs.html)
@@ -187,7 +198,8 @@ Below is a “what you can add to the timeline” inventory by task type. For pa
 ### Gabor components (`task_type: "gabor"`)
 
 - `gabor-trial`
-- `block` (block_component_type can be `gabor-trial` or `gabor-quest`)
+- `block` (block_component_type can be `gabor-trial`, `gabor-quest`, or `gabor-learning`)
+  - Gabor blocks support cue/value learning controls including cue validity probability, target-value coupling, and cue-conditioned reward availability.
 
 ### Flanker components (`task_type: "flanker"`)
 

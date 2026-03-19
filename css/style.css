@@ -1301,6 +1301,57 @@ template {
     align-items: center;
 }
 
+/* Timeline cards: full-width row with drag-left, text-middle, actions-right. */
+.timeline-component {
+    width: 100%;
+}
+
+.timeline-component .card-body > .d-flex.justify-content-between.align-items-center {
+    width: 100%;
+    min-width: 0;
+    gap: 0.5rem;
+}
+
+.timeline-component .card-body > .d-flex.justify-content-between.align-items-center > .d-flex.align-items-center {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 0.25rem;
+}
+
+.timeline-component .card-body > .d-flex.justify-content-between.align-items-center > .d-flex.align-items-center > div:last-child {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.timeline-component .drag-handle {
+    margin-right: 0.15rem !important;
+    padding: 0.1rem;
+}
+
+/* Keep timeline cards visually aligned even when labels are dynamic/long. */
+.timeline-component .card-title {
+    margin-bottom: 0.15rem !important;
+    line-height: 1.2;
+    max-width: 100%;
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.timeline-component .cf-component-label {
+    display: block;
+    font-size: 0.84rem;
+    line-height: 1.2;
+    min-height: 0.95rem;
+    width: 100%;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 /* Keep gutters stable in inner scroll areas too */
 .timeline-container,
 .json-preview {

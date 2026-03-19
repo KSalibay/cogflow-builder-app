@@ -83,7 +83,8 @@ class ComponentPreview {
         // Check component type to determine preview type
         const componentType = componentData?.type || 'unknown';
         
-        console.log('Showing preview for component type:', componentType, 'with data:', componentData);
+        console.log('🔍 ComponentPreview.showPreview() called with componentType:', componentType);
+        console.log('   Full componentData:', componentData);
         
         // Simple, direct routing like the Figma prototype
         if (componentType === 'detection-response-task-start') {
@@ -106,7 +107,8 @@ class ComponentPreview {
             this.showRewardSettingsPreview(componentData);
         } else if (componentType === 'flanker-trial') {
             this.showFlankerPreview(componentData);
-        } else if (componentType === 'gabor-trial' || componentType === 'gabor-quest') {
+        } else if (componentType === 'gabor-trial' || componentType === 'gabor-quest' || componentType === 'gabor-learning') {
+            console.log('   ✓ Routing to showGaborPreview for type:', componentType);
             this.showGaborPreview(componentData);
         } else if (componentType === 'sart-trial') {
             this.showSartPreview(componentData);
@@ -139,6 +141,7 @@ class ComponentPreview {
                    componentType === 'psychophysics-rdm' || 
                    componentType === 'rdk' ||
                    (componentData.coherence !== undefined)) {
+            console.log('   ⚠️  Routing to showRDMPreview; componentType=' + componentType + ', has coherence=' + (componentData.coherence !== undefined));
             this.showRDMPreview(componentData);
         } else {
             console.warn('Unknown component type for preview:', componentType);
@@ -1902,8 +1905,9 @@ class ComponentPreview {
         const targetTilt = Number(componentData?.target_tilt_deg ?? 45);
         const distractorOrientation = Number(componentData?.distractor_orientation_deg ?? 0);
         const spatialCue = (componentData?.spatial_cue ?? 'none').toString();
-        const leftValue = (componentData?.left_value ?? 'neutral').toString();
-        const rightValue = (componentData?.right_value ?? 'neutral').toString();
+        const valueCueEnabled = componentData?.value_cue_enabled !== false && componentData?.value_cue_enabled !== 'false' && componentData?.value_cue_enabled !== 0;
+        const leftValue = valueCueEnabled ? (componentData?.left_value ?? 'neutral').toString() : 'neutral';
+        const rightValue = valueCueEnabled ? (componentData?.right_value ?? 'neutral').toString() : 'neutral';
 
         const responseTask = (componentData?.response_task ?? 'discriminate_tilt').toString();
         const leftKey = (componentData?.left_key ?? 'f').toString();
@@ -2051,10 +2055,14 @@ class ComponentPreview {
             ctx.fillText('(no spatial cue)', Math.floor(w / 2), Math.floor(h * 0.18));
         }
 
-        // Circular value outlines directly around each patch (no padded square frame)
+        // Gabor patches — draw first so value cue rings are painted on top
+        this.drawGaborPatch(ctx, leftCx, cy, patchSize, leftAngle, { spatialFrequency, gratingWaveform, contrast, patchBorder });
+        this.drawGaborPatch(ctx, rightCx, cy, patchSize, rightAngle, { spatialFrequency, gratingWaveform, contrast, patchBorder });
+
+        // Circular value cue rings drawn AFTER patches so putImageData doesn't overwrite them
         const outlineRadius = Math.floor(patchSize / 2) - 1;
         ctx.save();
-        ctx.lineWidth = 6;
+        ctx.lineWidth = Math.max(2, patchBorder?.widthPx ?? 6);
         ctx.strokeStyle = leftFrameColor;
         ctx.beginPath();
         ctx.arc(leftCx, cy, outlineRadius, 0, Math.PI * 2);
@@ -2064,10 +2072,6 @@ class ComponentPreview {
         ctx.arc(rightCx, cy, outlineRadius, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
-
-        // Gabor patches
-        this.drawGaborPatch(ctx, leftCx, cy, patchSize, leftAngle, { spatialFrequency, gratingWaveform, contrast, patchBorder });
-        this.drawGaborPatch(ctx, rightCx, cy, patchSize, rightAngle, { spatialFrequency, gratingWaveform, contrast, patchBorder });
 
     }
 
@@ -2383,7 +2387,8 @@ class ComponentPreview {
             return;
         }
 
-        if (baseType === 'gabor-trial' || baseType === 'gabor-quest') {
+        if (baseType === 'gabor-trial' || baseType === 'gabor-quest' || baseType === 'gabor-learning') {
+            console.log('   ✓ showBlockPreview routing to showGaborPreview for baseType:', baseType);
             this.showGaborPreview(sampled);
             return;
         }
@@ -3823,14 +3828,27 @@ class ComponentPreview {
             const dis = parseNumberList(blockData.gabor_distractor_orientation_options, { min: 0, max: 179 });
             sampled.distractor_orientation_deg = pickFromList(dis, 0);
 
-            const cues = parseStringList(blockData.gabor_spatial_cue_options);
-            sampled.spatial_cue = pickFromList(cues, 'none');
+            const spatialCueEnabled = blockData.gabor_spatial_cue_enabled !== false && blockData.gabor_spatial_cue_enabled !== 'false' && blockData.gabor_spatial_cue_enabled !== 0;
+            sampled.spatial_cue_enabled = spatialCueEnabled;
+            if (spatialCueEnabled) {
+                const cues = parseStringList(blockData.gabor_spatial_cue_options);
+                sampled.spatial_cue = pickFromList(cues, 'none');
+            } else {
+                sampled.spatial_cue = 'none';
+            }
 
-            const lv = parseStringList(blockData.gabor_left_value_options);
-            sampled.left_value = pickFromList(lv, 'neutral');
+            const valueCueEnabled = blockData.gabor_value_cue_enabled !== false && blockData.gabor_value_cue_enabled !== 'false' && blockData.gabor_value_cue_enabled !== 0;
+            sampled.value_cue_enabled = valueCueEnabled;
+            if (valueCueEnabled) {
+                const lv = parseStringList(blockData.gabor_left_value_options);
+                sampled.left_value = pickFromList(lv, 'neutral');
 
-            const rv = parseStringList(blockData.gabor_right_value_options);
-            sampled.right_value = pickFromList(rv, 'neutral');
+                const rv = parseStringList(blockData.gabor_right_value_options);
+                sampled.right_value = pickFromList(rv, 'neutral');
+            } else {
+                sampled.left_value = 'neutral';
+                sampled.right_value = 'neutral';
+            }
 
             const freq = randFloat(blockData.gabor_spatial_frequency_min, blockData.gabor_spatial_frequency_max);
             if (freq !== null) sampled.spatial_frequency_cyc_per_px = freq;
