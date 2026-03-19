@@ -6364,6 +6364,9 @@ class JsonBuilder {
                             <button class="btn btn-sm btn-outline-secondary" onclick="editComponent(this)" title="Edit">
                                 <i class="fas fa-pencil-alt"></i>
                             </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="duplicateComponent(this)" title="Duplicate Below">
+                                <i class="fas fa-copy"></i>
+                            </button>
                             <button class="btn btn-sm btn-outline-danger" onclick="removeComponent(this)" title="Delete">
                                 <i class="fas fa-trash"></i>
                             </button>
@@ -6480,6 +6483,9 @@ class JsonBuilder {
                             </button>
                             <button class="btn btn-sm btn-outline-secondary" onclick="editComponent(this)" title="Edit">
                                 <i class="fas fa-pencil-alt"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="duplicateComponent(this)" title="Duplicate Below">
+                                <i class="fas fa-copy"></i>
                             </button>
                             <button class="btn btn-sm btn-outline-danger" onclick="removeComponent(this)" title="Delete">
                                 <i class="fas fa-trash"></i>
@@ -10723,6 +10729,9 @@ class JsonBuilder {
                         <button class="btn btn-sm btn-outline-secondary" onclick="editComponent(this)" title="Edit">
                             <i class="fas fa-pencil-alt"></i>
                         </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="duplicateComponent(this)" title="Duplicate Below">
+                            <i class="fas fa-copy"></i>
+                        </button>
                         <button class="btn btn-sm btn-outline-danger" onclick="removeComponent(this)" title="Delete">
                             <i class="fas fa-trash"></i>
                         </button>
@@ -11118,6 +11127,99 @@ class JsonBuilder {
             window.componentPreview.showPreview(previewData);
         } else {
             console.error('ComponentPreview not found');
+        }
+    }
+
+    /**
+     * Publish the current config to the CogFlow Platform backend.
+     *
+     * Activated when window.COGFLOW_PLATFORM_URL is set (e.g. "http://localhost:8000").
+     * Study metadata is read from window.COGFLOW_STUDY_SLUG / COGFLOW_STUDY_NAME /
+     * COGFLOW_CONFIG_VERSION, or prompted via the UI when absent.
+     *
+     * Called by the "Platform Publish" button in the platform version of index.html.
+     */
+    async publishToPlatform() {
+        const platformUrl = (
+            typeof window.COGFLOW_PLATFORM_URL === 'string'
+                ? window.COGFLOW_PLATFORM_URL.trim().replace(/\/+$/, '')
+                : ''
+        );
+        if (!platformUrl) {
+            this.showValidationResult(
+                'error',
+                'Platform URL not configured. Set window.COGFLOW_PLATFORM_URL before publishing.'
+            );
+            return;
+        }
+
+        // Build config payload
+        let config;
+        try {
+            config = this.generateJSON();
+        } catch (e) {
+            this.showValidationResult('error', `Could not generate config: ${e?.message || String(e)}`);
+            return;
+        }
+
+        // Block on validation errors (same as exportJSON)
+        const blockLengthErrors = this.findBlockLengthViolations(config);
+        if (blockLengthErrors.length > 0) {
+            this.showValidationResult('error', `Cannot publish: ${blockLengthErrors.join(' | ')}`);
+            return;
+        }
+
+        // Study metadata — read from window globals set by platform index.html, with sane fallbacks.
+        const studySlug = (
+            (typeof window.COGFLOW_STUDY_SLUG === 'string' && window.COGFLOW_STUDY_SLUG.trim()) ||
+            (config && config.task_type ? `${config.task_type}-study` : 'untitled-study')
+        );
+        const studyName = (
+            (typeof window.COGFLOW_STUDY_NAME === 'string' && window.COGFLOW_STUDY_NAME.trim()) ||
+            studySlug
+        );
+        const versionLabel = (
+            (typeof window.COGFLOW_CONFIG_VERSION === 'string' && window.COGFLOW_CONFIG_VERSION.trim()) ||
+            `v${new Date().toISOString().slice(0, 10)}`
+        );
+        const builderVersion = (
+            typeof window.__COGFLOW_BUILDER_VERSION === 'string'
+                ? window.__COGFLOW_BUILDER_VERSION
+                : 'unknown'
+        );
+
+        const payload = {
+            study_slug: studySlug,
+            study_name: studyName,
+            config_version_label: versionLabel,
+            builder_version: builderVersion,
+            runtime_mode: 'django',
+            config,
+        };
+
+        this.showValidationResult('success', `Publishing to ${platformUrl}…`);
+
+        try {
+            const response = await fetch(`${platformUrl}/api/v1/configs/publish`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            const data = await response.json().catch(() => ({}));
+
+            if (response.ok) {
+                const dashUrl = data.dashboard_url || `${platformUrl}/studies/${data.study_slug || studySlug}/`;
+                this.showValidationResult(
+                    'success',
+                    `Published! Study: ${data.study_slug || studySlug} · Config ID: ${data.config_version_id || '—'}\nDashboard: ${dashUrl}`
+                );
+            } else {
+                const errMsg = data.detail || data.error || JSON.stringify(data);
+                this.showValidationResult('error', `Publish failed (${response.status}): ${errMsg}`);
+            }
+        } catch (e) {
+            this.showValidationResult('error', `Publish error: ${e?.message || String(e)}`);
         }
     }
 }

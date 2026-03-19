@@ -71,6 +71,9 @@
                 <button class="btn btn-outline-light me-2" id="prepJatosPropsBtn">
                     <i class="fas fa-clipboard"></i> JATOS Props
                 </button>
+                <button class="btn btn-warning me-2" id="platformPublishBtn" style="display:none" title="Publish config to CogFlow Platform">
+                    <i class="fas fa-server"></i> Platform Publish
+                </button>
                 <button class="btn btn-success" id="exportJsonBtn">
                     <i class="fas fa-cloud-arrow-up"></i> Export
                 </button>
@@ -464,6 +467,17 @@
             
             // Store globally for access from other functions
             window.jsonBuilderInstance = jsonBuilder;
+
+            // Platform Publish button — visible only when COGFLOW_PLATFORM_URL is configured.
+            const platformPublishBtn = document.getElementById('platformPublishBtn');
+            if (platformPublishBtn) {
+                if (typeof window.COGFLOW_PLATFORM_URL === 'string' && window.COGFLOW_PLATFORM_URL.trim()) {
+                    platformPublishBtn.style.display = '';
+                }
+                platformPublishBtn.addEventListener('click', () => {
+                    jsonBuilder.publishToPlatform();
+                });
+            }
             
             // Initialize ComponentPreview (guard against double-init)
             if (!window.componentPreview) {
@@ -657,6 +671,9 @@
                             </button>
                             <button class="btn btn-sm btn-outline-secondary" onclick="editComponent(this)" title="Edit">
                                 <i class="fas fa-pencil-alt"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="duplicateComponent(this)" title="Duplicate Below">
+                                <i class="fas fa-copy"></i>
                             </button>
                             <button class="btn btn-sm btn-outline-danger" onclick="removeComponent(this)" title="Delete">
                                 <i class="fas fa-trash"></i>
@@ -1292,6 +1309,41 @@
             }
             
             console.log('Saved instructions component:', updatedData);
+        }
+
+        function duplicateComponent(button) {
+            const component = button.closest('.timeline-component');
+            if (!component) {
+                console.warn('No component found for duplication');
+                return;
+            }
+
+            const timelineContainer = document.getElementById('timelineComponents');
+            if (!timelineContainer) {
+                console.warn('Timeline container not found');
+                return;
+            }
+
+            const cloned = component.cloneNode(true);
+
+            // Keep data payload independent and valid JSON string in the duplicate.
+            try {
+                const parsed = JSON.parse(component.dataset.componentData || '{}');
+                cloned.dataset.componentData = JSON.stringify(parsed);
+            } catch {
+                cloned.dataset.componentData = component.dataset.componentData || '{}';
+            }
+
+            component.insertAdjacentElement('afterend', cloned);
+
+            const emptyState = timelineContainer.querySelector('.empty-timeline');
+            if (emptyState) {
+                emptyState.style.display = 'none';
+            }
+
+            if (window.jsonBuilderInstance) {
+                window.jsonBuilderInstance.updateJSON();
+            }
         }
         
         function removeComponent(button) {
