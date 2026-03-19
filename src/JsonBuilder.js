@@ -5106,10 +5106,15 @@ class JsonBuilder {
                 gabor_spatial_cue_enabled: { type: 'boolean', default: true },
                 gabor_spatial_cue_options: { type: 'string', default: 'none,left,right,both' },
                 gabor_spatial_cue_probability: { type: 'number', default: 1, min: 0, max: 1, step: 0.01 },
+                gabor_spatial_cue_validity_probability: { type: 'number', default: 1, min: 0, max: 1, step: 0.01 },
                 gabor_value_cue_enabled: { type: 'boolean', default: true },
                 gabor_left_value_options: { type: 'string', default: 'neutral,high,low' },
                 gabor_right_value_options: { type: 'string', default: 'neutral,high,low' },
                 gabor_value_cue_probability: { type: 'number', default: 1, min: 0, max: 1, step: 0.01 },
+                gabor_value_target_value: { type: 'select', default: 'any', options: ['any', 'high', 'low', 'neutral'] },
+                gabor_reward_availability_high: { type: 'number', default: 0.8, min: 0, max: 1, step: 0.01 },
+                gabor_reward_availability_low: { type: 'number', default: 0.8, min: 0, max: 1, step: 0.01 },
+                gabor_reward_availability_neutral: { type: 'number', default: 0, min: 0, max: 1, step: 0.01 },
 
                 gabor_spatial_frequency_min: { type: 'number', default: 0.06, min: 0.001, max: 0.5, step: 0.001 },
                 gabor_spatial_frequency_max: { type: 'number', default: 0.06, min: 0.001, max: 0.5, step: 0.001 },
@@ -6349,7 +6354,7 @@ class JsonBuilder {
                                 <h6 class="card-title mb-1">
                                     ${iconHtml} ${title}
                                 </h6>
-                                <small class="text-muted">${subtitle}</small>
+                                <small class="text-muted cf-component-label">${subtitle}</small>
                             </div>
                         </div>
                         <div class="btn-group" role="group">
@@ -6466,7 +6471,7 @@ class JsonBuilder {
                                 <h6 class="card-title mb-1">
                                     <i class="${componentDef.icon} text-primary"></i> ${componentDef.name}
                                 </h6>
-                                <small class="text-muted">${componentDef.description}</small>
+                                <small class="text-muted cf-component-label">${componentDef.description}</small>
                             </div>
                         </div>
                         <div class="btn-group" role="group">
@@ -9002,6 +9007,10 @@ class JsonBuilder {
             if (Number.isFinite(pSpatial)) {
                 values.spatial_cue_probability = Math.max(0, Math.min(1, pSpatial));
             }
+            const pSpatialValidity = Number(blockComponent.gabor_spatial_cue_validity_probability);
+            if (Number.isFinite(pSpatialValidity)) {
+                values.spatial_cue_validity_probability = Math.max(0, Math.min(1, pSpatialValidity));
+            }
 
             const lv = parseStringList(blockComponent.gabor_left_value_options);
             if (lv.length > 0) {
@@ -9019,6 +9028,24 @@ class JsonBuilder {
             const pValue = Number(blockComponent.gabor_value_cue_probability);
             if (Number.isFinite(pValue)) {
                 values.value_cue_probability = Math.max(0, Math.min(1, pValue));
+            }
+
+            const valueTarget = (blockComponent.gabor_value_target_value ?? '').toString().trim().toLowerCase();
+            if (valueTarget === 'high' || valueTarget === 'low' || valueTarget === 'neutral' || valueTarget === 'any') {
+                values.value_target_value = valueTarget;
+            }
+
+            const pRewardHigh = Number(blockComponent.gabor_reward_availability_high);
+            if (Number.isFinite(pRewardHigh)) {
+                values.reward_availability_high = Math.max(0, Math.min(1, pRewardHigh));
+            }
+            const pRewardLow = Number(blockComponent.gabor_reward_availability_low);
+            if (Number.isFinite(pRewardLow)) {
+                values.reward_availability_low = Math.max(0, Math.min(1, pRewardLow));
+            }
+            const pRewardNeutral = Number(blockComponent.gabor_reward_availability_neutral);
+            if (Number.isFinite(pRewardNeutral)) {
+                values.reward_availability_neutral = Math.max(0, Math.min(1, pRewardNeutral));
             }
 
             addWindow('spatial_frequency_cyc_per_px', blockComponent.gabor_spatial_frequency_min, blockComponent.gabor_spatial_frequency_max);
