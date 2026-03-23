@@ -1690,6 +1690,11 @@ class JSPsychSchemas {
                         type: this.parameterTypes.FLOAT,
                         default: 0.22,
                         description: 'Patch border opacity (0–1)'
+                    },
+                    contrast: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.95,
+                        description: 'Gabor patch contrast (0–1)'
                     }
                 }
             },
@@ -1853,6 +1858,161 @@ class JSPsychSchemas {
                 }
             },
 
+            'mot-trial': {
+                name: 'mot-trial',
+                description: 'Multiple Object Tracking (MOT) trial — animate objects on canvas, cue targets by flashing, then probe',
+                parameters: {
+                    // Objects
+                    num_objects: {
+                        type: this.parameterTypes.INT,
+                        default: 8,
+                        min: 2,
+                        max: 20,
+                        description: 'Total number of objects on screen'
+                    },
+                    num_targets: {
+                        type: this.parameterTypes.INT,
+                        default: 4,
+                        min: 1,
+                        max: 10,
+                        description: 'Number of target objects to track'
+                    },
+                    object_radius_px: {
+                        type: this.parameterTypes.INT,
+                        default: 22,
+                        min: 5,
+                        max: 80,
+                        description: 'Radius of each object in pixels'
+                    },
+                    object_color: {
+                        type: this.parameterTypes.COLOR,
+                        default: '#FFFFFF',
+                        description: 'Fill color for all objects (outside cue phase)'
+                    },
+                    target_cue_color: {
+                        type: this.parameterTypes.COLOR,
+                        default: '#FF9900',
+                        description: 'Alternate flash color used to cue targets during the cue phase'
+                    },
+                    background_color: {
+                        type: this.parameterTypes.COLOR,
+                        default: '#111111',
+                        description: 'Canvas background color'
+                    },
+                    // Arena
+                    arena_width_px: {
+                        type: this.parameterTypes.INT,
+                        default: 700,
+                        min: 200,
+                        max: 1400,
+                        description: 'Width of the arena canvas in pixels'
+                    },
+                    arena_height_px: {
+                        type: this.parameterTypes.INT,
+                        default: 500,
+                        min: 150,
+                        max: 1000,
+                        description: 'Height of the arena canvas in pixels'
+                    },
+                    boundary_behavior: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'bounce',
+                        options: ['bounce', 'wrap'],
+                        description: 'How objects behave at arena boundaries'
+                    },
+                    min_separation_px: {
+                        type: this.parameterTypes.INT,
+                        default: 50,
+                        min: 0,
+                        max: 200,
+                        description: 'Minimum center-to-center distance when placing objects initially'
+                    },
+                    // Motion
+                    speed_px_per_s: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 150,
+                        min: 20,
+                        max: 600,
+                        description: 'Object speed in pixels per second'
+                    },
+                    speed_variability: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.0,
+                        min: 0,
+                        max: 1,
+                        description: 'Per-object speed jitter (0 = all same speed, 1 = ±100% of base speed)'
+                    },
+                    motion_type: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'linear',
+                        options: ['linear', 'curved'],
+                        description: 'Trajectory type: linear (straight paths) or curved (smooth random turns)'
+                    },
+                    curve_strength: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.3,
+                        min: 0,
+                        max: 1,
+                        description: 'Turning rate for curved motion (ignored when motion_type is linear)'
+                    },
+                    // Timing
+                    cue_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 2000,
+                        min: 500,
+                        max: 5000,
+                        description: 'Duration of the cue phase (ms) during which targets flash'
+                    },
+                    cue_flash_rate_hz: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 3,
+                        min: 0.5,
+                        max: 10,
+                        description: 'Flash frequency (Hz) for target cue color alternation'
+                    },
+                    tracking_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 8000,
+                        min: 1000,
+                        max: 30000,
+                        description: 'Duration of the tracking phase (ms) where all objects move unlabeled'
+                    },
+                    iti_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 1000,
+                        min: 0,
+                        max: 10000,
+                        description: 'Inter-trial interval (ms) shown as blank canvas after the response'
+                    },
+                    // Probe / Response
+                    probe_mode: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'click',
+                        options: ['click', 'number_entry'],
+                        description: 'Probe interaction: click objects to select targets, or type numbered labels shown inside objects'
+                    },
+                    probe_timeout_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 0,
+                        min: 0,
+                        max: 30000,
+                        description: 'Probe phase time limit in ms (0 = no time limit)'
+                    },
+                    show_feedback: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        description: 'Show correct/incorrect feedback after probe response'
+                    },
+                    feedback_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 1500,
+                        min: 0,
+                        max: 10000,
+                        description: 'Duration of feedback display in ms (ignored when show_feedback is false)'
+                    }
+                }
+            },
+
             'block': {
                 name: 'block',
                 description: 'Generate many trials from parameter windows/ranges (compact representation for large experiments)',
@@ -1860,7 +2020,7 @@ class JSPsychSchemas {
                     block_component_type: {
                         type: this.parameterTypes.SELECT,
                         default: 'rdm-trial',
-                        options: ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups', 'flanker-trial', 'sart-trial', 'simon-trial', 'pvt-trial', 'task-switching-trial', 'stroop-trial', 'emotional-stroop-trial', 'gabor-trial', 'gabor-quest', 'nback-block', 'html-button-response', 'html-keyboard-response', 'image-keyboard-response', 'continuous-image-presentation'],
+                        options: ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups', 'flanker-trial', 'sart-trial', 'simon-trial', 'pvt-trial', 'task-switching-trial', 'stroop-trial', 'emotional-stroop-trial', 'gabor-trial', 'gabor-quest', 'gabor-learning', 'nback-block', 'mot-trial', 'html-button-response', 'html-keyboard-response', 'image-keyboard-response', 'continuous-image-presentation'],
                         required: true,
                         description: 'What component type this block generates'
                     },
@@ -2787,145 +2947,176 @@ class JSPsychSchemas {
                         type: this.parameterTypes.SELECT,
                         default: 'discriminate_tilt',
                         options: ['detect_target', 'discriminate_tilt'],
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: response task mode for generated trials'
                     },
                     gabor_left_key: {
                         type: this.parameterTypes.STRING,
                         default: 'f',
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: left key (discriminate_tilt)'
                     },
                     gabor_right_key: {
                         type: this.parameterTypes.STRING,
                         default: 'j',
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: right key (discriminate_tilt)'
                     },
                     gabor_yes_key: {
                         type: this.parameterTypes.STRING,
                         default: 'f',
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: yes key (detect_target)'
                     },
                     gabor_no_key: {
                         type: this.parameterTypes.STRING,
                         default: 'j',
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: no key (detect_target)'
                     },
                     gabor_target_location_options: {
                         type: this.parameterTypes.STRING,
                         default: 'left,right',
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: comma-separated target locations to sample from. Allowed: left, right.'
                     },
                     gabor_target_tilt_options: {
                         type: this.parameterTypes.STRING,
                         default: '-45,45',
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: comma-separated target tilts (degrees) to sample from. Allowed range: -90 to 90.'
                     },
                     gabor_distractor_orientation_options: {
                         type: this.parameterTypes.STRING,
                         default: '0,90',
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: comma-separated distractor orientations (degrees) to sample from. Allowed range: 0 to 179.'
                     },
                     gabor_spatial_cue_enabled: {
                         type: this.parameterTypes.BOOL,
                         default: true,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: enable sampling spatial cue presence per trial (when false: spatial_cue forced to none)'
                     },
                     gabor_spatial_cue_options: {
                         type: this.parameterTypes.STRING,
                         default: 'none,left,right,both',
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: comma-separated spatial cue options to sample from. Allowed: none, left, right, both.'
                     },
                     gabor_spatial_cue_probability: {
                         type: this.parameterTypes.FLOAT,
                         default: 1,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: probability a trial contains a spatial cue (0–1)'
+                    },
+                    gabor_spatial_cue_validity_probability: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 1,
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
+                        description: 'Gabor: probability that a unilateral spatial cue (left/right) is valid for target side (0–1)'
                     },
                     gabor_value_cue_enabled: {
                         type: this.parameterTypes.BOOL,
                         default: true,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: enable sampling value cue presence per trial (when false: left/right_value forced to neutral)'
                     },
                     gabor_left_value_options: {
                         type: this.parameterTypes.STRING,
                         default: 'neutral,high,low',
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: comma-separated left value cue options to sample from. Allowed: neutral, high, low.'
                     },
                     gabor_right_value_options: {
                         type: this.parameterTypes.STRING,
                         default: 'neutral,high,low',
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: comma-separated right value cue options to sample from. Allowed: neutral, high, low.'
                     },
                     gabor_value_cue_probability: {
                         type: this.parameterTypes.FLOAT,
                         default: 1,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: probability a trial contains value cues (0–1)'
+                    },
+                    gabor_value_target_value: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'any',
+                        options: ['any', 'high', 'low', 'neutral'],
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
+                        description: 'Gabor Value Learning: when set, force target location to side carrying this value cue'
+                    },
+                    gabor_reward_availability_high: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.8,
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
+                        description: 'Gabor Value Learning: reward-available probability when target appears on HIGH value cue (0–1)'
+                    },
+                    gabor_reward_availability_low: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.8,
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
+                        description: 'Gabor Value Learning: reward-available probability when target appears on LOW value cue (0–1)'
+                    },
+                    gabor_reward_availability_neutral: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0,
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
+                        description: 'Gabor Value Learning: reward-available probability when target appears on NEUTRAL value cue (0–1)'
                     },
                     gabor_spatial_frequency_min: {
                         type: this.parameterTypes.FLOAT,
                         default: 0.06,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: spatial frequency min (cycles per pixel)'
                     },
                     gabor_spatial_frequency_max: {
                         type: this.parameterTypes.FLOAT,
                         default: 0.06,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: spatial frequency max (cycles per pixel)'
                     },
                     gabor_patch_diameter_deg_min: {
                         type: this.parameterTypes.FLOAT,
                         default: 6,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: patch diameter min (degrees of visual angle)'
                     },
                     gabor_patch_diameter_deg_max: {
                         type: this.parameterTypes.FLOAT,
                         default: 6,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: patch diameter max (degrees of visual angle)'
                     },
                     gabor_grating_waveform_options: {
                         type: this.parameterTypes.STRING,
                         default: 'sinusoidal',
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: comma-separated grating waveforms to sample from. Allowed: sinusoidal, square, triangle.'
                     },
                     gabor_patch_border_enabled: {
                         type: this.parameterTypes.BOOL,
                         default: true,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: draw circular patch border (applies to stimulus + mask + placeholders)'
                     },
                     gabor_patch_border_width_px: {
                         type: this.parameterTypes.INT,
                         default: 2,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: patch border line width (px)'
                     },
                     gabor_patch_border_color: {
                         type: this.parameterTypes.COLOR,
                         default: '#FFFFFF',
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: patch border color'
                     },
                     gabor_patch_border_opacity: {
                         type: this.parameterTypes.FLOAT,
                         default: 0.22,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: patch border opacity (0–1)'
                     },
                     gabor_adaptive_mode: {
@@ -2938,7 +3129,7 @@ class JSPsychSchemas {
                     gabor_quest_parameter: {
                         type: this.parameterTypes.SELECT,
                         default: 'target_tilt_deg',
-                        options: ['target_tilt_deg', 'spatial_frequency_cyc_per_px'],
+                        options: ['target_tilt_deg', 'spatial_frequency_cyc_per_px', 'contrast'],
                         blockTarget: 'gabor-trial,gabor-quest',
                         description: 'Gabor QUEST: which parameter to adapt'
                     },
@@ -2990,28 +3181,94 @@ class JSPsychSchemas {
                         blockTarget: 'gabor-trial,gabor-quest',
                         description: 'Gabor QUEST: maximum allowed value'
                     },
+                    gabor_quest_trials_coarse: {
+                        type: this.parameterTypes.INT,
+                        default: 32,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor QUEST: trials in broad staircase phase'
+                    },
+                    gabor_quest_trials_fine: {
+                        type: this.parameterTypes.INT,
+                        default: 32,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor QUEST: trials in fine-tuning staircase phase (runs after coarse)'
+                    },
+                    gabor_quest_staircase_per_location: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor QUEST: run separate staircases for left and right target locations'
+                    },
+                    gabor_quest_store_location_threshold: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        blockTarget: 'gabor-trial,gabor-quest',
+                        description: 'Gabor QUEST: store per-location thresholds in window.cogflowState after block completes'
+                    },
+                    gabor_contrast_min: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.05,
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
+                        description: 'Gabor: contrast minimum (0–1)'
+                    },
+                    gabor_contrast_max: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.95,
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
+                        description: 'Gabor: contrast maximum (0–1)'
+                    },
+                    gabor_learning_streak_length: {
+                        type: this.parameterTypes.INT,
+                        default: 20,
+                        blockTarget: 'gabor-learning',
+                        description: 'Gabor Learning: number of recent trials to evaluate accuracy over'
+                    },
+                    gabor_learning_target_accuracy: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 0.9,
+                        blockTarget: 'gabor-learning',
+                        description: 'Gabor Learning: accuracy criterion to reach (0–1, e.g. 0.9 = 90%)'
+                    },
+                    gabor_learning_max_trials: {
+                        type: this.parameterTypes.INT,
+                        default: 200,
+                        blockTarget: 'gabor-learning',
+                        description: 'Gabor Learning: maximum number of trials before block ends regardless of accuracy'
+                    },
+                    gabor_show_feedback: {
+                        type: this.parameterTypes.BOOL,
+                        default: true,
+                        blockTarget: 'gabor-learning',
+                        description: 'Gabor: show correct/incorrect feedback after each trial'
+                    },
+                    gabor_feedback_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 800,
+                        blockTarget: 'gabor-learning',
+                        description: 'Gabor: duration of feedback display (ms)'
+                    },
                     gabor_stimulus_duration_min: {
                         type: this.parameterTypes.INT,
                         default: 67,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: stimulus duration min (ms)'
                     },
                     gabor_stimulus_duration_max: {
                         type: this.parameterTypes.INT,
                         default: 67,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: stimulus duration max (ms)'
                     },
                     gabor_mask_duration_min: {
                         type: this.parameterTypes.INT,
                         default: 67,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: mask duration min (ms)'
                     },
                     gabor_mask_duration_max: {
                         type: this.parameterTypes.INT,
                         default: 67,
-                        blockTarget: 'gabor-trial,gabor-quest',
+                        blockTarget: 'gabor-trial,gabor-quest,gabor-learning',
                         description: 'Gabor: mask duration max (ms)'
                     },
                     group_1_coherence_min: {
@@ -3073,6 +3330,88 @@ class JSPsychSchemas {
                         default: 10,
                         blockTarget: 'rdm-dot-groups',
                         description: 'RDM Groups: group 2 speed max'
+                    },
+
+                    // MOT block window parameters
+                    mot_num_objects_options: {
+                        type: this.parameterTypes.STRING,
+                        default: '6,8,10',
+                        blockTarget: 'mot-trial',
+                        description: 'MOT: comma-separated integers for num_objects sampling'
+                    },
+                    mot_num_targets_options: {
+                        type: this.parameterTypes.STRING,
+                        default: '2,3,4',
+                        blockTarget: 'mot-trial',
+                        description: 'MOT: comma-separated integers for num_targets sampling'
+                    },
+                    mot_speed_px_per_s_min: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 100,
+                        blockTarget: 'mot-trial',
+                        description: 'MOT: minimum speed (px/s) for block sampling'
+                    },
+                    mot_speed_px_per_s_max: {
+                        type: this.parameterTypes.FLOAT,
+                        default: 200,
+                        blockTarget: 'mot-trial',
+                        description: 'MOT: maximum speed (px/s) for block sampling'
+                    },
+                    mot_tracking_duration_ms_min: {
+                        type: this.parameterTypes.INT,
+                        default: 5000,
+                        blockTarget: 'mot-trial',
+                        description: 'MOT: minimum tracking duration (ms) for block sampling'
+                    },
+                    mot_tracking_duration_ms_max: {
+                        type: this.parameterTypes.INT,
+                        default: 10000,
+                        blockTarget: 'mot-trial',
+                        description: 'MOT: maximum tracking duration (ms) for block sampling'
+                    },
+                    mot_cue_duration_ms_min: {
+                        type: this.parameterTypes.INT,
+                        default: 1500,
+                        blockTarget: 'mot-trial',
+                        description: 'MOT: minimum cue duration (ms) for block sampling'
+                    },
+                    mot_cue_duration_ms_max: {
+                        type: this.parameterTypes.INT,
+                        default: 2500,
+                        blockTarget: 'mot-trial',
+                        description: 'MOT: maximum cue duration (ms) for block sampling'
+                    },
+                    mot_iti_ms_min: {
+                        type: this.parameterTypes.INT,
+                        default: 800,
+                        blockTarget: 'mot-trial',
+                        description: 'MOT: minimum ITI (ms) for block sampling'
+                    },
+                    mot_iti_ms_max: {
+                        type: this.parameterTypes.INT,
+                        default: 1500,
+                        blockTarget: 'mot-trial',
+                        description: 'MOT: maximum ITI (ms) for block sampling'
+                    },
+                    mot_motion_type: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'linear',
+                        options: ['linear', 'curved'],
+                        blockTarget: 'mot-trial',
+                        description: 'MOT: fixed motion type for all trials in this block'
+                    },
+                    mot_probe_mode: {
+                        type: this.parameterTypes.SELECT,
+                        default: 'click',
+                        options: ['click', 'number_entry'],
+                        blockTarget: 'mot-trial',
+                        description: 'MOT: fixed probe mode for all trials in this block'
+                    },
+                    mot_show_feedback: {
+                        type: this.parameterTypes.BOOL,
+                        default: false,
+                        blockTarget: 'mot-trial',
+                        description: 'MOT: whether to show feedback for all trials in this block'
                     }
                 },
                 data: {}
@@ -3533,7 +3872,22 @@ class JSPsychSchemas {
             }
 
             // Validate task type (experiment-wide)
-            const knownTaskTypes = ['rdm', 'sart', 'flanker', 'gabor', 'soc-dashboard', 'stroop', 'nback', 'simon', 'custom'];
+            const knownTaskTypes = [
+                'rdm',
+                'stroop',
+                'emotional-stroop',
+                'nback',
+                'simon',
+                'task-switching',
+                'pvt',
+                'mot',
+                'gabor',
+                'flanker',
+                'sart',
+                'continuous-image',
+                'soc-dashboard',
+                'custom'
+            ];
             if (config.task_type === undefined || config.task_type === null || config.task_type === '') {
                 warnings.push('Missing recommended field: task_type');
             } else if (typeof config.task_type !== 'string') {

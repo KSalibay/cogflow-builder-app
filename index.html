@@ -11,13 +11,21 @@
     <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
 
     <script>
-        // Apply Accessibility Mode early to avoid a flash of default styling
+        // Apply Accessibility Mode + Theme early to avoid flash of wrong styling
         (function () {
             try {
                 const enabled = localStorage.getItem('cogflow_builder_a11y') === '1';
                 if (enabled) document.documentElement.classList.add('cf-a11y');
             } catch (e) {
                 // Ignore storage errors (privacy mode, etc.)
+            }
+
+            try {
+                const savedTheme = localStorage.getItem('cogflow_builder_theme');
+                const theme = (savedTheme === 'dark' || savedTheme === 'light') ? savedTheme : 'light';
+                document.documentElement.setAttribute('data-cf-theme', theme);
+            } catch (e) {
+                document.documentElement.setAttribute('data-cf-theme', 'light');
             }
         })();
     </script>
@@ -42,6 +50,9 @@
                 <img src="img/logo_builder_light.png" alt="CogFlow Builder" class="cf-brand-logo">
             </span>
             <div class="d-flex">
+                <button class="btn btn-outline-light me-2 cf-theme-toggle" id="pageThemeToggle" title="Toggle Builder theme">
+                    <i class="fas fa-circle-half-stroke"></i> Theme: Light
+                </button>
                 <button class="btn btn-outline-light me-2" id="loadTemplateBtn">
                     <i class="fas fa-folder-open"></i> Load Template
                 </button>
@@ -59,6 +70,9 @@
                 </button>
                 <button class="btn btn-outline-light me-2" id="prepJatosPropsBtn">
                     <i class="fas fa-clipboard"></i> JATOS Props
+                </button>
+                <button class="btn btn-warning me-2" id="platformPublishBtn" style="display:none" title="Publish config to CogFlow Platform">
+                    <i class="fas fa-server"></i> Platform Publish
                 </button>
                 <button class="btn btn-success" id="exportJsonBtn">
                     <i class="fas fa-cloud-arrow-up"></i> Export
@@ -107,6 +121,7 @@
                                 <option value="simon">Simon Task</option>
                                 <option value="task-switching">Task Switching</option>
                                 <option value="pvt">Psychomotor Vigilance Task (PVT)</option>
+                                <option value="mot">Multiple Object Tracking (MOT)</option>
                                 <option value="gabor">Gabor Patch Task</option>
                                 <option value="flanker">Flanker Task</option>
                                 <option value="sart">SART</option>
@@ -385,13 +400,85 @@
     <script src="src/schemas/UnifiedSchema.js?v=20260113-10"></script>
 
     <script>
+        function setBuilderTheme(theme) {
+            const t = (theme === 'dark') ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-cf-theme', t);
+            try {
+                localStorage.setItem('cogflow_builder_theme', t);
+            } catch (e) {
+                // Ignore storage errors
+            }
+
+            const btn = document.getElementById('pageThemeToggle');
+            if (btn) {
+                btn.innerHTML = `<i class="fas fa-circle-half-stroke"></i> Theme: ${t === 'dark' ? 'Dark' : 'Light'}`;
+            }
+        }
+
+        function installDebugRemnantCleaner() {
+            const looksLikeDebugRemnant = (el) => {
+                try {
+                    const text = (el && el.textContent ? el.textContent : '').toLowerCase();
+                    if (!text) return false;
+                    return text.includes('study result visibility mode') || /^\s*worker\s*:\s*\d+\s*$/i.test(text);
+                } catch {
+                    return false;
+                }
+            };
+
+            const removeDebugRemnants = () => {
+                const all = Array.from(document.querySelectorAll('body *'));
+                all.forEach((el) => {
+                    if (!looksLikeDebugRemnant(el)) return;
+                    if (el.closest('.navbar, .card, .modal, #componentPreviewModal')) return;
+                    try {
+                        const style = window.getComputedStyle(el);
+                        const isBottomLeft = style && style.position === 'fixed' && style.left !== 'auto' && style.bottom !== 'auto';
+                        const isTiny = style && Number.parseFloat(style.fontSize || '0') <= 12;
+                        if (isBottomLeft || isTiny) el.remove();
+                    } catch {
+                        // ignore
+                    }
+                });
+            };
+
+            removeDebugRemnants();
+            const obs = new MutationObserver(() => removeDebugRemnants());
+            obs.observe(document.body, { childList: true, subtree: true });
+        }
+
         // Initialize the application
         document.addEventListener('DOMContentLoaded', function() {
+            const initialTheme = document.documentElement.getAttribute('data-cf-theme') || 'light';
+            setBuilderTheme(initialTheme);
+
+            const pageThemeToggle = document.getElementById('pageThemeToggle');
+            if (pageThemeToggle && pageThemeToggle.dataset.bound !== '1') {
+                pageThemeToggle.dataset.bound = '1';
+                pageThemeToggle.addEventListener('click', () => {
+                    const current = document.documentElement.getAttribute('data-cf-theme') || 'light';
+                    setBuilderTheme(current === 'dark' ? 'light' : 'dark');
+                });
+            }
+
+            installDebugRemnantCleaner();
+
             const jsonBuilder = new JsonBuilder();
             jsonBuilder.initialize();
             
             // Store globally for access from other functions
             window.jsonBuilderInstance = jsonBuilder;
+
+            // Platform Publish button — visible only when COGFLOW_PLATFORM_URL is configured.
+            const platformPublishBtn = document.getElementById('platformPublishBtn');
+            if (platformPublishBtn) {
+                if (typeof window.COGFLOW_PLATFORM_URL === 'string' && window.COGFLOW_PLATFORM_URL.trim()) {
+                    platformPublishBtn.style.display = '';
+                }
+                platformPublishBtn.addEventListener('click', () => {
+                    jsonBuilder.publishToPlatform();
+                });
+            }
             
             // Initialize ComponentPreview (guard against double-init)
             if (!window.componentPreview) {
@@ -454,6 +541,7 @@
                     sart: 'SART task',
                     simon: 'Simon task',
                     pvt: 'PVT task',
+                    mot: 'MOT task',
                     gabor: 'Gabor task',
                     'soc-dashboard': 'SOC Dashboard'
                 };
@@ -586,6 +674,9 @@
                             <button class="btn btn-sm btn-outline-secondary" onclick="editComponent(this)" title="Edit">
                                 <i class="fas fa-pencil-alt"></i>
                             </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="duplicateComponent(this)" title="Duplicate Below">
+                                <i class="fas fa-copy"></i>
+                            </button>
                             <button class="btn btn-sm btn-outline-danger" onclick="removeComponent(this)" title="Delete">
                                 <i class="fas fa-trash"></i>
                             </button>
@@ -620,6 +711,7 @@
                     sart: 'SART task',
                     simon: 'Simon task',
                     pvt: 'PVT task',
+                    mot: 'MOT task',
                     gabor: 'Gabor task',
                     'soc-dashboard': 'SOC Dashboard'
                 };
@@ -1220,6 +1312,41 @@
             }
             
             console.log('Saved instructions component:', updatedData);
+        }
+
+        function duplicateComponent(button) {
+            const component = button.closest('.timeline-component');
+            if (!component) {
+                console.warn('No component found for duplication');
+                return;
+            }
+
+            const timelineContainer = document.getElementById('timelineComponents');
+            if (!timelineContainer) {
+                console.warn('Timeline container not found');
+                return;
+            }
+
+            const cloned = component.cloneNode(true);
+
+            // Keep data payload independent and valid JSON string in the duplicate.
+            try {
+                const parsed = JSON.parse(component.dataset.componentData || '{}');
+                cloned.dataset.componentData = JSON.stringify(parsed);
+            } catch {
+                cloned.dataset.componentData = component.dataset.componentData || '{}';
+            }
+
+            component.insertAdjacentElement('afterend', cloned);
+
+            const emptyState = timelineContainer.querySelector('.empty-timeline');
+            if (emptyState) {
+                emptyState.style.display = 'none';
+            }
+
+            if (window.jsonBuilderInstance) {
+                window.jsonBuilderInstance.updateJSON();
+            }
         }
         
         function removeComponent(button) {

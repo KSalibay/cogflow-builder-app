@@ -2,7 +2,7 @@
 
 Generated from `src/schemas/JSPsychSchemas.js`.
 
-Generated at: 2026-03-09T20:26:01Z
+Generated at: 2026-03-19T19:35:49Z
 
 ---
 
@@ -24,7 +24,7 @@ Generate many trials from parameter windows/ranges (compact representation for l
 | adaptive_target_performance | FLOAT | 0.82 | RDM Adaptive: target performance (fixed) | blockTarget: rdm-adaptive |
 | aperture_outline_color | COLOR | #FFFFFF | Outline color when overriding outline visibility | blockTarget: rdm-* |
 | aperture_outline_width | FLOAT | 2 | Outline width (px) when overriding outline visibility | blockTarget: rdm-* |
-| block_component_type | SELECT | rdm-trial | What component type this block generates | options: rdm-trial, rdm-practice, rdm-adaptive, rdm-dot-groups, flanker-trial, sart-trial, simon-trial, pvt-trial, task-switching-trial, stroop-trial, emotional-stroop-trial, gabor-trial, gabor-quest, nback-block, html-button-response, html-keyboard-response, image-keyboard-response, continuous-image-presentation \| required |
+| block_component_type | SELECT | rdm-trial | What component type this block generates | options: rdm-trial, rdm-practice, rdm-adaptive, rdm-dot-groups, flanker-trial, sart-trial, simon-trial, pvt-trial, task-switching-trial, stroop-trial, emotional-stroop-trial, gabor-trial, gabor-quest, gabor-learning, nback-block, html-button-response, html-keyboard-response, image-keyboard-response, continuous-image-presentation \| required |
 | block_length | INT | 100 | Number of trials/frames this block represents | required |
 | button_choices | STRING | Continue | Button labels (comma/newline separated) | blockTarget: html-button-response |
 | button_html | HTML_STRING |  | Optional custom button HTML template (advanced) | blockTarget: html-button-response |
@@ -70,43 +70,59 @@ Generate many trials from parameter windows/ranges (compact representation for l
 | flanker_trial_duration_max | INT | 2000 | Flanker: trial duration max (ms) | blockTarget: flanker-trial |
 | flanker_trial_duration_min | INT | 1000 | Flanker: trial duration min (ms) | blockTarget: flanker-trial |
 | gabor_adaptive_mode | SELECT | none | Gabor: optional adaptive staircase mode for this block | options: none, quest \| blockTarget: gabor-trial,gabor-quest |
-| gabor_distractor_orientation_options | STRING | 0,90 | Gabor: comma-separated distractor orientations (degrees) to sample from. Allowed range: 0 to 179. | blockTarget: gabor-trial,gabor-quest |
-| gabor_grating_waveform_options | STRING | sinusoidal | Gabor: comma-separated grating waveforms to sample from. Allowed: sinusoidal, square, triangle. | blockTarget: gabor-trial,gabor-quest |
-| gabor_left_key | STRING | f | Gabor: left key (discriminate_tilt) | blockTarget: gabor-trial,gabor-quest |
-| gabor_left_value_options | STRING | neutral,high,low | Gabor: comma-separated left value cue options to sample from. Allowed: neutral, high, low. | blockTarget: gabor-trial,gabor-quest |
-| gabor_mask_duration_max | INT | 67 | Gabor: mask duration max (ms) | blockTarget: gabor-trial,gabor-quest |
-| gabor_mask_duration_min | INT | 67 | Gabor: mask duration min (ms) | blockTarget: gabor-trial,gabor-quest |
-| gabor_no_key | STRING | j | Gabor: no key (detect_target) | blockTarget: gabor-trial,gabor-quest |
-| gabor_patch_border_color | COLOR | #FFFFFF | Gabor: patch border color | blockTarget: gabor-trial,gabor-quest |
-| gabor_patch_border_enabled | BOOL | True | Gabor: draw circular patch border (applies to stimulus + mask + placeholders) | blockTarget: gabor-trial,gabor-quest |
-| gabor_patch_border_opacity | FLOAT | 0.22 | Gabor: patch border opacity (0–1) | blockTarget: gabor-trial,gabor-quest |
-| gabor_patch_border_width_px | INT | 2 | Gabor: patch border line width (px) | blockTarget: gabor-trial,gabor-quest |
-| gabor_patch_diameter_deg_max | FLOAT | 6 | Gabor: patch diameter max (degrees of visual angle) | blockTarget: gabor-trial,gabor-quest |
-| gabor_patch_diameter_deg_min | FLOAT | 6 | Gabor: patch diameter min (degrees of visual angle) | blockTarget: gabor-trial,gabor-quest |
+| gabor_contrast_max | FLOAT | 0.95 | Gabor: contrast maximum (0–1) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_contrast_min | FLOAT | 0.05 | Gabor: contrast minimum (0–1) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_distractor_orientation_options | STRING | 0,90 | Gabor: comma-separated distractor orientations (degrees) to sample from. Allowed range: 0 to 179. | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_feedback_duration_ms | INT | 800 | Gabor: duration of feedback display (ms) | blockTarget: gabor-learning |
+| gabor_grating_waveform_options | STRING | sinusoidal | Gabor: comma-separated grating waveforms to sample from. Allowed: sinusoidal, square, triangle. | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_learning_max_trials | INT | 200 | Gabor Learning: maximum number of trials before block ends regardless of accuracy | blockTarget: gabor-learning |
+| gabor_learning_streak_length | INT | 20 | Gabor Learning: number of recent trials to evaluate accuracy over | blockTarget: gabor-learning |
+| gabor_learning_target_accuracy | FLOAT | 0.9 | Gabor Learning: accuracy criterion to reach (0–1, e.g. 0.9 = 90%) | blockTarget: gabor-learning |
+| gabor_left_key | STRING | f | Gabor: left key (discriminate_tilt) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_left_value_options | STRING | neutral,high,low | Gabor: comma-separated left value cue options to sample from. Allowed: neutral, high, low. | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_mask_duration_max | INT | 67 | Gabor: mask duration max (ms) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_mask_duration_min | INT | 67 | Gabor: mask duration min (ms) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_no_key | STRING | j | Gabor: no key (detect_target) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_patch_border_color | COLOR | #FFFFFF | Gabor: patch border color | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_patch_border_enabled | BOOL | True | Gabor: draw circular patch border (applies to stimulus + mask + placeholders) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_patch_border_opacity | FLOAT | 0.22 | Gabor: patch border opacity (0–1) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_patch_border_width_px | INT | 2 | Gabor: patch border line width (px) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_patch_diameter_deg_max | FLOAT | 6 | Gabor: patch diameter max (degrees of visual angle) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_patch_diameter_deg_min | FLOAT | 6 | Gabor: patch diameter min (degrees of visual angle) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
 | gabor_quest_beta | FLOAT | 3.5 | Gabor QUEST: beta (slope) | blockTarget: gabor-trial,gabor-quest |
 | gabor_quest_delta | FLOAT | 0.01 | Gabor QUEST: lapse rate (delta) | blockTarget: gabor-trial,gabor-quest |
 | gabor_quest_gamma | FLOAT | 0.5 | Gabor QUEST: guess rate (gamma) | blockTarget: gabor-trial,gabor-quest |
 | gabor_quest_max_value | FLOAT | 90 | Gabor QUEST: maximum allowed value | blockTarget: gabor-trial,gabor-quest |
 | gabor_quest_min_value | FLOAT | -90 | Gabor QUEST: minimum allowed value | blockTarget: gabor-trial,gabor-quest |
-| gabor_quest_parameter | SELECT | target_tilt_deg | Gabor QUEST: which parameter to adapt | options: target_tilt_deg, spatial_frequency_cyc_per_px \| blockTarget: gabor-trial,gabor-quest |
+| gabor_quest_parameter | SELECT | target_tilt_deg | Gabor QUEST: which parameter to adapt | options: target_tilt_deg, spatial_frequency_cyc_per_px, contrast \| blockTarget: gabor-trial,gabor-quest |
+| gabor_quest_staircase_per_location | BOOL | False | Gabor QUEST: run separate staircases for left and right target locations | blockTarget: gabor-trial,gabor-quest |
 | gabor_quest_start_sd | FLOAT | 20 | Gabor QUEST: initial SD | blockTarget: gabor-trial,gabor-quest |
 | gabor_quest_start_value | FLOAT | 45 | Gabor QUEST: initial value | blockTarget: gabor-trial,gabor-quest |
+| gabor_quest_store_location_threshold | BOOL | False | Gabor QUEST: store per-location thresholds in window.cogflowState after block completes | blockTarget: gabor-trial,gabor-quest |
 | gabor_quest_target_performance | FLOAT | 0.82 | Gabor QUEST: target performance level (e.g., 0.82) | blockTarget: gabor-trial,gabor-quest |
-| gabor_response_task | SELECT | discriminate_tilt | Gabor: response task mode for generated trials | options: detect_target, discriminate_tilt \| blockTarget: gabor-trial,gabor-quest |
-| gabor_right_key | STRING | j | Gabor: right key (discriminate_tilt) | blockTarget: gabor-trial,gabor-quest |
-| gabor_right_value_options | STRING | neutral,high,low | Gabor: comma-separated right value cue options to sample from. Allowed: neutral, high, low. | blockTarget: gabor-trial,gabor-quest |
-| gabor_spatial_cue_enabled | BOOL | True | Gabor: enable sampling spatial cue presence per trial (when false: spatial_cue forced to none) | blockTarget: gabor-trial,gabor-quest |
-| gabor_spatial_cue_options | STRING | none,left,right,both | Gabor: comma-separated spatial cue options to sample from. Allowed: none, left, right, both. | blockTarget: gabor-trial,gabor-quest |
-| gabor_spatial_cue_probability | FLOAT | 1 | Gabor: probability a trial contains a spatial cue (0–1) | blockTarget: gabor-trial,gabor-quest |
-| gabor_spatial_frequency_max | FLOAT | 0.06 | Gabor: spatial frequency max (cycles per pixel) | blockTarget: gabor-trial,gabor-quest |
-| gabor_spatial_frequency_min | FLOAT | 0.06 | Gabor: spatial frequency min (cycles per pixel) | blockTarget: gabor-trial,gabor-quest |
-| gabor_stimulus_duration_max | INT | 67 | Gabor: stimulus duration max (ms) | blockTarget: gabor-trial,gabor-quest |
-| gabor_stimulus_duration_min | INT | 67 | Gabor: stimulus duration min (ms) | blockTarget: gabor-trial,gabor-quest |
-| gabor_target_location_options | STRING | left,right | Gabor: comma-separated target locations to sample from. Allowed: left, right. | blockTarget: gabor-trial,gabor-quest |
-| gabor_target_tilt_options | STRING | -45,45 | Gabor: comma-separated target tilts (degrees) to sample from. Allowed range: -90 to 90. | blockTarget: gabor-trial,gabor-quest |
-| gabor_value_cue_enabled | BOOL | True | Gabor: enable sampling value cue presence per trial (when false: left/right_value forced to neutral) | blockTarget: gabor-trial,gabor-quest |
-| gabor_value_cue_probability | FLOAT | 1 | Gabor: probability a trial contains value cues (0–1) | blockTarget: gabor-trial,gabor-quest |
-| gabor_yes_key | STRING | f | Gabor: yes key (detect_target) | blockTarget: gabor-trial,gabor-quest |
+| gabor_quest_trials_coarse | INT | 32 | Gabor QUEST: trials in broad staircase phase | blockTarget: gabor-trial,gabor-quest |
+| gabor_quest_trials_fine | INT | 32 | Gabor QUEST: trials in fine-tuning staircase phase (runs after coarse) | blockTarget: gabor-trial,gabor-quest |
+| gabor_response_task | SELECT | discriminate_tilt | Gabor: response task mode for generated trials | options: detect_target, discriminate_tilt \| blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_reward_availability_high | FLOAT | 0.8 | Gabor Value Learning: reward-available probability when target appears on HIGH value cue (0–1) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_reward_availability_low | FLOAT | 0.8 | Gabor Value Learning: reward-available probability when target appears on LOW value cue (0–1) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_reward_availability_neutral | FLOAT | 0 | Gabor Value Learning: reward-available probability when target appears on NEUTRAL value cue (0–1) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_right_key | STRING | j | Gabor: right key (discriminate_tilt) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_right_value_options | STRING | neutral,high,low | Gabor: comma-separated right value cue options to sample from. Allowed: neutral, high, low. | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_show_feedback | BOOL | True | Gabor: show correct/incorrect feedback after each trial | blockTarget: gabor-learning |
+| gabor_spatial_cue_enabled | BOOL | True | Gabor: enable sampling spatial cue presence per trial (when false: spatial_cue forced to none) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_spatial_cue_options | STRING | none,left,right,both | Gabor: comma-separated spatial cue options to sample from. Allowed: none, left, right, both. | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_spatial_cue_probability | FLOAT | 1 | Gabor: probability a trial contains a spatial cue (0–1) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_spatial_cue_validity_probability | FLOAT | 1 | Gabor: probability that a unilateral spatial cue (left/right) is valid for target side (0–1) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_spatial_frequency_max | FLOAT | 0.06 | Gabor: spatial frequency max (cycles per pixel) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_spatial_frequency_min | FLOAT | 0.06 | Gabor: spatial frequency min (cycles per pixel) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_stimulus_duration_max | INT | 67 | Gabor: stimulus duration max (ms) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_stimulus_duration_min | INT | 67 | Gabor: stimulus duration min (ms) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_target_location_options | STRING | left,right | Gabor: comma-separated target locations to sample from. Allowed: left, right. | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_target_tilt_options | STRING | -45,45 | Gabor: comma-separated target tilts (degrees) to sample from. Allowed range: -90 to 90. | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_value_cue_enabled | BOOL | True | Gabor: enable sampling value cue presence per trial (when false: left/right_value forced to neutral) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_value_cue_probability | FLOAT | 1 | Gabor: probability a trial contains value cues (0–1) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_value_target_value | SELECT | any | Gabor Value Learning: when set, force target location to side carrying this value cue | options: any, high, low, neutral \| blockTarget: gabor-trial,gabor-quest,gabor-learning |
+| gabor_yes_key | STRING | f | Gabor: yes key (detect_target) | blockTarget: gabor-trial,gabor-quest,gabor-learning |
 | group_1_coherence_max | FLOAT | 0.5 | RDM Groups: group 1 coherence max (0-1) | blockTarget: rdm-dot-groups |
 | group_1_coherence_min | FLOAT | 0.1 | RDM Groups: group 1 coherence min (0-1) | blockTarget: rdm-dot-groups |
 | group_1_color | COLOR | #FF0066 | RDM Groups: group 1 dot color (hex) | blockTarget: rdm-dot-groups |
@@ -244,6 +260,7 @@ Gabor patch trial/frame (stimulus + scoring implemented by interpreter)
 
 | Name | Type | Default | Description | Notes |
 |---|---|---|---|---|
+| contrast | FLOAT | 0.95 | Gabor patch contrast (0–1) |  |
 | distractor_orientation_deg | FLOAT | 0 | Distractor orientation (degrees) |  |
 | grating_waveform | SELECT | sinusoidal | Waveform of the grating carrier | options: sinusoidal, square, triangle |
 | left_key | STRING | f | Left response key (for discriminate_tilt) |  |

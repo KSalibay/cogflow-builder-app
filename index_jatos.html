@@ -10,13 +10,29 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
 
+  <script>
+    (function () {
+      try {
+        const savedTheme = localStorage.getItem('cogflow_builder_theme');
+        const theme = (savedTheme === 'dark' || savedTheme === 'light') ? savedTheme : 'light';
+        document.documentElement.setAttribute('data-cf-theme', theme);
+      } catch {
+        document.documentElement.setAttribute('data-cf-theme', 'light');
+      }
+    })();
+  </script>
+
   <style>
     html, body {
       height: 100%;
       margin: 0;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-      background: #0f1320;
-      color: rgba(255,255,255,0.88);
+      background: #e3e9e5;
+      color: #232742;
+    }
+    html[data-cf-theme="dark"] body {
+      background: #262c41;
+      color: rgba(223,232,225,0.92);
     }
     .wrap {
       min-height: 100%;
@@ -28,16 +44,39 @@
     }
     .card {
       width: min(820px, 100%);
-      border: 1px solid rgba(255,255,255,0.12);
+      border: 1px solid rgba(48,51,74,0.16);
       border-radius: 12px;
       padding: 16px;
-      background: rgba(255,255,255,0.04);
+      background: #ffffff;
+    }
+    html[data-cf-theme="dark"] .card {
+      border: 1px solid rgba(186,199,190,0.28);
+      background: #2f3550;
+    }
+    .top-theme-toggle {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      z-index: 1000;
+      border: 1px solid rgba(48,51,74,0.35);
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: #ffffff;
+      color: #232742;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    html[data-cf-theme="dark"] .top-theme-toggle {
+      border-color: rgba(186,199,190,0.45);
+      background: #3a405a;
+      color: rgba(223,232,225,0.95);
     }
     .muted { opacity: 0.75; }
     code { opacity: 0.95; }
   </style>
 </head>
 <body>
+  <button id="pageThemeToggleJatos" class="top-theme-toggle" type="button">Theme: Light</button>
   <div class="wrap">
     <div class="card">
       <div style="font-weight:600; font-size: 16px;">Loading CogFlow Builder…</div>
@@ -50,6 +89,25 @@
 
   <script>
     (function () {
+      const setBuilderTheme = (theme) => {
+        const t = (theme === 'dark') ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-cf-theme', t);
+        try { localStorage.setItem('cogflow_builder_theme', t); } catch { /* ignore */ }
+        const btn = document.getElementById('pageThemeToggleJatos');
+        if (btn) btn.textContent = `Theme: ${t === 'dark' ? 'Dark' : 'Light'}`;
+      };
+
+      const initialTheme = document.documentElement.getAttribute('data-cf-theme') || 'light';
+      setBuilderTheme(initialTheme);
+
+      const pageThemeToggle = document.getElementById('pageThemeToggleJatos');
+      if (pageThemeToggle) {
+        pageThemeToggle.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-cf-theme') || 'light';
+          setBuilderTheme(current === 'dark' ? 'light' : 'dark');
+        });
+      }
+
       const detailsEl = document.getElementById('details');
       const log = (...args) => {
         try { console.log('[Builder]', ...args); } catch { /* ignore */ }

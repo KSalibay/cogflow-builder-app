@@ -83,7 +83,8 @@ class ComponentPreview {
         // Check component type to determine preview type
         const componentType = componentData?.type || 'unknown';
         
-        console.log('Showing preview for component type:', componentType, 'with data:', componentData);
+        console.log('🔍 ComponentPreview.showPreview() called with componentType:', componentType);
+        console.log('   Full componentData:', componentData);
         
         // Simple, direct routing like the Figma prototype
         if (componentType === 'detection-response-task-start') {
@@ -106,7 +107,8 @@ class ComponentPreview {
             this.showRewardSettingsPreview(componentData);
         } else if (componentType === 'flanker-trial') {
             this.showFlankerPreview(componentData);
-        } else if (componentType === 'gabor-trial' || componentType === 'gabor-quest') {
+        } else if (componentType === 'gabor-trial' || componentType === 'gabor-quest' || componentType === 'gabor-learning') {
+            console.log('   ✓ Routing to showGaborPreview for type:', componentType);
             this.showGaborPreview(componentData);
         } else if (componentType === 'sart-trial') {
             this.showSartPreview(componentData);
@@ -122,6 +124,8 @@ class ComponentPreview {
             this.showNbackTrialSequencePreview(componentData);
         } else if (componentType === 'nback-block') {
             this.showNbackBlockPreview(componentData);
+        } else if (componentType === 'mot-trial') {
+            this.showMotPreview(componentData);
         } else if (componentType === 'survey-response') {
             this.showSurveyPreview(componentData);
         } else if (componentType === 'soc-dashboard') {
@@ -139,6 +143,7 @@ class ComponentPreview {
                    componentType === 'psychophysics-rdm' || 
                    componentType === 'rdk' ||
                    (componentData.coherence !== undefined)) {
+            console.log('   ⚠️  Routing to showRDMPreview; componentType=' + componentType + ', has coherence=' + (componentData.coherence !== undefined));
             this.showRDMPreview(componentData);
         } else {
             console.warn('Unknown component type for preview:', componentType);
@@ -1902,8 +1907,9 @@ class ComponentPreview {
         const targetTilt = Number(componentData?.target_tilt_deg ?? 45);
         const distractorOrientation = Number(componentData?.distractor_orientation_deg ?? 0);
         const spatialCue = (componentData?.spatial_cue ?? 'none').toString();
-        const leftValue = (componentData?.left_value ?? 'neutral').toString();
-        const rightValue = (componentData?.right_value ?? 'neutral').toString();
+        const valueCueEnabled = componentData?.value_cue_enabled !== false && componentData?.value_cue_enabled !== 'false' && componentData?.value_cue_enabled !== 0;
+        const leftValue = valueCueEnabled ? (componentData?.left_value ?? 'neutral').toString() : 'neutral';
+        const rightValue = valueCueEnabled ? (componentData?.right_value ?? 'neutral').toString() : 'neutral';
 
         const responseTask = (componentData?.response_task ?? 'discriminate_tilt').toString();
         const leftKey = (componentData?.left_key ?? 'f').toString();
@@ -1924,6 +1930,15 @@ class ComponentPreview {
             : null;
         const spatialFrequency = Number(componentData?.spatial_frequency_cyc_per_px ?? panelFreq ?? 0.06);
         const gratingWaveform = (componentData?.grating_waveform ?? document.getElementById('gaborGratingWaveform')?.value ?? 'sinusoidal').toString();
+        const contrast = (componentData?.contrast !== undefined && Number.isFinite(Number(componentData.contrast)))
+            ? Math.max(0, Math.min(1, Number(componentData.contrast)))
+            : 0.95;
+        const patchBorder = {
+            enabled: componentData?.patch_border_enabled !== false,
+            widthPx: Math.max(0, Math.min(50, Number(componentData?.patch_border_width_px ?? 2))),
+            color: (componentData?.patch_border_color ?? '#ffffff').toString(),
+            opacity: Math.max(0, Math.min(1, Number(componentData?.patch_border_opacity ?? 0.22)))
+        };
 
         const frameColorForValue = (v) => {
             if (v === 'high') return highColor;
@@ -1986,7 +2001,9 @@ class ComponentPreview {
                     leftAngle,
                     rightAngle,
                     spatialFrequency,
-                    gratingWaveform
+                    gratingWaveform,
+                    contrast,
+                    patchBorder
                 });
             }
 
@@ -2009,7 +2026,7 @@ class ComponentPreview {
         modal.show();
     }
 
-    renderGaborTrialToCanvas(canvas, { spatialCue, leftFrameColor, rightFrameColor, leftAngle, rightAngle, spatialFrequency, gratingWaveform }) {
+    renderGaborTrialToCanvas(canvas, { spatialCue, leftFrameColor, rightFrameColor, leftAngle, rightAngle, spatialFrequency, gratingWaveform, contrast, patchBorder }) {
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
@@ -2024,44 +2041,91 @@ class ComponentPreview {
         // Layout
         const pad = 24;
         const patchSize = Math.min(200, Math.floor((w - pad * 2) / 3));
-        const frameSize = patchSize + 44;
         const cy = Math.floor(h * 0.60);
-        const leftCx = Math.floor(w * 0.32);
-        const rightCx = Math.floor(w * 0.68);
+        const leftCx = Math.floor(w * 0.30);
+        const rightCx = Math.floor(w * 0.70);
 
-        // Cue
-        ctx.fillStyle = 'rgba(255,255,255,0.9)';
-        ctx.font = '36px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        const cueText = (spatialCue === 'left') ? '←' : (spatialCue === 'right') ? '→' : (spatialCue === 'both') ? '↔' : '';
-        if (cueText) {
-            ctx.fillText(cueText, Math.floor(w / 2), Math.floor(h * 0.18));
+        // Cue — diamond shape matching the interpreter (drawCueDiamond)
+        const hasCue = (spatialCue === 'left' || spatialCue === 'right' || spatialCue === 'both');
+        if (hasCue) {
+            this.drawCueDiamond(ctx, Math.floor(w / 2), cy, spatialCue);
         } else {
             ctx.fillStyle = 'rgba(255,255,255,0.35)';
             ctx.font = '14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
             ctx.fillText('(no spatial cue)', Math.floor(w / 2), Math.floor(h * 0.18));
         }
 
-        // Frames
-        this.drawRoundedRectStroke(ctx, leftCx - frameSize / 2, cy - frameSize / 2, frameSize, frameSize, 16, leftFrameColor, 6);
-        this.drawRoundedRectStroke(ctx, rightCx - frameSize / 2, cy - frameSize / 2, frameSize, frameSize, 16, rightFrameColor, 6);
+        // Gabor patches — draw first so value cue rings are painted on top
+        this.drawGaborPatch(ctx, leftCx, cy, patchSize, leftAngle, { spatialFrequency, gratingWaveform, contrast, patchBorder });
+        this.drawGaborPatch(ctx, rightCx, cy, patchSize, rightAngle, { spatialFrequency, gratingWaveform, contrast, patchBorder });
 
-        // Gabor patches
-        this.drawGaborPatch(ctx, leftCx, cy, patchSize, leftAngle, { spatialFrequency, gratingWaveform });
-        this.drawGaborPatch(ctx, rightCx, cy, patchSize, rightAngle, { spatialFrequency, gratingWaveform });
-
-        // Fixation
-        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-        ctx.lineWidth = 2;
-        const fx = Math.floor(w / 2);
-        const fy = cy;
+        // Circular value cue rings drawn AFTER patches so putImageData doesn't overwrite them
+        const outlineRadius = Math.floor(patchSize / 2) - 1;
+        ctx.save();
+        ctx.lineWidth = Math.max(2, patchBorder?.widthPx ?? 6);
+        ctx.strokeStyle = leftFrameColor;
         ctx.beginPath();
-        ctx.moveTo(fx - 10, fy);
-        ctx.lineTo(fx + 10, fy);
-        ctx.moveTo(fx, fy - 10);
-        ctx.lineTo(fx, fy + 10);
+        ctx.arc(leftCx, cy, outlineRadius, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.strokeStyle = rightFrameColor;
+        ctx.beginPath();
+        ctx.arc(rightCx, cy, outlineRadius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+
+    }
+
+    drawCueDiamond(ctx, x, y, spatialCue) {
+        // Mirrors drawCueDiamond() in jspsych-gabor.js exactly.
+        const cue = (spatialCue || 'none').toString().toLowerCase();
+        const half = 28;
+        const fillLeft  = (cue === 'left'  || cue === 'both');
+        const fillRight = (cue === 'right' || cue === 'both');
+
+        ctx.save();
+
+        // Left half fill
+        ctx.beginPath();
+        ctx.moveTo(x, y - half);
+        ctx.lineTo(x, y + half);
+        ctx.lineTo(x - half, y);
+        ctx.closePath();
+        ctx.fillStyle = fillLeft ? 'rgba(255,255,255,0.82)' : 'rgba(255,255,255,0.08)';
+        ctx.fill();
+
+        // Right half fill
+        ctx.beginPath();
+        ctx.moveTo(x, y - half);
+        ctx.lineTo(x + half, y);
+        ctx.lineTo(x, y + half);
+        ctx.closePath();
+        ctx.fillStyle = fillRight ? 'rgba(255,255,255,0.82)' : 'rgba(255,255,255,0.08)';
+        ctx.fill();
+
+        // Outline on top
+        ctx.beginPath();
+        ctx.moveTo(x, y - half);
+        ctx.lineTo(x + half, y);
+        ctx.lineTo(x, y + half);
+        ctx.lineTo(x - half, y);
+        ctx.closePath();
+        ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Fixation cross inside the cue (matches interpreter)
+        ctx.strokeStyle = 'rgba(16,16,16,0.95)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x - 8, y);
+        ctx.lineTo(x + 8, y);
+        ctx.moveTo(x, y - 8);
+        ctx.lineTo(x, y + 8);
+        ctx.stroke();
+
+        ctx.restore();
     }
 
     drawRoundedRectStroke(ctx, x, y, width, height, radius, strokeStyle, lineWidth) {
@@ -2084,7 +2148,7 @@ class ComponentPreview {
         ctx.restore();
     }
 
-    drawGaborPatch(ctx, centerX, centerY, sizePx, orientationDeg, { spatialFrequency, gratingWaveform } = {}) {
+    drawGaborPatch(ctx, centerX, centerY, sizePx, orientationDeg, { spatialFrequency, gratingWaveform, contrast: contrastParam, patchBorder } = {}) {
         const w = Math.max(8, Math.floor(sizePx));
         const h = w;
         const r = Math.floor(w / 2);
@@ -2096,7 +2160,9 @@ class ComponentPreview {
             : 0.06;
         const waveform = (gratingWaveform || 'sinusoidal').toString();
         const sigma = w / 6;
-        const contrast = 0.95;
+        const contrast = (Number.isFinite(Number(contrastParam)) && Number(contrastParam) >= 0)
+            ? Math.min(1, Number(contrastParam))
+            : 0.95;
         const phase = 0;
 
         const img = ctx.createImageData(w, h);
@@ -2149,14 +2215,22 @@ class ComponentPreview {
         // provide absolute coordinates.
         ctx.putImageData(img, Math.round(centerX - r), Math.round(centerY - r));
 
-        // Soft outline
-        ctx.save();
-        ctx.strokeStyle = 'rgba(255,255,255,0.22)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, r - 1, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
+        // Border ring (respects patchBorder settings, mirrors interpreter)
+        const pbEnabled = patchBorder?.enabled !== false;
+        const pbWidth   = Math.max(0, Math.min(50, Number(patchBorder?.widthPx ?? 2)));
+        const pbOpacity = Math.max(0, Math.min(1, Number(patchBorder?.opacity ?? 0.22)));
+        const pbColor   = (patchBorder?.color ?? '#ffffff').toString();
+        if (pbEnabled && pbWidth > 0 && pbOpacity > 0) {
+            ctx.save();
+            ctx.strokeStyle = pbColor.startsWith('#')
+                ? pbColor + Math.round(pbOpacity * 255).toString(16).padStart(2, '0')
+                : `rgba(255,255,255,${pbOpacity})`;
+            ctx.lineWidth = pbWidth;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, r - 1, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
     }
 
     showSurveyPreview(componentData) {
@@ -2315,7 +2389,8 @@ class ComponentPreview {
             return;
         }
 
-        if (baseType === 'gabor-trial' || baseType === 'gabor-quest') {
+        if (baseType === 'gabor-trial' || baseType === 'gabor-quest' || baseType === 'gabor-learning') {
+            console.log('   ✓ showBlockPreview routing to showGaborPreview for baseType:', baseType);
             this.showGaborPreview(sampled);
             return;
         }
@@ -2342,6 +2417,11 @@ class ComponentPreview {
 
         if (baseType === 'pvt-trial') {
             this.showPvtPreview(sampled);
+            return;
+        }
+
+        if (baseType === 'mot-trial') {
+            this.showMotPreview(sampled);
             return;
         }
 
@@ -3612,6 +3692,27 @@ class ComponentPreview {
 
             const iti = randInt(src.pvt_iti_min, src.pvt_iti_max);
             if (iti !== null) sampled.iti_ms = iti;
+        } else if (componentType === 'mot-trial') {
+            const parseIntCSV = (raw) => (raw ?? '').toString().split(',')
+                .map(s => parseInt(s.trim(), 10)).filter(n => Number.isFinite(n));
+            const numObjs = parseIntCSV(src.mot_num_objects_options);
+            sampled.num_objects = numObjs.length > 0 ? numObjs[Math.floor(Math.random() * numObjs.length)] : 8;
+            const numTgts = parseIntCSV(src.mot_num_targets_options);
+            sampled.num_targets = numTgts.length > 0 ? numTgts[Math.floor(Math.random() * numTgts.length)] : 4;
+            const spd = randFloat(src.mot_speed_px_per_s_min, src.mot_speed_px_per_s_max);
+            if (spd !== null) sampled.speed_px_per_s = spd;
+            const tDur = randInt(src.mot_tracking_duration_ms_min, src.mot_tracking_duration_ms_max);
+            if (tDur !== null) sampled.tracking_duration_ms = tDur;
+            const cDur = randInt(src.mot_cue_duration_ms_min, src.mot_cue_duration_ms_max);
+            if (cDur !== null) sampled.cue_duration_ms = cDur;
+            const itiMot = randInt(src.mot_iti_ms_min, src.mot_iti_ms_max);
+            if (itiMot !== null) sampled.iti_ms = itiMot;
+            sampled.motion_type      = (src.mot_motion_type || 'linear').toString();
+            sampled.probe_mode       = (src.mot_probe_mode  || 'click').toString();
+            sampled.show_feedback    = !!src.mot_show_feedback;
+            sampled.object_color     = src.object_color     || '#FFFFFF';
+            sampled.target_cue_color = src.target_cue_color || '#FF9900';
+            sampled.background_color = src.background_color || '#111111';
         } else if (componentType === 'stroop-trial') {
             const uiStimulusNames = (() => {
                 try {
@@ -3745,7 +3846,7 @@ class ComponentPreview {
 
             const iti = randInt(src.emostroop_iti_min, src.emostroop_iti_max);
             if (iti !== null) sampled.iti_ms = iti;
-        } else if (componentType === 'gabor-trial' || componentType === 'gabor-quest') {
+        } else if (componentType === 'gabor-trial' || componentType === 'gabor-quest' || componentType === 'gabor-learning') {
             const locs = parseStringList(blockData.gabor_target_location_options);
             sampled.target_location = pickFromList(locs, 'left');
 
@@ -3755,14 +3856,27 @@ class ComponentPreview {
             const dis = parseNumberList(blockData.gabor_distractor_orientation_options, { min: 0, max: 179 });
             sampled.distractor_orientation_deg = pickFromList(dis, 0);
 
-            const cues = parseStringList(blockData.gabor_spatial_cue_options);
-            sampled.spatial_cue = pickFromList(cues, 'none');
+            const spatialCueEnabled = blockData.gabor_spatial_cue_enabled !== false && blockData.gabor_spatial_cue_enabled !== 'false' && blockData.gabor_spatial_cue_enabled !== 0;
+            sampled.spatial_cue_enabled = spatialCueEnabled;
+            if (spatialCueEnabled) {
+                const cues = parseStringList(blockData.gabor_spatial_cue_options);
+                sampled.spatial_cue = pickFromList(cues, 'none');
+            } else {
+                sampled.spatial_cue = 'none';
+            }
 
-            const lv = parseStringList(blockData.gabor_left_value_options);
-            sampled.left_value = pickFromList(lv, 'neutral');
+            const valueCueEnabled = blockData.gabor_value_cue_enabled !== false && blockData.gabor_value_cue_enabled !== 'false' && blockData.gabor_value_cue_enabled !== 0;
+            sampled.value_cue_enabled = valueCueEnabled;
+            if (valueCueEnabled) {
+                const lv = parseStringList(blockData.gabor_left_value_options);
+                sampled.left_value = pickFromList(lv, 'neutral');
 
-            const rv = parseStringList(blockData.gabor_right_value_options);
-            sampled.right_value = pickFromList(rv, 'neutral');
+                const rv = parseStringList(blockData.gabor_right_value_options);
+                sampled.right_value = pickFromList(rv, 'neutral');
+            } else {
+                sampled.left_value = 'neutral';
+                sampled.right_value = 'neutral';
+            }
 
             const freq = randFloat(blockData.gabor_spatial_frequency_min, blockData.gabor_spatial_frequency_max);
             if (freq !== null) sampled.spatial_frequency_cyc_per_px = freq;
@@ -4746,6 +4860,83 @@ class ComponentPreview {
         
         if (frameCountEl) frameCountEl.textContent = this.frameCount || 0;
         if (randomDotsEl) randomDotsEl.textContent = this.dots.length - coherentCount;
+    }
+    showMotPreview(componentData) {
+        const previewModal = this.getPreviewModal();
+        if (!previewModal) return;
+        const { modalEl, modal } = previewModal;
+
+        const params = componentData || {};
+        const W    = params.arena_width_px  || 700;
+        const H    = params.arena_height_px || 500;
+        const bg   = params.background_color || '#111111';
+        const N    = Math.max(2, parseInt(params.num_objects, 10) || 8);
+        const T    = Math.min(N - 1, Math.max(1, parseInt(params.num_targets, 10) || 4));
+        const note = params._previewContextNote || '';
+
+        const canvasId = 'motPreviewCanvas_' + Date.now();
+        const bodyHtml = `
+            <div class="text-center">
+                <canvas id="${canvasId}" width="${W}" height="${H}"
+                    style="background:${bg};max-width:100%;border:1px solid #555;"></canvas>
+                ${note ? `<p class="text-muted small mt-1">${note}</p>` : ''}
+                <p class="text-muted small">Static preview — ${T} target(s) (orange flash) among ${N} object(s).
+                  Speed: ${params.speed_px_per_s ?? 150} px/s &middot; ${params.motion_type ?? 'linear'} &middot; ${params.probe_mode ?? 'click'} probe</p>
+            </div>`;
+
+        const titleEl = modalEl.querySelector('.modal-title');
+        const bodyEl  = modalEl.querySelector('.modal-body');
+        if (titleEl) titleEl.textContent = 'MOT Trial Preview';
+        if (bodyEl)  bodyEl.innerHTML    = bodyHtml;
+        modal.show();
+
+        setTimeout(() => {
+            const canvas = document.getElementById(canvasId);
+            if (canvas) this._renderMotPreviewToCanvas(canvas, params);
+        }, 50);
+    }
+
+    _renderMotPreviewToCanvas(canvas, params) {
+        const ctx = canvas.getContext('2d');
+        const W   = canvas.width;
+        const H   = canvas.height;
+        const bg  = params.background_color  || '#111111';
+        const objColor = params.object_color     || '#FFFFFF';
+        const tgtColor = params.target_cue_color || '#FF9900';
+        const r   = Math.max(5, parseInt(params.object_radius_px, 10) || 22);
+        const N   = Math.max(2, parseInt(params.num_objects, 10) || 8);
+        const T   = Math.min(N - 1, Math.max(1, parseInt(params.num_targets, 10) || 4));
+
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+
+        // Place circles with rejection sampling to avoid overlap
+        const minDist   = 2 * r + 6;
+        const positions = [];
+        for (let i = 0; i < N; i++) {
+            let x, y, ok, attempts = 0;
+            do {
+                x = r + Math.random() * (W - 2 * r);
+                y = r + Math.random() * (H - 2 * r);
+                ok = positions.every(p => Math.hypot(p.x - x, p.y - y) >= minDist);
+            } while (!ok && ++attempts < 500);
+            positions.push({ x, y, isTarget: i < T });
+        }
+        // Shuffle so targets are not always top-left
+        for (let i = positions.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [positions[i], positions[j]] = [positions[j], positions[i]];
+        }
+
+        for (const p of positions) {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, r, 0, 2 * Math.PI);
+            ctx.fillStyle   = p.isTarget ? tgtColor : objColor;
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(136,136,136,0.5)';
+            ctx.lineWidth   = 1.5;
+            ctx.stroke();
+        }
     }
 }
 

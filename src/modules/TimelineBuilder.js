@@ -91,8 +91,19 @@ class TimelineBuilder {
             name: component.name,
             ...component.parameters
         };
+        // Preserve top-level label (not inside parameters)
+        const _topLabel = component.label ?? component.parameters?.label ?? '';
+        if (_topLabel !== '' && _topLabel !== undefined && _topLabel !== null) {
+            componentData.label = _topLabel;
+        }
         componentElement.dataset.componentData = JSON.stringify(componentData);
-        
+
+        const _labelText = (component.parameters?.label ?? component.label ?? '').toString().trim();
+        const _esc = (s) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        const _subtitleHtml = _labelText
+            ? `<small class="text-muted cf-component-label"><i class="fas fa-tag me-1" style="font-size:0.75em;opacity:0.6;"></i>${_esc(_labelText)}</small>`
+            : `<small class="text-muted cf-component-label">${component.type}</small>`;
+
         componentElement.innerHTML = `
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
@@ -102,7 +113,7 @@ class TimelineBuilder {
                         </div>
                         <div>
                             <h6 class="card-title mb-1">${component.name}</h6>
-                            <small class="text-muted">${component.type}</small>
+                            ${_subtitleHtml}
                         </div>
                     </div>
                     <div class="btn-group" role="group">
@@ -111,6 +122,9 @@ class TimelineBuilder {
                         </button>
                         <button class="btn btn-sm btn-outline-secondary" onclick="editComponent(this)" title="Edit">
                             <i class="fas fa-pencil-alt"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="duplicateComponent(this)" title="Duplicate Below">
+                            <i class="fas fa-copy"></i>
                         </button>
                         <button class="btn btn-sm btn-outline-danger" onclick="removeComponent(this)" title="Delete">
                             <i class="fas fa-trash"></i>
@@ -194,6 +208,8 @@ class TimelineBuilder {
         modalBody.innerHTML = schema
             ? this.generateParameterForm(component, schema)
             : this.generateParameterFormFromComponentDefinitions(component);
+
+        this._prependLabelFieldToModal(modalBody, component);
 
         // Setup form listeners
         this.setupParameterFormListeners(modalBody, component);
@@ -1158,6 +1174,19 @@ class TimelineBuilder {
     generateParameterFormFromComponentDefinitions(component) {
         const type = (component?.type ?? '').toString();
 
+        // Block editor uses component definitions (task-scoped defaults/options), but
+        // visibility filtering depends on schema-level `blockTarget` metadata.
+        const blockSchema = (type === 'block' && this.jsonBuilder?.schemaValidator)
+            ? this.jsonBuilder.schemaValidator.getPluginSchema('block')
+            : null;
+        const blockTargetByParam = (blockSchema && blockSchema.parameters && typeof blockSchema.parameters === 'object')
+            ? Object.fromEntries(
+                Object.entries(blockSchema.parameters)
+                    .map(([k, v]) => [k, (v && typeof v === 'object') ? v.blockTarget : undefined])
+                    .filter(([, target]) => typeof target === 'string' && target.trim() !== '')
+            )
+            : {};
+
         const getBlockInnerType = (c) => {
             try {
                 const inner = (c?.parameters && typeof c.parameters === 'object')
@@ -1186,7 +1215,8 @@ class TimelineBuilder {
             if (innerType === 'flanker-trial') return 'flanker';
             if (innerType === 'sart-trial') return 'sart';
             if (innerType === 'nback-block') return 'nback';
-            if (innerType === 'gabor-trial' || innerType === 'gabor-quest') return 'gabor';
+            if (innerType === 'gabor-trial' || innerType === 'gabor-quest' || innerType === 'gabor-learning') return 'gabor';
+            if (innerType === 'mot-trial') return 'mot';
             if (innerType === 'continuous-image-presentation') return 'continuous-image';
             return null;
         };
@@ -1254,6 +1284,7 @@ class TimelineBuilder {
                 if (keys.some(k => k.startsWith('pvt_'))) return 'pvt';
                 if (keys.some(k => k.startsWith('gabor_'))) return 'gabor';
                 if (keys.some(k => k.startsWith('nback_'))) return 'nback';
+                if (keys.some(k => k.startsWith('mot_'))) return 'mot';
                 return null;
             })();
 
@@ -1277,7 +1308,7 @@ class TimelineBuilder {
                 : (hintTask === 'task-switching')
                     ? ['task-switching-trial']
                 : (hintTask === 'gabor')
-                    ? ['gabor-trial', 'gabor-quest']
+                    ? ['gabor-trial', 'gabor-quest', 'gabor-learning']
                 : (hintTask === 'continuous-image')
                     ? ['continuous-image-presentation']
                 : (hintTask === 'stroop')
@@ -1318,8 +1349,12 @@ class TimelineBuilder {
                 ? '<div class="form-text">When unchecked, ISO timing/RT fields are locked to default values.</div>'
                 : '';
 
+            const blockTargetAttr = (type === 'block' && blockTargetByParam[paramName])
+                ? ` data-block-target="${this.escapeHtmlAttr(String(blockTargetByParam[paramName]))}"`
+                : '';
+
             formHtml += `
-                <div class="mb-3" data-param-name="${this.escapeHtmlAttr(paramName)}">
+                <div class="mb-3" data-param-name="${this.escapeHtmlAttr(paramName)}"${blockTargetAttr}>
                     <label for="param_${this.escapeHtmlAttr(paramName)}" class="form-label">${label}</label>
                     ${this.generateParameterInputFromComponentDef(paramName, paramDef, currentValue, shouldDisable)}
                     ${helpText}
@@ -1599,6 +1634,7 @@ class TimelineBuilder {
                 const blockTypeLabel = (v) => {
                     if (v === 'gabor-trial') return 'Gabor (fixed)';
                     if (v === 'gabor-quest') return 'Gabor (QUEST)';
+                    if (v === 'gabor-learning') return 'Gabor (Learning)';
                     return v;
                 };
 
@@ -2053,9 +2089,11 @@ class TimelineBuilder {
                     : (currentTaskType === 'nback')
                         ? ['nback-block']
                     : (currentTaskType === 'gabor')
-                        ? ['gabor-trial', 'gabor-quest']
+                        ? ['gabor-trial', 'gabor-quest', 'gabor-learning']
                     : (currentTaskType === 'continuous-image')
                         ? ['continuous-image-presentation']
+                    : (currentTaskType === 'mot')
+                        ? ['mot-trial']
                     : ['rdm-trial', 'rdm-practice', 'rdm-adaptive', 'rdm-dot-groups'];
 
             // Always include generic jsPsych options for Block inner trials.
@@ -2107,7 +2145,7 @@ class TimelineBuilder {
         const updateGaborBlockKeyVisibility = () => {
             if (!blockTypeEl) return;
             const selected = blockTypeEl.value;
-            if (selected !== 'gabor-trial' && selected !== 'gabor-quest') return;
+            if (selected !== 'gabor-trial' && selected !== 'gabor-quest' && selected !== 'gabor-learning') return;
 
             const taskEl = formContainer.querySelector('#param_gabor_response_task');
             const task = (taskEl ? taskEl.value : 'discriminate_tilt').toString();
@@ -2122,21 +2160,44 @@ class TimelineBuilder {
         const updateGaborQuestVisibility = () => {
             if (!blockTypeEl) return;
             const selected = blockTypeEl.value;
-            if (selected !== 'gabor-trial' && selected !== 'gabor-quest') {
-                // Ensure hidden when switching block types
-                [
-                    'gabor_quest_parameter',
-                    'gabor_quest_target_performance',
-                    'gabor_quest_start_value',
-                    'gabor_quest_start_sd',
-                    'gabor_quest_beta',
-                    'gabor_quest_delta',
-                    'gabor_quest_gamma',
-                    'gabor_quest_min_value',
-                    'gabor_quest_max_value'
-                ].forEach(p => setParamVisible(p, false));
+            const questParams = [
+                'gabor_quest_parameter',
+                'gabor_quest_target_performance',
+                'gabor_quest_start_value',
+                'gabor_quest_start_sd',
+                'gabor_quest_beta',
+                'gabor_quest_delta',
+                'gabor_quest_gamma',
+                'gabor_quest_min_value',
+                'gabor_quest_max_value',
+                'gabor_quest_trials_coarse',
+                'gabor_quest_trials_fine',
+                'gabor_quest_staircase_per_location',
+                'gabor_quest_store_location_threshold'
+            ];
+            const learningParams = [
+                'gabor_learning_streak_length',
+                'gabor_learning_target_accuracy',
+                'gabor_learning_max_trials',
+                'gabor_show_feedback',
+                'gabor_feedback_duration_ms'
+            ];
+            if (selected !== 'gabor-trial' && selected !== 'gabor-quest' && selected !== 'gabor-learning') {
+                // Ensure all hidden when switching to a non-Gabor block type
+                questParams.forEach(p => setParamVisible(p, false));
+                learningParams.forEach(p => setParamVisible(p, false));
                 return;
             }
+
+            // Learning mode: show learning params, hide QUEST params
+            if (selected === 'gabor-learning') {
+                questParams.forEach(p => setParamVisible(p, false));
+                learningParams.forEach(p => setParamVisible(p, true));
+                return;
+            }
+
+            // gabor-trial / gabor-quest: hide learning params, show QUEST when mode = quest
+            learningParams.forEach(p => setParamVisible(p, false));
 
             const modeEl = formContainer.querySelector('#param_gabor_adaptive_mode');
             // If the user picked the QUEST block type, force quest mode so the fields appear.
@@ -2147,17 +2208,7 @@ class TimelineBuilder {
             const mode = (modeEl ? modeEl.value : 'none').toString();
             const showQuest = (mode === 'quest');
 
-            [
-                'gabor_quest_parameter',
-                'gabor_quest_target_performance',
-                'gabor_quest_start_value',
-                'gabor_quest_start_sd',
-                'gabor_quest_beta',
-                'gabor_quest_delta',
-                'gabor_quest_gamma',
-                'gabor_quest_min_value',
-                'gabor_quest_max_value'
-            ].forEach(p => setParamVisible(p, showQuest));
+            questParams.forEach(p => setParamVisible(p, showQuest));
         };
 
         const updateGaborCueVisibility = () => {
@@ -2165,13 +2216,18 @@ class TimelineBuilder {
             const selected = blockTypeEl.value;
 
             // If switching away from Gabor, ensure these are hidden.
-            if (selected !== 'gabor-trial' && selected !== 'gabor-quest') {
+            if (selected !== 'gabor-trial' && selected !== 'gabor-quest' && selected !== 'gabor-learning') {
                 [
                     'gabor_spatial_cue_options',
                     'gabor_spatial_cue_probability',
+                    'gabor_spatial_cue_validity_probability',
                     'gabor_left_value_options',
                     'gabor_right_value_options',
-                    'gabor_value_cue_probability'
+                    'gabor_value_cue_probability',
+                    'gabor_value_target_value',
+                    'gabor_reward_availability_high',
+                    'gabor_reward_availability_low',
+                    'gabor_reward_availability_neutral'
                 ].forEach(p => setParamVisible(p, false));
                 return;
             }
@@ -2186,6 +2242,7 @@ class TimelineBuilder {
             }
             setParamVisible('gabor_spatial_cue_options', spatialEnabled);
             setParamVisible('gabor_spatial_cue_probability', spatialEnabled);
+            setParamVisible('gabor_spatial_cue_validity_probability', spatialEnabled);
 
             const valueEnabledEl = formContainer.querySelector('#param_gabor_value_cue_enabled');
             const valueEnabled = valueEnabledEl ? !!valueEnabledEl.checked : true;
@@ -2200,6 +2257,10 @@ class TimelineBuilder {
             setParamVisible('gabor_left_value_options', valueEnabled);
             setParamVisible('gabor_right_value_options', valueEnabled);
             setParamVisible('gabor_value_cue_probability', valueEnabled);
+            setParamVisible('gabor_value_target_value', valueEnabled);
+            setParamVisible('gabor_reward_availability_high', valueEnabled);
+            setParamVisible('gabor_reward_availability_low', valueEnabled);
+            setParamVisible('gabor_reward_availability_neutral', valueEnabled);
         };
 
         const updateTaskSwitchingBlockVisibility = () => {
@@ -2313,7 +2374,7 @@ class TimelineBuilder {
             }
 
             // Gabor block: show the correct key fields based on response task.
-            if (selected === 'gabor-trial' || selected === 'gabor-quest') {
+            if (selected === 'gabor-trial' || selected === 'gabor-quest' || selected === 'gabor-learning') {
                 updateGaborBlockKeyVisibility();
                 updateGaborQuestVisibility();
                 updateGaborCueVisibility();
@@ -3815,7 +3876,8 @@ class TimelineBuilder {
                 type: currentData.type,
                 name: currentData.name || 'Survey Response',
                 ...currentData,
-                ...survey
+                ...survey,
+                label: this._readLabelFromModal(modalBody)
             };
 
             // Legacy DRT per-element toggle is deprecated; never persist it.
@@ -3828,6 +3890,7 @@ class TimelineBuilder {
                 }
             }
 
+            this._updateCardLabel(this.jsonBuilder.currentEditingComponent, updatedData.label);
             this.jsonBuilder.currentEditingComponent.dataset.componentData = JSON.stringify(updatedData);
             this.jsonBuilder.updateJSON();
 
@@ -3859,6 +3922,8 @@ class TimelineBuilder {
                 }
             }
 
+            updatedData.label = this._readLabelFromModal(modalBody);
+            this._updateCardLabel(this.jsonBuilder.currentEditingComponent, updatedData.label);
             this.jsonBuilder.currentEditingComponent.dataset.componentData = JSON.stringify(updatedData);
             this.jsonBuilder.updateJSON();
 
@@ -4294,7 +4359,9 @@ class TimelineBuilder {
             }
             
             console.log('Updated component data after save:', updatedData);
-            
+
+            updatedData.label = this._readLabelFromModal(modalBody);
+            this._updateCardLabel(this.jsonBuilder.currentEditingComponent, updatedData.label);
             this.jsonBuilder.currentEditingComponent.dataset.componentData = JSON.stringify(updatedData);
             console.log('Updated component DOM data:', updatedData);
             console.log('Updated parameters:', updatedData.parameters);
@@ -4332,4 +4399,47 @@ class TimelineBuilder {
         
         return undefined;
     }
+
+    // ── Label field helpers ──────────────────────────────────────────────────
+
+    _prependLabelFieldToModal(modalBody, component) {
+        if (!modalBody) return;
+        if (modalBody.querySelector('#cf-label-wrapper')) return; // already injected
+        const currentLabel = ((component?.label ?? component?.parameters?.label) ?? '').toString();
+        const escaped = currentLabel.replace(/"/g, '&quot;');
+        const wrapper = document.createElement('div');
+        wrapper.className = 'mb-3 border-bottom pb-3';
+        wrapper.id = 'cf-label-wrapper';
+        wrapper.innerHTML = `
+            <label for="cf-label-input" class="form-label fw-semibold">
+                <i class="fas fa-tag me-1 text-muted"></i>Component Label
+            </label>
+            <input type="text" class="form-control" id="cf-label-input"
+                   placeholder="Optional label shown in the timeline"
+                   value="${escaped}">
+            <div class="form-text">A short descriptive label displayed under the component name in the timeline. Does not affect experiment logic.</div>
+        `;
+        modalBody.prepend(wrapper);
+    }
+
+    _readLabelFromModal(modalBody) {
+        if (!modalBody) return '';
+        const input = modalBody.querySelector('#cf-label-input');
+        return input ? input.value.trim() : '';
+    }
+
+    _updateCardLabel(componentElement, label) {
+        if (!componentElement) return;
+        const subtitle = componentElement.querySelector('.cf-component-label');
+        if (!subtitle) return;
+        const labelText = (label ?? '').toString().trim();
+        const type = (componentElement.dataset.componentType ?? '').toString();
+        if (labelText) {
+            const esc = (s) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            subtitle.innerHTML = `<i class="fas fa-tag me-1" style="font-size:0.75em;opacity:0.6;"></i>${esc(labelText)}`;
+        } else {
+            subtitle.textContent = type || '';
+        }
+    }
+
 }

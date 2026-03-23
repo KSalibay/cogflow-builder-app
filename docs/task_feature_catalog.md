@@ -30,6 +30,7 @@ Conventions:
 | `task-switching` | trial-based | Switch vs repeat trials with cueing | `task-switching-trial`, `block` | _Fill in_ |
 | `gabor` | trial-based | Gabor patch detection/discrimination | `gabor-trial`, `block` (incl. `gabor-quest`) | _Fill in_ |
 | `nback` | trial-based, continuous | Working memory N-back | `nback-trial-sequence`, `nback-block`, `block` | _Fill in_ |
+| `mot` | trial-based | Multiple Object Tracking | `mot-trial`, `block` | _Fill in_ |
 | `soc-dashboard` | continuous | Multi-window SOC desktop multitasking | `soc-dashboard`, `soc-dashboard-icon`, SOC subtasks | _Fill in_ |
 | `continuous-image` | continuous | Continuous Image Presentation (CIP) | `block` (inner type `continuous-image-presentation`) | _Fill in_ |
 | `custom` | trial-based, continuous | Advanced/manual mode (generic components only) | generic components + tracking | _Fill in_ |
@@ -71,14 +72,20 @@ Authorship / design notes:
 
 What it supports:
 
-- GO/NO-GO sustained attention trials.
-- Blocks for generating large sequences.
-- Preview support for basic rendering.
+- GO/NO-GO sustained attention reaction-time trials.
+- Stimulus timing windows (duration, ISI randomization).
+- Configurable target/no-go signal identification.
+- Per-trial parameter sampling (target probability, timing windows) via Blocks.
+- Feedback display options (correctness, reaction time visualization).
+- Blocks for generating large sequences with parameter windows.
+- Canvas-based stimulus rendering with fixation cross.
+- Response collection (keyboard/mouse) with false-alarm and miss tracking.
+- Preview support for sanity-checking trial layouts and timing.
 
 Authorship / design notes:
 
 - Owners: _Fill in_
-- Rationale / intended use: _Fill in_
+- Rationale / intended use: SART (Sustained Attention to Response Task) for measuring vigilance, inhibition, and attention lapses.
 - Known limitations / future work: _Fill in_
 
 ### `stroop`
@@ -158,13 +165,21 @@ What it supports:
 
 - Gabor stimulus + mask parameterization.
 - Detection or discrimination response paradigms.
-- Optional adaptive mode (QUEST-like) for selected parameters.
-- Blocks for generating large runs.
+- **Gabor-trial**: Single trial execution with optional QUEST adaptive mode.
+- **Gabor-quest**: QUEST-driven loop with coarse→fine phase transitions and per-location staircase support.
+- **Gabor-learning**: Accuracy-driven loop that runs until achieving target streak accuracy or max trials.
+- Learning controls: streak length, target accuracy, max trials, post-trial feedback display.
+- Adaptive parameter selection (tilt, contrast, etc.) with QUEST-generated values.
+- Spatial/value cue configurations with independent left/right controls.
+- Blocks for generating large runs with parameter sampling.
+- Canvas-rendered diamond cue and circular patch outlines (improved in March 2026).
+- Contrast windowing (min/max) for adaptive sampling.
 
 Authorship / design notes:
 
 - Owners: _Fill in_
-- Rationale / intended use: _Fill in_
+- Rationale / intended use: Gabor patches for measuring visual discrimination thresholds; learning mode for adaptive task difficulty.
+- Recent improvements (March 2026): Diamond cue rendering (centered between patches, no separate fixation cross), increased patch separation (0.30/0.70 canvas width), circular patch outlines, full learning/QUEST pipeline end-to-end.
 - Known limitations / future work: _Fill in_
 
 ### `nback`
@@ -172,14 +187,38 @@ Authorship / design notes:
 What it supports:
 
 - Trial-based N-back (sequence generation and block expansion at runtime).
-- Continuous N-back mode (Interpreter compiles to a continuous stream).
+- Continuous N-back mode (Interpreter compiles to a continuous stream with minimal DOM re-rendering).
+- Configurable stimulus modes (letters, custom tokens) and N-value (1-back, 2-back, etc.).
+- Response paradigms (go/no-go, match/non-match).
+- Per-trial and per-block sampling of N-value, target probability, and timing windows.
+- Fixation cross control and feedback display options.
 - Blocks for advanced/manual N-back generation.
 
 Authorship / design notes:
 
 - Owners: _Fill in_
-- Rationale / intended use: _Fill in_
+- Rationale / intended use: N-back for working memory assessment; continuous mode for embedded tasking within multi-window (SOC) sessions.
 - Known limitations / future work: _Fill in_
+
+### `mot`
+
+What it supports:
+
+- Canvas-rendered arena with multiple moving objects (requestAnimationFrame loop, same approach as RDM).
+- Three-phase trial structure: **cue phase** (targets flash at `cue_flash_rate_hz` Hz between `object_color` and `target_cue_color`) → **tracking phase** (all objects move identically, unlabeled) → **probe phase** (participant identifies targets).
+- Two trajectory types: `linear` (straight paths, bounce/wrap at boundary) and `curved` (smooth random turning controlled by `curve_strength`).
+- Two probe modes: `click` (participant clicks objects they believe are targets) and `number_entry` (numbers 1–N appear inside objects during probe; participant types corresponding numbers on keyboard).
+- Configurable arena size (`arena_width_px`, `arena_height_px`) and boundary behavior (`bounce` or `wrap`).
+- Per-object speed jitter via `speed_variability` (0 = all same speed).
+- Optional post-probe feedback display (`show_feedback`, `feedback_duration_ms`).
+- Block support with range/options sampling for: num_objects, num_targets, speed, tracking/cue/ITI durations, motion_type, and probe_mode.
+- Data recorded per trial: `num_correct`, `num_false_alarms`, `num_missed`, `rt_first_click_ms`, `clicks[]`.
+
+Authorship / design notes:
+
+- Owners: _Fill in_
+- Rationale / intended use: Standard MOT paradigm for measuring attentional tracking capacity; supports both click-to-select and number-entry response modes.
+- Known limitations / future work: No adaptive variant; difficulty can be controlled through block sequencing.
 
 ### `soc-dashboard`
 
@@ -238,6 +277,7 @@ Authorship / design notes:
 
 These apply across multiple task types.
 
+- **Theming system** (light/dark manual toggle): Replaces system `prefers-color-scheme` detection with manual user control. Theme preference persists via localStorage. Implemented March 2026 with CogFlow palette-driven color tokens for both light and dark modes. Available in both standalone and JATOS entry points.
 - Blocks (compact trial generation + per-trial sampling).
 - Preview modal (component renderers and sampled block preview).
 - Export paths (Local JSON, Token Store + JATOS props bundles, optional SharePoint).

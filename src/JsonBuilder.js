@@ -2158,7 +2158,7 @@ class JsonBuilder {
 
     maybeInsertStarterTimeline(taskType) {
         if (taskType === 'soc-dashboard' && this.experimentType !== 'continuous') return;
-        if (taskType !== 'flanker' && taskType !== 'sart' && taskType !== 'gabor' && taskType !== 'stroop' && taskType !== 'emotional-stroop' && taskType !== 'simon' && taskType !== 'task-switching' && taskType !== 'pvt' && taskType !== 'soc-dashboard' && taskType !== 'nback') return;
+        if (taskType !== 'flanker' && taskType !== 'sart' && taskType !== 'gabor' && taskType !== 'stroop' && taskType !== 'emotional-stroop' && taskType !== 'simon' && taskType !== 'task-switching' && taskType !== 'pvt' && taskType !== 'mot' && taskType !== 'soc-dashboard' && taskType !== 'nback') return;
 
         const timelineContainer = document.getElementById('timelineComponents');
         if (!timelineContainer) return;
@@ -2178,6 +2178,8 @@ class JsonBuilder {
                     ? 'task-switching-trial'
                 : (taskType === 'pvt')
                     ? 'pvt-trial'
+                : (taskType === 'mot')
+                    ? 'mot-trial'
                 : (taskType === 'stroop')
                     ? 'stroop-trial'
                 : (taskType === 'emotional-stroop')
@@ -2302,7 +2304,7 @@ class JsonBuilder {
             if (type === 'gabor-trial') return true;
             if (type === 'block') {
                 const innerType = getBlockInnerType();
-                return innerType === 'gabor-trial' || innerType === 'gabor-quest';
+                return innerType === 'gabor-trial' || innerType === 'gabor-quest' || innerType === 'gabor-learning';
             }
             return false;
         }
@@ -2348,6 +2350,15 @@ class JsonBuilder {
             if (type === 'block') {
                 const innerType = getBlockInnerType();
                 return innerType === 'pvt-trial';
+            }
+            return false;
+        }
+
+        if (taskType === 'mot') {
+            if (type === 'mot-trial') return true;
+            if (type === 'block') {
+                const innerType = getBlockInnerType();
+                return innerType === 'mot-trial';
             }
             return false;
         }
@@ -3161,6 +3172,68 @@ class JsonBuilder {
                             <label class="form-check-label" for="pvtAddTrialPerFalseStart">Add one extra trial per false start</label>
                         </div>
                         <div class="parameter-help">When enabled, false starts do not count toward the intended PVT block length (Interpreter extends the block to preserve the target number of valid trials).</div>
+                    </div>
+                </div>
+            </div>
+            `
+            : (taskType === 'mot')
+            ? `
+            <div class="parameter-group" id="motExperimentParameters">
+                <div class="group-title d-flex justify-content-between align-items-center">
+                    <div>
+                        <span>MOT Experiment Settings</span>
+                        <small class="text-muted d-block">Default values for MOT components</small>
+                    </div>
+                    <button class="btn btn-sm btn-info" id="previewTaskDefaultsBtn" onclick="window.componentPreview?.showPreview(window.jsonBuilderInstance?.getCurrentMotDefaults())">
+                        <i class="fas fa-eye"></i> Preview Defaults
+                    </button>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label"># Objects:</label>
+                    <input type="number" class="form-control parameter-input" id="motNumObjectsDefault" value="8" min="2" max="20">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label"># Targets:</label>
+                    <input type="number" class="form-control parameter-input" id="motNumTargetsDefault" value="4" min="1" max="10">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Speed (px/s):</label>
+                    <input type="number" class="form-control parameter-input" id="motSpeedDefault" value="150" min="20" max="600">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Motion Type:</label>
+                    <select class="form-control parameter-input" id="motMotionTypeDefault">
+                        <option value="linear" selected>Linear</option>
+                        <option value="curved">Curved</option>
+                    </select>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Probe Mode:</label>
+                    <select class="form-control parameter-input" id="motProbeModeDefault">
+                        <option value="click" selected>Click</option>
+                        <option value="number_entry">Number entry</option>
+                    </select>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Cue Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="motCueDurationMsDefault" value="2000" min="0" max="30000">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Tracking Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="motTrackingDurationMsDefault" value="8000" min="0" max="60000">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">ITI (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="motItiMsDefault" value="1000" min="0" max="30000">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Show Feedback:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="motShowFeedbackDefault">
+                            <label class="form-check-label" for="motShowFeedbackDefault">Highlight correct/incorrect picks</label>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -4295,6 +4368,59 @@ class JsonBuilder {
                 </div>
             </div>
             `
+            : (taskType === 'mot')
+            ? `
+            <div class="parameter-group" id="motExperimentParameters">
+                <div class="group-title d-flex justify-content-between align-items-center">
+                    <div>
+                        <span>MOT Experiment Settings</span>
+                        <small class="text-muted d-block">Default values for MOT components</small>
+                    </div>
+                    <button class="btn btn-sm btn-info" id="previewTaskDefaultsBtn" onclick="window.componentPreview?.showPreview(window.jsonBuilderInstance?.getCurrentMotDefaults())">
+                        <i class="fas fa-eye"></i> Preview Defaults
+                    </button>
+                </div>
+
+                <div class="parameter-row">
+                    <label class="parameter-label"># Objects:</label>
+                    <input type="number" class="form-control parameter-input" id="motNumObjectsDefault" value="8" min="2" max="20">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label"># Targets:</label>
+                    <input type="number" class="form-control parameter-input" id="motNumTargetsDefault" value="4" min="1" max="10">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Speed (px/s):</label>
+                    <input type="number" class="form-control parameter-input" id="motSpeedDefault" value="150" min="20" max="600">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Motion Type:</label>
+                    <select class="form-control parameter-input" id="motMotionTypeDefault">
+                        <option value="linear" selected>Linear</option>
+                        <option value="curved">Curved</option>
+                    </select>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Probe Mode:</label>
+                    <select class="form-control parameter-input" id="motProbeModeDefault">
+                        <option value="click" selected>Click</option>
+                        <option value="number_entry">Number entry</option>
+                    </select>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Cue Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="motCueDurationMsDefault" value="2000" min="0" max="30000">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Tracking Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="motTrackingDurationMsDefault" value="8000" min="0" max="60000">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">ITI (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="motItiMsDefault" value="1000" min="0" max="30000">
+                </div>
+            </div>
+            `
             : (taskType === 'gabor')
             ? `
             <div class="parameter-group" id="gaborExperimentParameters">
@@ -5005,6 +5131,8 @@ class JsonBuilder {
                             ? 'Task Switching Block'
                         : (currentTaskType === 'pvt')
                             ? 'PVT Block'
+                        : (currentTaskType === 'mot')
+                            ? 'MOT Block'
                         : (currentTaskType === 'gabor')
                             ? 'Gabor Block'
                             : (currentTaskType === 'continuous-image')
@@ -5027,8 +5155,10 @@ class JsonBuilder {
                         ? ['task-switching-trial']
                     : (currentTaskType === 'pvt')
                         ? ['pvt-trial']
+                    : (currentTaskType === 'mot')
+                        ? ['mot-trial']
                     : (currentTaskType === 'gabor')
-                        ? ['gabor-trial', 'gabor-quest']
+                        ? ['gabor-trial', 'gabor-quest', 'gabor-learning']
                         : (currentTaskType === 'continuous-image')
                             ? ['continuous-image-presentation']
                         : (currentTaskType === 'stroop')
@@ -5106,10 +5236,15 @@ class JsonBuilder {
                 gabor_spatial_cue_enabled: { type: 'boolean', default: true },
                 gabor_spatial_cue_options: { type: 'string', default: 'none,left,right,both' },
                 gabor_spatial_cue_probability: { type: 'number', default: 1, min: 0, max: 1, step: 0.01 },
+                gabor_spatial_cue_validity_probability: { type: 'number', default: 1, min: 0, max: 1, step: 0.01 },
                 gabor_value_cue_enabled: { type: 'boolean', default: true },
                 gabor_left_value_options: { type: 'string', default: 'neutral,high,low' },
                 gabor_right_value_options: { type: 'string', default: 'neutral,high,low' },
                 gabor_value_cue_probability: { type: 'number', default: 1, min: 0, max: 1, step: 0.01 },
+                gabor_value_target_value: { type: 'select', default: 'any', options: ['any', 'high', 'low', 'neutral'] },
+                gabor_reward_availability_high: { type: 'number', default: 0.8, min: 0, max: 1, step: 0.01 },
+                gabor_reward_availability_low: { type: 'number', default: 0.8, min: 0, max: 1, step: 0.01 },
+                gabor_reward_availability_neutral: { type: 'number', default: 0, min: 0, max: 1, step: 0.01 },
 
                 gabor_spatial_frequency_min: { type: 'number', default: 0.06, min: 0.001, max: 0.5, step: 0.001 },
                 gabor_spatial_frequency_max: { type: 'number', default: 0.06, min: 0.001, max: 0.5, step: 0.001 },
@@ -5125,7 +5260,7 @@ class JsonBuilder {
 
                 // Optional adaptive staircase per-block (stored in exported block.parameter_values.adaptive)
                 gabor_adaptive_mode: { type: 'select', default: 'none', options: ['none', 'quest'] },
-                gabor_quest_parameter: { type: 'select', default: 'target_tilt_deg', options: ['target_tilt_deg', 'spatial_frequency_cyc_per_px'] },
+                gabor_quest_parameter: { type: 'select', default: 'target_tilt_deg', options: ['target_tilt_deg', 'spatial_frequency_cyc_per_px', 'contrast'] },
                 gabor_quest_target_performance: { type: 'number', default: 0.82, min: 0.5, max: 0.99, step: 0.01 },
                 gabor_quest_start_value: { type: 'number', default: 45, step: 0.1 },
                 gabor_quest_start_sd: { type: 'number', default: 20, min: 0.001, step: 0.1 },
@@ -5134,6 +5269,20 @@ class JsonBuilder {
                 gabor_quest_gamma: { type: 'number', default: 0.5, min: 0, max: 1, step: 0.01 },
                 gabor_quest_min_value: { type: 'number', default: -90, step: 0.1 },
                 gabor_quest_max_value: { type: 'number', default: 90, step: 0.1 },
+                gabor_quest_trials_coarse: { type: 'number', default: 32, min: 0, max: 10000, step: 1 },
+                gabor_quest_trials_fine: { type: 'number', default: 32, min: 0, max: 10000, step: 1 },
+                gabor_quest_staircase_per_location: { type: 'boolean', default: false },
+                gabor_quest_store_location_threshold: { type: 'boolean', default: false },
+
+                gabor_contrast_min: { type: 'number', default: 0.05, min: 0, max: 1, step: 0.01 },
+                gabor_contrast_max: { type: 'number', default: 0.95, min: 0, max: 1, step: 0.01 },
+
+                gabor_learning_streak_length: { type: 'number', default: 20, min: 1, max: 10000, step: 1 },
+                gabor_learning_target_accuracy: { type: 'number', default: 0.9, min: 0, max: 1, step: 0.01 },
+                gabor_learning_max_trials: { type: 'number', default: 200, min: 1, max: 100000, step: 1 },
+                gabor_show_feedback: { type: 'boolean', default: true },
+                gabor_feedback_duration_ms: { type: 'number', default: 800, min: 0, max: 30000, step: 1 },
+
                 gabor_stimulus_duration_min: { type: 'number', default: 67, min: 0, max: 10000 },
                 gabor_stimulus_duration_max: { type: 'number', default: 67, min: 0, max: 10000 },
                 gabor_mask_duration_min: { type: 'number', default: 67, min: 0, max: 10000 },
@@ -5281,6 +5430,22 @@ class JsonBuilder {
                 pvt_iti_max: { type: 'number', default: 0, min: 0, max: 30000 }
             };
 
+            const motOnlyParams = {
+                mot_num_objects_options: { type: 'string', default: (document.getElementById('motNumObjectsDefault')?.value || '8').toString() },
+                mot_num_targets_options: { type: 'string', default: (document.getElementById('motNumTargetsDefault')?.value || '4').toString() },
+                mot_motion_type: { type: 'select', default: (document.getElementById('motMotionTypeDefault')?.value || 'linear').toString(), options: ['linear', 'curved'] },
+                mot_probe_mode: { type: 'select', default: (document.getElementById('motProbeModeDefault')?.value || 'click').toString(), options: ['click', 'number_entry'] },
+                mot_show_feedback: { type: 'boolean', default: !!document.getElementById('motShowFeedbackDefault')?.checked },
+                mot_speed_px_per_s_min: { type: 'number', default: Number.parseFloat(document.getElementById('motSpeedDefault')?.value || '150'), min: 20, max: 600 },
+                mot_speed_px_per_s_max: { type: 'number', default: Number.parseFloat(document.getElementById('motSpeedDefault')?.value || '150'), min: 20, max: 600 },
+                mot_tracking_duration_ms_min: { type: 'number', default: Number.parseInt(document.getElementById('motTrackingDurationMsDefault')?.value || '8000', 10), min: 0, max: 60000 },
+                mot_tracking_duration_ms_max: { type: 'number', default: Number.parseInt(document.getElementById('motTrackingDurationMsDefault')?.value || '8000', 10), min: 0, max: 60000 },
+                mot_cue_duration_ms_min: { type: 'number', default: Number.parseInt(document.getElementById('motCueDurationMsDefault')?.value || '2000', 10), min: 0, max: 30000 },
+                mot_cue_duration_ms_max: { type: 'number', default: Number.parseInt(document.getElementById('motCueDurationMsDefault')?.value || '2000', 10), min: 0, max: 30000 },
+                mot_iti_ms_min: { type: 'number', default: Number.parseInt(document.getElementById('motItiMsDefault')?.value || '1000', 10), min: 0, max: 30000 },
+                mot_iti_ms_max: { type: 'number', default: Number.parseInt(document.getElementById('motItiMsDefault')?.value || '1000', 10), min: 0, max: 30000 }
+            };
+
             const continuousImageOnlyParams = {
                 cip_asset_code: { type: 'string', default: '' },
                 // Mask is derived from the pixel-wise average of the image set, then modified by the selected transform.
@@ -5379,6 +5544,8 @@ class JsonBuilder {
                         ? taskSwitchingOnlyParams
                     : (currentTaskType === 'pvt')
                         ? pvtOnlyParams
+                    : (currentTaskType === 'mot')
+                        ? motOnlyParams
                     : (currentTaskType === 'gabor')
                         ? gaborOnlyParams
                         : (currentTaskType === 'continuous-image')
@@ -5702,7 +5869,7 @@ class JsonBuilder {
         }
 
         // For Flanker/SART/Simon/Task Switching/PVT/Gabor/Stroop/N-back/Continuous Image, show only task-appropriate components.
-        if (taskType === 'flanker' || taskType === 'sart' || taskType === 'simon' || taskType === 'task-switching' || taskType === 'pvt' || taskType === 'gabor' || taskType === 'stroop' || taskType === 'emotional-stroop' || taskType === 'nback' || taskType === 'continuous-image') {
+        if (taskType === 'flanker' || taskType === 'sart' || taskType === 'simon' || taskType === 'task-switching' || taskType === 'pvt' || taskType === 'mot' || taskType === 'gabor' || taskType === 'stroop' || taskType === 'emotional-stroop' || taskType === 'nback' || taskType === 'continuous-image') {
             if (taskType === 'flanker') {
                 baseComponents.push({
                     id: 'flanker-trial',
@@ -5806,6 +5973,26 @@ class JsonBuilder {
                         foreperiod_ms: { type: 'number', default: 4000, min: 0, max: 60000 },
                         trial_duration_ms: { type: 'number', default: 10000, min: 0, max: 60000 },
                         iti_ms: { type: 'number', default: 0, min: 0, max: 30000 }
+                    }
+                });
+            }
+
+            if (taskType === 'mot') {
+                baseComponents.push({
+                    id: 'mot-trial',
+                    name: `MOT ${unitName}`,
+                    icon: 'fas fa-bullseye',
+                    description: 'Multiple Object Tracking trial (cue, tracking, probe)',
+                    category: 'task',
+                    parameters: {
+                        num_objects: { type: 'number', default: 8, min: 2, max: 20 },
+                        num_targets: { type: 'number', default: 4, min: 1, max: 10 },
+                        speed_px_per_s: { type: 'number', default: 150, min: 20, max: 600 },
+                        motion_type: { type: 'select', default: 'linear', options: ['linear', 'curved'] },
+                        probe_mode: { type: 'select', default: 'click', options: ['click', 'number_entry'] },
+                        cue_duration_ms: { type: 'number', default: 2000, min: 0, max: 30000 },
+                        tracking_duration_ms: { type: 'number', default: 8000, min: 0, max: 60000 },
+                        iti_ms: { type: 'number', default: 1000, min: 0, max: 30000 }
                     }
                 });
             }
@@ -6335,7 +6522,7 @@ class JsonBuilder {
                                 <h6 class="card-title mb-1">
                                     ${iconHtml} ${title}
                                 </h6>
-                                <small class="text-muted">${subtitle}</small>
+                                <small class="text-muted cf-component-label">${subtitle}</small>
                             </div>
                         </div>
                         <div class="btn-group" role="group">
@@ -6344,6 +6531,9 @@ class JsonBuilder {
                             </button>
                             <button class="btn btn-sm btn-outline-secondary" onclick="editComponent(this)" title="Edit">
                                 <i class="fas fa-pencil-alt"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="duplicateComponent(this)" title="Duplicate Below">
+                                <i class="fas fa-copy"></i>
                             </button>
                             <button class="btn btn-sm btn-outline-danger" onclick="removeComponent(this)" title="Delete">
                                 <i class="fas fa-trash"></i>
@@ -6395,6 +6585,10 @@ class JsonBuilder {
                 Object.assign(componentData, this.getPvtDefaultsForNewComponent());
             }
 
+            if (componentDef.id === 'mot-trial') {
+                Object.assign(componentData, this.getMotDefaultsForNewComponent());
+            }
+
             if (componentDef.id === 'gabor-trial') {
                 Object.assign(componentData, this.getGaborDefaultsForNewComponent());
             }
@@ -6434,6 +6628,9 @@ class JsonBuilder {
                 if (currentTaskType === 'pvt') {
                     Object.assign(componentData, this.getPvtDefaultsForNewBlock());
                 }
+                if (currentTaskType === 'mot') {
+                    Object.assign(componentData, this.getMotDefaultsForNewBlock());
+                }
                 if (currentTaskType === 'nback') {
                     Object.assign(componentData, this.getNbackDefaultsForNewBlock());
                 }
@@ -6452,7 +6649,7 @@ class JsonBuilder {
                                 <h6 class="card-title mb-1">
                                     <i class="${componentDef.icon} text-primary"></i> ${componentDef.name}
                                 </h6>
-                                <small class="text-muted">${componentDef.description}</small>
+                                <small class="text-muted cf-component-label">${componentDef.description}</small>
                             </div>
                         </div>
                         <div class="btn-group" role="group">
@@ -6461,6 +6658,9 @@ class JsonBuilder {
                             </button>
                             <button class="btn btn-sm btn-outline-secondary" onclick="editComponent(this)" title="Edit">
                                 <i class="fas fa-pencil-alt"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="duplicateComponent(this)" title="Duplicate Below">
+                                <i class="fas fa-copy"></i>
                             </button>
                             <button class="btn btn-sm btn-outline-danger" onclick="removeComponent(this)" title="Delete">
                                 <i class="fas fa-trash"></i>
@@ -6981,6 +7181,30 @@ class JsonBuilder {
             };
         }
 
+        if (taskType === 'mot') {
+            const numObjects = Number.parseInt(document.getElementById('motNumObjectsDefault')?.value || '8', 10);
+            const numTargets = Number.parseInt(document.getElementById('motNumTargetsDefault')?.value || '4', 10);
+            const speed = Number.parseFloat(document.getElementById('motSpeedDefault')?.value || '150');
+            const motionType = (document.getElementById('motMotionTypeDefault')?.value || 'linear').toString();
+            const probeMode = (document.getElementById('motProbeModeDefault')?.value || 'click').toString();
+            const cueMs = Number.parseInt(document.getElementById('motCueDurationMsDefault')?.value || '2000', 10);
+            const trackingMs = Number.parseInt(document.getElementById('motTrackingDurationMsDefault')?.value || '8000', 10);
+            const itiMs = Number.parseInt(document.getElementById('motItiMsDefault')?.value || '1000', 10);
+            const showFeedback = !!document.getElementById('motShowFeedbackDefault')?.checked;
+
+            config.mot_settings = {
+                num_objects: Number.isFinite(numObjects) ? numObjects : 8,
+                num_targets: Number.isFinite(numTargets) ? numTargets : 4,
+                speed_px_per_s: Number.isFinite(speed) ? speed : 150,
+                motion_type: motionType,
+                probe_mode: probeMode,
+                cue_duration_ms: Number.isFinite(cueMs) ? cueMs : 2000,
+                tracking_duration_ms: Number.isFinite(trackingMs) ? trackingMs : 8000,
+                iti_ms: Number.isFinite(itiMs) ? itiMs : 1000,
+                show_feedback: showFeedback
+            };
+        }
+
         if (taskType === 'nback') {
             const safeInt = (raw, fallback) => {
                 const v = Number.parseInt(raw, 10);
@@ -7407,6 +7631,26 @@ class JsonBuilder {
     }
 
     /**
+     * Build a preview payload for the current MOT defaults.
+     */
+    getCurrentMotDefaults() {
+        const d = this.getMotDefaultsForNewComponent();
+        return {
+            type: 'mot-trial',
+            name: 'MOT Defaults',
+            num_objects: Number.isFinite(Number(d.num_objects)) ? Number(d.num_objects) : 8,
+            num_targets: Number.isFinite(Number(d.num_targets)) ? Number(d.num_targets) : 4,
+            speed_px_per_s: Number.isFinite(Number(d.speed_px_per_s)) ? Number(d.speed_px_per_s) : 150,
+            motion_type: (d.motion_type || 'linear').toString(),
+            probe_mode: (d.probe_mode || 'click').toString(),
+            cue_duration_ms: Number.isFinite(Number(d.cue_duration_ms)) ? Number(d.cue_duration_ms) : 2000,
+            tracking_duration_ms: Number.isFinite(Number(d.tracking_duration_ms)) ? Number(d.tracking_duration_ms) : 8000,
+            iti_ms: Number.isFinite(Number(d.iti_ms)) ? Number(d.iti_ms) : 1000,
+            show_feedback: !!d.show_feedback
+        };
+    }
+
+    /**
      * Build a preview payload for the current N-back defaults.
      * We return a `block` payload so the preview matches the real authoring unit.
      */
@@ -7616,6 +7860,47 @@ class JsonBuilder {
             pvt_trial_duration_max: Number.isFinite(trialMs) ? trialMs : 10000,
             pvt_iti_min: Number.isFinite(itiMs) ? itiMs : 0,
             pvt_iti_max: Number.isFinite(itiMs) ? itiMs : 0
+        };
+    }
+
+    getMotDefaultsForNewComponent() {
+        return {
+            num_objects: Number.parseInt(document.getElementById('motNumObjectsDefault')?.value || '8', 10),
+            num_targets: Number.parseInt(document.getElementById('motNumTargetsDefault')?.value || '4', 10),
+            speed_px_per_s: Number.parseFloat(document.getElementById('motSpeedDefault')?.value || '150'),
+            motion_type: (document.getElementById('motMotionTypeDefault')?.value || 'linear').toString(),
+            probe_mode: (document.getElementById('motProbeModeDefault')?.value || 'click').toString(),
+            cue_duration_ms: Number.parseInt(document.getElementById('motCueDurationMsDefault')?.value || '2000', 10),
+            tracking_duration_ms: Number.parseInt(document.getElementById('motTrackingDurationMsDefault')?.value || '8000', 10),
+            iti_ms: Number.parseInt(document.getElementById('motItiMsDefault')?.value || '1000', 10),
+            show_feedback: !!document.getElementById('motShowFeedbackDefault')?.checked
+        };
+    }
+
+    getMotDefaultsForNewBlock() {
+        const d = this.getMotDefaultsForNewComponent();
+        const speed = Number.isFinite(Number(d.speed_px_per_s)) ? Number(d.speed_px_per_s) : 150;
+        const tracking = Number.isFinite(Number(d.tracking_duration_ms)) ? Number(d.tracking_duration_ms) : 8000;
+        const cue = Number.isFinite(Number(d.cue_duration_ms)) ? Number(d.cue_duration_ms) : 2000;
+        const iti = Number.isFinite(Number(d.iti_ms)) ? Number(d.iti_ms) : 1000;
+        const nums = Number.isFinite(Number(d.num_objects)) ? Number(d.num_objects) : 8;
+        const tgts = Number.isFinite(Number(d.num_targets)) ? Number(d.num_targets) : 4;
+
+        return {
+            block_component_type: 'mot-trial',
+            mot_num_objects_options: String(nums),
+            mot_num_targets_options: String(tgts),
+            mot_motion_type: (d.motion_type || 'linear').toString(),
+            mot_probe_mode: (d.probe_mode || 'click').toString(),
+            mot_show_feedback: !!d.show_feedback,
+            mot_speed_px_per_s_min: speed,
+            mot_speed_px_per_s_max: speed,
+            mot_tracking_duration_ms_min: tracking,
+            mot_tracking_duration_ms_max: tracking,
+            mot_cue_duration_ms_min: cue,
+            mot_cue_duration_ms_max: cue,
+            mot_iti_ms_min: iti,
+            mot_iti_ms_max: iti
         };
     }
 
@@ -8937,7 +9222,7 @@ class JsonBuilder {
             addWindow('mask_duration_ms', blockComponent.sart_mask_duration_min, blockComponent.sart_mask_duration_max);
             addWindow('trial_duration_ms', blockComponent.sart_trial_duration_min, blockComponent.sart_trial_duration_max);
             addWindow('iti_ms', blockComponent.sart_iti_min, blockComponent.sart_iti_max);
-        } else if (resolvedComponentType === 'gabor-trial' || resolvedComponentType === 'gabor-quest') {
+        } else if (resolvedComponentType === 'gabor-trial' || resolvedComponentType === 'gabor-quest' || resolvedComponentType === 'gabor-learning') {
             const parseStringList = (raw) => {
                 if (raw === undefined || raw === null) return [];
                 return raw
@@ -8988,6 +9273,10 @@ class JsonBuilder {
             if (Number.isFinite(pSpatial)) {
                 values.spatial_cue_probability = Math.max(0, Math.min(1, pSpatial));
             }
+            const pSpatialValidity = Number(blockComponent.gabor_spatial_cue_validity_probability);
+            if (Number.isFinite(pSpatialValidity)) {
+                values.spatial_cue_validity_probability = Math.max(0, Math.min(1, pSpatialValidity));
+            }
 
             const lv = parseStringList(blockComponent.gabor_left_value_options);
             if (lv.length > 0) {
@@ -9007,7 +9296,26 @@ class JsonBuilder {
                 values.value_cue_probability = Math.max(0, Math.min(1, pValue));
             }
 
+            const valueTarget = (blockComponent.gabor_value_target_value ?? '').toString().trim().toLowerCase();
+            if (valueTarget === 'high' || valueTarget === 'low' || valueTarget === 'neutral' || valueTarget === 'any') {
+                values.value_target_value = valueTarget;
+            }
+
+            const pRewardHigh = Number(blockComponent.gabor_reward_availability_high);
+            if (Number.isFinite(pRewardHigh)) {
+                values.reward_availability_high = Math.max(0, Math.min(1, pRewardHigh));
+            }
+            const pRewardLow = Number(blockComponent.gabor_reward_availability_low);
+            if (Number.isFinite(pRewardLow)) {
+                values.reward_availability_low = Math.max(0, Math.min(1, pRewardLow));
+            }
+            const pRewardNeutral = Number(blockComponent.gabor_reward_availability_neutral);
+            if (Number.isFinite(pRewardNeutral)) {
+                values.reward_availability_neutral = Math.max(0, Math.min(1, pRewardNeutral));
+            }
+
             addWindow('spatial_frequency_cyc_per_px', blockComponent.gabor_spatial_frequency_min, blockComponent.gabor_spatial_frequency_max);
+            addWindow('contrast', blockComponent.gabor_contrast_min, blockComponent.gabor_contrast_max);
 
             addWindow('patch_diameter_deg', blockComponent.gabor_patch_diameter_deg_min, blockComponent.gabor_patch_diameter_deg_max);
 
@@ -9048,7 +9356,11 @@ class JsonBuilder {
                     delta: Number(blockComponent.gabor_quest_delta),
                     gamma: Number(blockComponent.gabor_quest_gamma),
                     min_value: Number(blockComponent.gabor_quest_min_value),
-                    max_value: Number(blockComponent.gabor_quest_max_value)
+                    max_value: Number(blockComponent.gabor_quest_max_value),
+                    quest_trials_coarse: Number(blockComponent.gabor_quest_trials_coarse),
+                    quest_trials_fine: Number(blockComponent.gabor_quest_trials_fine),
+                    staircase_per_location: !!blockComponent.gabor_quest_staircase_per_location,
+                    store_location_threshold: !!blockComponent.gabor_quest_store_location_threshold
                 };
 
                 // Clean up NaNs if the user left fields empty
@@ -9059,6 +9371,23 @@ class JsonBuilder {
                     }
                 });
             }
+
+            // Learning block controls
+            const streakLen = Number(blockComponent.gabor_learning_streak_length);
+            if (Number.isFinite(streakLen)) values.learning_streak_length = Math.max(1, Math.round(streakLen));
+
+            const targetAcc = Number(blockComponent.gabor_learning_target_accuracy);
+            if (Number.isFinite(targetAcc)) values.learning_target_accuracy = Math.max(0, Math.min(1, targetAcc));
+
+            const maxTrials = Number(blockComponent.gabor_learning_max_trials);
+            if (Number.isFinite(maxTrials)) values.learning_max_trials = Math.max(1, Math.round(maxTrials));
+
+            if (blockComponent.gabor_show_feedback !== undefined) {
+                values.show_feedback = !!blockComponent.gabor_show_feedback;
+            }
+
+            const fbDur = Number(blockComponent.gabor_feedback_duration_ms);
+            if (Number.isFinite(fbDur)) values.feedback_duration_ms = Math.max(0, Math.round(fbDur));
 
             addWindow('stimulus_duration_ms', blockComponent.gabor_stimulus_duration_min, blockComponent.gabor_stimulus_duration_max);
             addWindow('mask_duration_ms', blockComponent.gabor_mask_duration_min, blockComponent.gabor_mask_duration_max);
@@ -9291,6 +9620,27 @@ class JsonBuilder {
             addWindow('foreperiod_ms', blockComponent.pvt_foreperiod_min, blockComponent.pvt_foreperiod_max);
             addWindow('trial_duration_ms', blockComponent.pvt_trial_duration_min, blockComponent.pvt_trial_duration_max);
             addWindow('iti_ms', blockComponent.pvt_iti_min, blockComponent.pvt_iti_max);
+        } else if (resolvedComponentType === 'mot-trial') {
+            const parseIntCSV = (raw) => {
+                if (raw === undefined || raw === null) return [];
+                return raw.toString().split(',').map(s => s.trim()).filter(Boolean)
+                    .map(s => Number.parseInt(s, 10)).filter(n => Number.isFinite(n));
+            };
+            const nums = parseIntCSV(blockComponent.mot_num_objects_options);
+            if (nums.length > 0) values.num_objects = Array.from(new Set(nums));
+            const tgts = parseIntCSV(blockComponent.mot_num_targets_options);
+            if (tgts.length > 0) values.num_targets = Array.from(new Set(tgts));
+            const mtype = (blockComponent.mot_motion_type ?? '').toString().trim();
+            if (mtype) values.motion_type = mtype;
+            const pm = (blockComponent.mot_probe_mode ?? '').toString().trim();
+            if (pm) values.probe_mode = pm;
+            if (blockComponent.mot_show_feedback !== undefined) {
+                values.show_feedback = !!blockComponent.mot_show_feedback;
+            }
+            addWindow('speed_px_per_s', blockComponent.mot_speed_px_per_s_min, blockComponent.mot_speed_px_per_s_max);
+            addWindow('tracking_duration_ms', blockComponent.mot_tracking_duration_ms_min, blockComponent.mot_tracking_duration_ms_max);
+            addWindow('cue_duration_ms', blockComponent.mot_cue_duration_ms_min, blockComponent.mot_cue_duration_ms_max);
+            addWindow('iti_ms', blockComponent.mot_iti_ms_min, blockComponent.mot_iti_ms_max);
         } else if (resolvedComponentType === 'html-keyboard-response') {
             const stim = (blockComponent.stimulus_html ?? blockComponent.stimulus ?? '').toString();
             if (stim.trim() !== '') {
@@ -10660,6 +11010,9 @@ class JsonBuilder {
                         <button class="btn btn-sm btn-outline-secondary" onclick="editComponent(this)" title="Edit">
                             <i class="fas fa-pencil-alt"></i>
                         </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="duplicateComponent(this)" title="Duplicate Below">
+                            <i class="fas fa-copy"></i>
+                        </button>
                         <button class="btn btn-sm btn-outline-danger" onclick="removeComponent(this)" title="Delete">
                             <i class="fas fa-trash"></i>
                         </button>
@@ -11055,6 +11408,99 @@ class JsonBuilder {
             window.componentPreview.showPreview(previewData);
         } else {
             console.error('ComponentPreview not found');
+        }
+    }
+
+    /**
+     * Publish the current config to the CogFlow Platform backend.
+     *
+     * Activated when window.COGFLOW_PLATFORM_URL is set (e.g. "http://localhost:8000").
+     * Study metadata is read from window.COGFLOW_STUDY_SLUG / COGFLOW_STUDY_NAME /
+     * COGFLOW_CONFIG_VERSION, or prompted via the UI when absent.
+     *
+     * Called by the "Platform Publish" button in the platform version of index.html.
+     */
+    async publishToPlatform() {
+        const platformUrl = (
+            typeof window.COGFLOW_PLATFORM_URL === 'string'
+                ? window.COGFLOW_PLATFORM_URL.trim().replace(/\/+$/, '')
+                : ''
+        );
+        if (!platformUrl) {
+            this.showValidationResult(
+                'error',
+                'Platform URL not configured. Set window.COGFLOW_PLATFORM_URL before publishing.'
+            );
+            return;
+        }
+
+        // Build config payload
+        let config;
+        try {
+            config = this.generateJSON();
+        } catch (e) {
+            this.showValidationResult('error', `Could not generate config: ${e?.message || String(e)}`);
+            return;
+        }
+
+        // Block on validation errors (same as exportJSON)
+        const blockLengthErrors = this.findBlockLengthViolations(config);
+        if (blockLengthErrors.length > 0) {
+            this.showValidationResult('error', `Cannot publish: ${blockLengthErrors.join(' | ')}`);
+            return;
+        }
+
+        // Study metadata — read from window globals set by platform index.html, with sane fallbacks.
+        const studySlug = (
+            (typeof window.COGFLOW_STUDY_SLUG === 'string' && window.COGFLOW_STUDY_SLUG.trim()) ||
+            (config && config.task_type ? `${config.task_type}-study` : 'untitled-study')
+        );
+        const studyName = (
+            (typeof window.COGFLOW_STUDY_NAME === 'string' && window.COGFLOW_STUDY_NAME.trim()) ||
+            studySlug
+        );
+        const versionLabel = (
+            (typeof window.COGFLOW_CONFIG_VERSION === 'string' && window.COGFLOW_CONFIG_VERSION.trim()) ||
+            `v${new Date().toISOString().slice(0, 10)}`
+        );
+        const builderVersion = (
+            typeof window.__COGFLOW_BUILDER_VERSION === 'string'
+                ? window.__COGFLOW_BUILDER_VERSION
+                : 'unknown'
+        );
+
+        const payload = {
+            study_slug: studySlug,
+            study_name: studyName,
+            config_version_label: versionLabel,
+            builder_version: builderVersion,
+            runtime_mode: 'django',
+            config,
+        };
+
+        this.showValidationResult('success', `Publishing to ${platformUrl}…`);
+
+        try {
+            const response = await fetch(`${platformUrl}/api/v1/configs/publish`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            const data = await response.json().catch(() => ({}));
+
+            if (response.ok) {
+                const dashUrl = data.dashboard_url || `${platformUrl}/studies/${data.study_slug || studySlug}/`;
+                this.showValidationResult(
+                    'success',
+                    `Published! Study: ${data.study_slug || studySlug} · Config ID: ${data.config_version_id || '—'}\nDashboard: ${dashUrl}`
+                );
+            } else {
+                const errMsg = data.detail || data.error || JSON.stringify(data);
+                this.showValidationResult('error', `Publish failed (${response.status}): ${errMsg}`);
+            }
+        } catch (e) {
+            this.showValidationResult('error', `Publish error: ${e?.message || String(e)}`);
         }
     }
 }
