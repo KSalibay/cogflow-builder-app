@@ -4,6 +4,57 @@ Migrate Builder + Interpreter from JATOS/Token-Store dependence to a Kubernetes-
 
 Add an optional LSL-capable deployment profile for labs that need device synchronization (EEG, physiology). This profile uses a separate local app branded as `Home Gear` (technical name: `CogFlow Local Runtime`) that runs the Interpreter locally (Dockerized), bridges experiment markers to native `liblsl`, and syncs metadata/results back to the cloud platform.
 
+## Condensed 2-Week Deployment Sprint (Execution Plan)
+
+This condensed sprint focuses on portal MVP readiness for initial deployment while preserving backend-first reliability.
+
+### Week 1 (Build + Integrate)
+
+1. Finalize role schema and access semantics
+1.1 Keep role records in database via `users.UserProfile.role`.
+1.2 Ensure role set covers platform admin, researcher, analyst, and participant semantics.
+1.3 Enforce researcher/admin-only controls for participant link issuance.
+
+2. Lock Builder to platform publish flow
+2.1 Validate `Platform Publish` path to `/api/v1/configs/publish`.
+2.2 Ensure publish writes dashboard-visible study records with stable version labels.
+2.3 Preserve JATOS fallback under feature flag.
+
+3. Formalize Builder -> Interpreter runtime pipeline
+3.1 Keep `/api/v1/runs/start` and `/api/v1/results/submit` as the canonical runtime path.
+3.2 Ensure start response includes sufficient launch metadata for interpreter initialization.
+3.3 Keep payload compatibility with current Builder/Interpreter schemas.
+
+4. Add researcher-facing participant link generation
+4.1 Create researcher action to generate participant launch links per study.
+4.2 Bind links to study slug, owner identity, optional participant external id, and expiry.
+4.3 Record link-issuance events in audit trail.
+
+### Week 2 (Portal MVP + Hardening)
+
+1. Portal dashboard MVP for researcher workflows
+1.1 Show study, owner, runtime mode, latest config, run count, and last result.
+1.2 Add dashboard-level action to generate participant launch links.
+1.3 Keep UX functional in authenticated researcher sessions first; polish next.
+
+2. Participant launch and data association guarantees
+2.1 Allow run start by launch token or direct study slug.
+2.2 Ensure participant runs resolve to the intended study and researcher context.
+2.3 Persist submitted data through existing encrypted envelope + trial pipeline.
+
+3. Deployment readiness checks
+3.1 Run API and integration tests for publish -> start -> submit -> dashboard visibility.
+3.2 Validate role restrictions and audit events for link generation and decrypt access.
+3.3 Produce go-live checklist for initial portal deployment candidate.
+
+### Sprint Exit Criteria
+
+1. Role semantics are enforceable in database-backed user profiles.
+2. Builder publish path is operational against platform backend.
+3. Interpreter runtime pipeline works end-to-end through platform APIs.
+4. Researcher can generate participant links from portal UI/API.
+5. Participant launch flow saves results to the study context owned by the researcher.
+
 **Steps**
 1. Phase 0 - Architecture baseline and contracts
 1.1 Define target system boundaries and API contracts for `Config API`, `Asset API`, `Result Ingest API`, `Auth API`, `Study/Run API`, and `Home Gear Sync API`.

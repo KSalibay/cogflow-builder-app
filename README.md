@@ -123,6 +123,7 @@ The Builder supports these `task_type` values via the **Task Type** dropdown:
 - `pvt` — Psychomotor Vigilance Task (PVT)
 - `task-switching` — Task switching (letters/numbers or custom token sets; explicit/position/color cueing)
 - `gabor` — Gabor patch
+- `mot` — Multiple Object Tracking (MOT)
 - `nback` — N-back (trial-based and continuous)
 - `soc-dashboard` — SOC desktop multitasking session (continuous-mode)
 - `continuous-image` — Continuous Image Presentation (CIP) session (continuous-mode)

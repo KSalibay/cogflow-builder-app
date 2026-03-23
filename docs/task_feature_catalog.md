@@ -30,6 +30,7 @@ Conventions:
 | `task-switching` | trial-based | Switch vs repeat trials with cueing | `task-switching-trial`, `block` | _Fill in_ |
 | `gabor` | trial-based | Gabor patch detection/discrimination | `gabor-trial`, `block` (incl. `gabor-quest`) | _Fill in_ |
 | `nback` | trial-based, continuous | Working memory N-back | `nback-trial-sequence`, `nback-block`, `block` | _Fill in_ |
+| `mot` | trial-based | Multiple Object Tracking | `mot-trial`, `block` | _Fill in_ |
 | `soc-dashboard` | continuous | Multi-window SOC desktop multitasking | `soc-dashboard`, `soc-dashboard-icon`, SOC subtasks | _Fill in_ |
 | `continuous-image` | continuous | Continuous Image Presentation (CIP) | `block` (inner type `continuous-image-presentation`) | _Fill in_ |
 | `custom` | trial-based, continuous | Advanced/manual mode (generic components only) | generic components + tracking | _Fill in_ |
@@ -198,6 +199,26 @@ Authorship / design notes:
 - Owners: _Fill in_
 - Rationale / intended use: N-back for working memory assessment; continuous mode for embedded tasking within multi-window (SOC) sessions.
 - Known limitations / future work: _Fill in_
+
+### `mot`
+
+What it supports:
+
+- Canvas-rendered arena with multiple moving objects (requestAnimationFrame loop, same approach as RDM).
+- Three-phase trial structure: **cue phase** (targets flash at `cue_flash_rate_hz` Hz between `object_color` and `target_cue_color`) → **tracking phase** (all objects move identically, unlabeled) → **probe phase** (participant identifies targets).
+- Two trajectory types: `linear` (straight paths, bounce/wrap at boundary) and `curved` (smooth random turning controlled by `curve_strength`).
+- Two probe modes: `click` (participant clicks objects they believe are targets) and `number_entry` (numbers 1–N appear inside objects during probe; participant types corresponding numbers on keyboard).
+- Configurable arena size (`arena_width_px`, `arena_height_px`) and boundary behavior (`bounce` or `wrap`).
+- Per-object speed jitter via `speed_variability` (0 = all same speed).
+- Optional post-probe feedback display (`show_feedback`, `feedback_duration_ms`).
+- Block support with range/options sampling for: num_objects, num_targets, speed, tracking/cue/ITI durations, motion_type, and probe_mode.
+- Data recorded per trial: `num_correct`, `num_false_alarms`, `num_missed`, `rt_first_click_ms`, `clicks[]`.
+
+Authorship / design notes:
+
+- Owners: _Fill in_
+- Rationale / intended use: Standard MOT paradigm for measuring attentional tracking capacity; supports both click-to-select and number-entry response modes.
+- Known limitations / future work: No adaptive variant; difficulty can be controlled through block sequencing.
 
 ### `soc-dashboard`
 

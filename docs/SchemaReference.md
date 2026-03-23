@@ -40,6 +40,33 @@ Additional note: aperture outline (border) fields are exported under `aperture_p
 | `block` | `JSPsychSchemas.pluginSchemas.block` |
 | `rdm-*` plugins | `JSPsychSchemas.generateRDMPluginSchema()` and `pluginSchemas` |
 | `html-keyboard-response` | `JSPsychSchemas.pluginSchemas['html-keyboard-response']` |
+| `mot-trial` | `JSPsychSchemas.pluginSchemas['mot-trial']` |
+| `flanker-trial` | `JSPsychSchemas.pluginSchemas['flanker-trial']` |
+| `sart-trial` | `JSPsychSchemas.pluginSchemas['sart-trial']` |
+| `pvt-trial` | `JSPsychSchemas.pluginSchemas['pvt-trial']` |
+| `nback-block` / `nback-trial-sequence` | `JSPsychSchemas.pluginSchemas['nback-block']` |
+| `gabor-trial` | `JSPsychSchemas.pluginSchemas['gabor-trial']` |
+| `stroop-trial` / `emotional-stroop-trial` | `JSPsychSchemas.pluginSchemas['stroop-trial']` |
+| `simon-trial` | `JSPsychSchemas.pluginSchemas['simon-trial']` |
+| `task-switching-trial` | `JSPsychSchemas.pluginSchemas['task-switching-trial']` |
+
+### MOT task (`mot-trial`)
+
+The MOT component schema (`mot-trial`) defines the following block-level parameters (sourced from `motOnlyParams` in `JsonBuilder.js`):
+
+| Parameter | Type | Description |
+|---|---|---|
+| `mot_num_objects_options` | options list | Candidate values for total object count |
+| `mot_num_targets_options` | options list | Candidate values for number of targets to track |
+| `mot_motion_type` | select | `linear` or `curved` |
+| `mot_probe_mode` | select | `click` or `number_entry` |
+| `mot_show_feedback` | boolean | Whether to show post-probe feedback rings |
+| `mot_speed_px_per_s_min` / `_max` | range | Speed window in pixels/second |
+| `mot_tracking_duration_ms_min` / `_max` | range | Tracking phase duration window |
+| `mot_cue_duration_ms_min` / `_max` | range | Cue phase duration window |
+| `mot_iti_ms_min` / `_max` | range | ITI window |
+
+Global defaults export: `config.mot_settings` (merged into each `mot-trial` at runtime by the Interpreter).
 
 ---
 
