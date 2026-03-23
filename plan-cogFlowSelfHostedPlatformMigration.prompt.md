@@ -2,6 +2,60 @@
 
 Migrate Builder + Interpreter from JATOS/Token-Store dependence to a Kubernetes-first Django+PostgreSQL platform with strict compliance controls, while keeping JATOS as an operational fallback during transition. Build a separate monorepo (`cogflow-platform`) that contains backend services, integrated Builder/Interpreter frontends, asset storage pipeline, and a basic researcher portal in MVP. The Builder publish flow will be automated so new compiled studies are auto-registered and immediately visible on the researcher dashboard without token copy/paste.
 
+## Delivery Snapshot (Updated 2026-03-24)
+
+### Checkpoints already hit
+
+1. Platform propagation completed
+1.1 Latest Builder and Interpreter changes mirrored into `cogflow-platform` frontend mounts.
+1.2 MOT/plugin-related updates and publish/runtime wiring are present in platform copy.
+
+2. Portal MVP foundations completed
+2.1 Portal login/session flow is live with role-aware navigation.
+2.2 Builder and Interpreter are embedded via same-origin iframes.
+2.3 Theme sync works portal -> builder and persists across reloads.
+
+3. Runtime and preview workflow completed
+3.1 Interpreter launch flow fixed to accept `launch_token` in portal preview path.
+3.2 Participant launch links (multi-use and single-use) are generated from portal and consumed by runtime start API.
+
+4. Security/compliance baseline completed
+4.1 MFA setup/verify/disable endpoints are in place.
+4.2 Password change endpoint is in place.
+4.3 Decrypt protections and audit trail behaviors are covered in integration tests.
+
+5. Admin user-management baseline completed
+5.1 Admin panel added to portal for `platform_admin` users.
+5.2 Admin can list users, create users, change roles, delete users.
+5.3 Admin can activate/deactivate user accounts (self-deactivation blocked).
+
+6. Test baseline green
+6.1 Integration suite currently passes with new admin/API additions.
+
+### Immediate next 3-5 day checkpoints before alpha online testing
+
+1. API hardening and permissions matrix (Day 1)
+1.1 Add explicit negative tests for non-admin access across all admin endpoints (list/create/role/activation/delete).
+1.2 Confirm account deactivation behavior at auth boundary (`is_active=False` cannot log in or keep session).
+
+2. Portal UX stabilization (Day 1-2)
+2.1 Final responsive pass for Admin, Ethics, and Studies on laptop + tablet + mobile widths.
+2.2 Add loading/disabled states for all admin destructive actions to prevent double-submit.
+
+3. Pre-alpha operational checks (Day 2-3)
+3.1 Run full backend test suite in dockerized environment matching target server profile.
+3.2 Dry-run deployment script for staging-like host with HTTPS, env vars, and DB migration.
+3.3 Verify static asset cache-busting strategy for portal/builder/interpreter updates.
+
+4. Alpha data-path validation (Day 3-4)
+4.1 Execute end-to-end script: publish study -> generate link -> run interpreter -> submit -> decrypt -> export.
+4.2 Confirm audit events for admin user operations and result decryption access.
+
+5. Go/No-Go checklist for first online alpha (Day 4-5)
+5.1 Security: default admin rotation + TLS + secret management verified.
+5.2 Reliability: backup/restore smoke test completed on platform DB.
+5.3 UX: known issues triaged with severity and mitigation notes.
+
 Add an optional LSL-capable deployment profile for labs that need device synchronization (EEG, physiology). This profile uses a separate local app branded as `Home Gear` (technical name: `CogFlow Local Runtime`) that runs the Interpreter locally (Dockerized), bridges experiment markers to native `liblsl`, and syncs metadata/results back to the cloud platform.
 
 ## Condensed 2-Week Deployment Sprint (Execution Plan)

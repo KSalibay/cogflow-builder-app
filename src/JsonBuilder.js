@@ -868,9 +868,12 @@ class JsonBuilder {
             this.showComponentLibrary();
         });
 
-        document.getElementById('exportJsonBtn').addEventListener('click', () => {
-            this.exportJSON();
-        });
+        const exportJsonBtn = document.getElementById('exportJsonBtn');
+        if (exportJsonBtn) {
+            exportJsonBtn.addEventListener('click', () => {
+                this.exportJSON();
+            });
+        }
 
         // Assets folder upload -> Token Store assets + filename-to-URL index
         const assetsBtn = document.getElementById('uploadAssetsFolderBtn');
@@ -10040,7 +10043,7 @@ class JsonBuilder {
             total_dots: parseInt(document.getElementById('totalDots')?.value || 150),
             dot_size: parseInt(document.getElementById('dotSize')?.value || 4),
             dot_color: document.getElementById('dotColor')?.value || '#FFFFFF',
-            lifetime_frames: parseInt(document.getElementById('dotLifetime')?.value || 5)
+            lifetime_frames: parseInt(document.getElementById('dotLifetime')?.value || 60)
         };
 
         // Add dot groups configuration if enabled
@@ -10799,7 +10802,7 @@ class JsonBuilder {
                 total_dots: 150,
                 dot_size: 4,
                 dot_color: "#FFFFFF",
-                lifetime_frames: 5
+                lifetime_frames: 60
             },
             motion_parameters: {
                 coherence: 0.5,
@@ -11421,6 +11424,139 @@ class JsonBuilder {
      * Called by the "Platform Publish" button in the platform version of index.html.
      */
     async publishToPlatform() {
+        const toSlug = (value) => String(value || '')
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9\s-]/g, '')
+            .replace(/\s+/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-|-$/g, '')
+            .slice(0, 64);
+
+        const getCsrfToken = () => {
+            try {
+                const fromCookie = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+                if (fromCookie && fromCookie[1]) return decodeURIComponent(fromCookie[1]);
+                const fromMeta = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                return (fromMeta || '').trim();
+            } catch {
+                return '';
+            }
+        };
+
+        const safePrompt = (message, defaultValue = '') => {
+            try {
+                return window.prompt(message, defaultValue);
+            } catch {
+                return null;
+            }
+        };
+
+        const requestPublishMetadata = ({ initialName = '', initialSlug = '', initialVersion = '' }) => {
+            const modalEl = document.getElementById('publishMetadataModal');
+            const bootstrapApi = window.bootstrap;
+            if (!modalEl || !bootstrapApi?.Modal) {
+                return Promise.resolve(null);
+            }
+
+            const nameInput = modalEl.querySelector('#publishStudyName');
+            const slugInput = modalEl.querySelector('#publishStudySlug');
+            const versionInput = modalEl.querySelector('#publishConfigVersion');
+            const confirmBtn = modalEl.querySelector('#publishMetaConfirmBtn');
+            const errorEl = modalEl.querySelector('#publishMetaError');
+            if (!nameInput || !slugInput || !versionInput || !confirmBtn || !errorEl) {
+                return Promise.resolve(null);
+            }
+
+            return new Promise((resolve) => {
+                const modal = bootstrapApi.Modal.getOrCreateInstance(modalEl);
+                let settled = false;
+                let slugTouched = false;
+
+                const clearError = () => {
+                    errorEl.textContent = '';
+                    errorEl.classList.add('d-none');
+                };
+
+                const showError = (message) => {
+                    errorEl.textContent = message;
+                    errorEl.classList.remove('d-none');
+                };
+
+                const cleanup = () => {
+                    modalEl.removeEventListener('hidden.bs.modal', onHidden);
+                    confirmBtn.removeEventListener('click', onConfirm);
+                    nameInput.removeEventListener('input', onNameInput);
+                    slugInput.removeEventListener('input', onSlugInput);
+                };
+
+                const finish = (value) => {
+                    if (settled) return;
+                    settled = true;
+                    cleanup();
+                    resolve(value);
+                };
+
+                const onHidden = () => finish(null);
+
+                const onSlugInput = () => {
+                    if (slugInput.value.trim()) slugTouched = true;
+                    clearError();
+                };
+
+                const onNameInput = () => {
+                    clearError();
+                    if (!slugTouched) {
+                        slugInput.value = toSlug(nameInput.value);
+                    }
+                };
+
+                const onConfirm = () => {
+                    const studyName = String(nameInput.value || '').trim();
+                    const studySlug = toSlug(slugInput.value);
+                    const configVersion = String(versionInput.value || '').trim();
+
+                    if (!studyName) {
+                        showError('Study name is required.');
+                        nameInput.focus();
+                        return;
+                    }
+                    if (!studySlug) {
+                        showError('Study slug is required and must be URL-safe.');
+                        slugInput.focus();
+                        return;
+                    }
+                    if (!configVersion) {
+                        showError('Config version is required.');
+                        versionInput.focus();
+                        return;
+                    }
+
+                    finish({
+                        study_name: studyName,
+                        study_slug: studySlug,
+                        config_version: configVersion,
+                    });
+                    modal.hide();
+                };
+
+                clearError();
+                nameInput.value = initialName;
+                slugInput.value = initialSlug;
+                versionInput.value = initialVersion;
+                slugTouched = Boolean(initialSlug);
+
+                modalEl.addEventListener('hidden.bs.modal', onHidden);
+                confirmBtn.addEventListener('click', onConfirm);
+                nameInput.addEventListener('input', onNameInput);
+                slugInput.addEventListener('input', onSlugInput);
+
+                modal.show();
+                nameInput.focus();
+                nameInput.select();
+            });
+        };
+
         const platformUrl = (
             typeof window.COGFLOW_PLATFORM_URL === 'string'
                 ? window.COGFLOW_PLATFORM_URL.trim().replace(/\/+$/, '')
@@ -11450,19 +11586,94 @@ class JsonBuilder {
             return;
         }
 
-        // Study metadata — read from window globals set by platform index.html, with sane fallbacks.
-        const studySlug = (
-            (typeof window.COGFLOW_STUDY_SLUG === 'string' && window.COGFLOW_STUDY_SLUG.trim()) ||
-            (config && config.task_type ? `${config.task_type}-study` : 'untitled-study')
-        );
-        const studyName = (
+        // Study metadata — collect from platform globals/saved values, then prompt via modal if needed.
+        const publishMetaKey = 'cogflow_platform_publish_meta_v1';
+        let savedMeta = {};
+        try {
+            savedMeta = JSON.parse(localStorage.getItem(publishMetaKey) || '{}') || {};
+        } catch {
+            savedMeta = {};
+        }
+
+        const defaultVersionLabel = `v${new Date().toISOString().slice(0, 10)}`;
+
+        let studyName = (
             (typeof window.COGFLOW_STUDY_NAME === 'string' && window.COGFLOW_STUDY_NAME.trim()) ||
-            studySlug
+            (typeof savedMeta.study_name === 'string' && savedMeta.study_name.trim()) ||
+            ''
         );
-        const versionLabel = (
+        let studySlug = (
+            (typeof window.COGFLOW_STUDY_SLUG === 'string' && window.COGFLOW_STUDY_SLUG.trim()) ||
+            (typeof savedMeta.study_slug === 'string' && savedMeta.study_slug.trim()) ||
+            ''
+        );
+
+        let versionLabel = (
             (typeof window.COGFLOW_CONFIG_VERSION === 'string' && window.COGFLOW_CONFIG_VERSION.trim()) ||
-            `v${new Date().toISOString().slice(0, 10)}`
+            (typeof savedMeta.config_version === 'string' && savedMeta.config_version.trim()) ||
+            defaultVersionLabel
         );
+
+        const defaultName = (config?.task_name || config?.task_type || 'Untitled Study').toString().trim();
+        if (!studyName) studyName = defaultName;
+        if (!studySlug) {
+            studySlug = toSlug(studyName) || (config && config.task_type ? `${config.task_type}-study` : 'untitled-study');
+        }
+
+        const metadataNeeded = !window.COGFLOW_STUDY_NAME || !window.COGFLOW_STUDY_SLUG;
+        if (metadataNeeded) {
+            const modalMeta = await requestPublishMetadata({
+                initialName: studyName,
+                initialSlug: studySlug,
+                initialVersion: versionLabel,
+            });
+
+            if (modalMeta) {
+                studyName = modalMeta.study_name;
+                studySlug = modalMeta.study_slug;
+                versionLabel = modalMeta.config_version;
+            } else {
+                const enteredName = safePrompt('Enter study name for Platform Publish:', studyName || defaultName);
+                if (enteredName === null) {
+                    this.showValidationResult('warning', 'Publish canceled.');
+                    return;
+                }
+                studyName = String(enteredName || '').trim();
+                if (!studyName) {
+                    this.showValidationResult('error', 'Study name is required for publish.');
+                    return;
+                }
+
+                const enteredSlug = safePrompt('Enter study slug (URL-safe id):', studySlug || toSlug(studyName));
+                if (enteredSlug === null) {
+                    this.showValidationResult('warning', 'Publish canceled.');
+                    return;
+                }
+                studySlug = toSlug(enteredSlug);
+                if (!studySlug) {
+                    this.showValidationResult('error', 'Study slug is required for publish.');
+                    return;
+                }
+
+                const enteredVersion = safePrompt('Enter config version label:', versionLabel || defaultVersionLabel);
+                if (enteredVersion === null) {
+                    this.showValidationResult('warning', 'Publish canceled.');
+                    return;
+                }
+                versionLabel = String(enteredVersion || '').trim() || defaultVersionLabel;
+            }
+        }
+
+        try {
+            const meta = { study_name: studyName, study_slug: studySlug, config_version: versionLabel };
+            localStorage.setItem(publishMetaKey, JSON.stringify(meta));
+            window.COGFLOW_STUDY_NAME = studyName;
+            window.COGFLOW_STUDY_SLUG = studySlug;
+            window.COGFLOW_CONFIG_VERSION = versionLabel;
+        } catch {
+            // ignore storage errors
+        }
+
         const builderVersion = (
             typeof window.__COGFLOW_BUILDER_VERSION === 'string'
                 ? window.__COGFLOW_BUILDER_VERSION
@@ -11481,9 +11692,14 @@ class JsonBuilder {
         this.showValidationResult('success', `Publishing to ${platformUrl}…`);
 
         try {
+            const csrfToken = getCsrfToken();
             const response = await fetch(`${platformUrl}/api/v1/configs/publish`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(csrfToken ? { 'X-CSRFToken': csrfToken } : {})
+                },
                 body: JSON.stringify(payload),
             });
 

@@ -1574,7 +1574,7 @@ class TimelineBuilder {
 
                         <div>
                             <div class="small text-muted mb-1">Preview</div>
-                            <div class="border rounded p-2" style="background:#fff;">
+                            <div class="border rounded p-2" style="background:var(--cf-surface);">
                                 <img id="${previewId}" alt="image preview" style="max-width: 100%; max-height: 320px; display:none;" />
                                 <div class="text-muted" data-psy-image-empty="1" style="display:none;">No image selected.</div>
                             </div>
@@ -1611,7 +1611,7 @@ class TimelineBuilder {
 
                         <div>
                             <div class="small text-muted mb-1">Preview</div>
-                            <div class="border rounded p-2" style="background:#fff;">
+                            <div class="border rounded p-2" style="background:var(--cf-surface);">
                                 <audio id="${previewId}" controls style="width: 100%; display:none;"></audio>
                                 <div class="text-muted" data-psy-audio-empty="1" style="display:none;">No audio selected.</div>
                             </div>
