@@ -47,6 +47,11 @@ What it supports:
 - Practice variants and adaptive variants (staircase/QUEST-like behavior depending on settings).
 - Dot-groups variant (multiple dot populations with separate coherences/colors; optional cueing).
 - Blocks to generate large runs from ranges/windows instead of listing every trial.
+- Loop containers with nested expansion via `loop-start` / `loop-end` markers.
+- Mind-wandering interruption probes (`mw-probe`) with editable survey-style questions and interval controls.
+- Continuous-mode runtime diagnostics for target vs measured RDM dynamics (coherence/speed/direction/lifetime, reseeds, noise jumps).
+- Refresh-rate-independent lifetime behavior in continuous mode so absolute lifetime settings stay consistent across monitors.
+- Continuous-mode DRT start/stop support with in-stream overlay signaling.
 
 Authorship / design notes:
 

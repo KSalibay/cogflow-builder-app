@@ -169,6 +169,9 @@ class ComponentPreview {
                 .replace(/'/g, '&#39;');
         };
 
+        const displayMode = (componentData.drt_display_mode ?? 'corner_dot').toString().trim().toLowerCase() === 'screen_border'
+            ? 'screen_border'
+            : 'corner_dot';
         const location = (componentData.location ?? 'top-right').toString();
         const sizePx = Number.isFinite(Number(componentData.size_px)) ? Number(componentData.size_px) : 18;
         const color = (componentData.stimulus_color ?? '#ff3b3b').toString() || '#ff3b3b';
@@ -195,6 +198,7 @@ class ComponentPreview {
                     <div>
                         <div class="h5 mb-0">DRT Start Preview</div>
                         <div class="small text-muted">Response key: <span class="badge bg-secondary">${escape(key)}</span></div>
+                        <div class="small text-muted">Display mode: <span class="badge bg-light text-dark">${escape(displayMode)}</span></div>
                     </div>
                     <div class="small text-muted text-end">
                         ITI: ${escape(minIti)}–${escape(maxIti)} ms<br/>
@@ -204,9 +208,9 @@ class ComponentPreview {
                 </div>
 
                 <div class="position-relative border rounded overflow-hidden" style="height:260px;">
-                    <div class="position-absolute" style="${posCss}">
-                        <div style="width:${escape(sizePx)}px; height:${escape(sizePx)}px; background:${escape(color)}; border-radius:${shape === 'circle' ? '999px' : '0px'};"></div>
-                    </div>
+                    ${displayMode === 'screen_border'
+                        ? `<div class="position-absolute" style="inset:10px; border:${escape(sizePx)}px solid ${escape(color)}; border-radius:6px;"></div>`
+                        : `<div class="position-absolute" style="${posCss}"><div style="width:${escape(sizePx)}px; height:${escape(sizePx)}px; background:${escape(color)}; border-radius:${shape === 'circle' ? '999px' : '0px'};"></div></div>`}
                     <div class="small text-muted position-absolute" style="left:18px; bottom:18px;">
                         Static preview (runtime will flash this stimulus periodically).
                     </div>
@@ -3644,9 +3648,20 @@ class ComponentPreview {
             };
 
             const digits = parseIntList(blockData.sart_digit_options);
-            sampled.digit = pickFromList(digits, 1);
-
             const nogo = Number.parseInt(blockData.sart_nogo_digit, 10);
+            const nogoProb = Number.parseFloat(blockData.sart_nogo_probability);
+            const useWeighted = Number.isFinite(nogoProb) && nogoProb > 0 && nogoProb < 1 && Number.isFinite(nogo);
+            if (useWeighted) {
+                const goDigits = digits.filter(d => d !== nogo);
+                if (goDigits.length > 0 && Math.random() < nogoProb) {
+                    sampled.digit = nogo;
+                } else {
+                    sampled.digit = pickFromList(goDigits.length > 0 ? goDigits : digits, 1);
+                }
+            } else {
+                sampled.digit = pickFromList(digits, 1);
+            }
+
             if (Number.isFinite(nogo)) sampled.nogo_digit = nogo;
 
             sampled.go_key = (blockData.sart_go_key || 'space').toString();

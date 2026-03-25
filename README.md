@@ -101,7 +101,8 @@ Block export example (abridged):
   "sampling_mode": "per-trial",
   "parameter_windows": [
     { "parameter": "coherence", "min": 0.2, "max": 0.8 },
-    { "parameter": "speed", "min": 4, "max": 10 }
+    { "parameter": "speed", "min": 4, "max": 10 },
+    { "parameter": "lifetime_frames", "min": 3, "max": 8 }
   ],
   "parameter_values": {
     "direction": [0, 180],
@@ -109,6 +110,8 @@ Block export example (abridged):
   }
 }
 ```
+
+For RDM Blocks, `lifetime_frames` now uses the same per-trial sampling path as `coherence` and `speed`. The Builder exports it under `parameter_windows`, the Interpreter samples it while expanding the Block to generated trials, and the sampled value is passed through to the RDM renderer for the actual dot update loop.
 
 ## Supported tasks
 
@@ -195,6 +198,7 @@ Below is a “what you can add to the timeline” inventory by task type. For pa
 - `rdm-dot-groups`
 - `block` (block_component_type can be `rdm-trial`, `rdm-practice`, `rdm-adaptive`, `rdm-dot-groups`, `html-keyboard-response`, `html-button-response`, or `image-keyboard-response`)
   - For `image-keyboard-response` blocks, you can provide `stimulus_images` as a comma/newline-separated list to sample from across generated trials.
+  - RDM Blocks can sample `lifetime_frames` per generated trial in addition to `coherence` and `speed`, which allows dot lifetime to vary within and across Blocks.
 
 ### Gabor components (`task_type: "gabor"`)
 
@@ -211,6 +215,7 @@ Below is a “what you can add to the timeline” inventory by task type. For pa
 
 - `sart-trial`
 - `block` (block_component_type can be `sart-trial`)
+  - SART Blocks can preserve the full digit option list while also exporting `nogo_probability`; preview/runtime trial generation uses that probability to determine no-go frequency.
 
 ### Stroop components (`task_type: "stroop"`)
 
