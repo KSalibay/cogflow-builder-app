@@ -56,6 +56,30 @@ Migrate Builder + Interpreter from JATOS/Token-Store dependence to a Kubernetes-
 5.2 Reliability: backup/restore smoke test completed on platform DB.
 5.3 UX: known issues triaged with severity and mitigation notes.
 
+### Tonight Wrap-Up and Tomorrow Start Plan (2026-03-24 -> 2026-03-25)
+
+Status at wrap-up:
+1. Platform commit completed in `cogflow-platform` for portal/admin updates, publish modal flow, interpreter runtime stabilization, and RDM debug instrumentation.
+2. RDM rendering behavior is now consistent with expected high-coherence single-direction settings after cache/version and runtime-path fixes.
+3. Remaining RDM work is validation/hardening, not core rendering repair.
+
+Tomorrow start sequence:
+1. RDM stabilization validation pass
+1.1 Run a compact regression matrix across representative RDM configs (coherence/speed/noise/lifetime).
+1.2 Record expected debug-HUD signatures (coherent %, reseed/s, mean direction) for each test profile.
+
+2. Builder -> Interpreter consistency checks
+2.1 Add debug-mode compiled-trial dump for effective per-trial RDM fields at launch.
+2.2 Add one targeted automated test for block-window override precedence versus experiment defaults.
+
+3. Publish-flow and portal hardening
+3.1 Quick QA pass for publish metadata modal (validation, cancel, persistence).
+3.2 Smoke-test admin create/role/activation/deactivation/delete paths with non-admin denial checks.
+
+4. Pre-alpha readiness preparation
+4.1 Produce a short known-good build checklist with script/version cache-bust verification steps.
+4.2 Finalize go/no-go notes for the next online alpha dry run.
+
 Add an optional LSL-capable deployment profile for labs that need device synchronization (EEG, physiology). This profile uses a separate local app branded as `Home Gear` (technical name: `CogFlow Local Runtime`) that runs the Interpreter locally (Dockerized), bridges experiment markers to native `liblsl`, and syncs metadata/results back to the cloud platform.
 
 ## Condensed 2-Week Deployment Sprint (Execution Plan)

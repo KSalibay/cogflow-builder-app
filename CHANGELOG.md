@@ -1,5 +1,62 @@
 # CogFlow Builder & Interpreter Changelog
 
+## March 25, 2026
+
+### Cross-Team Follow-up (Sachi, Tariq, Guy)
+
+#### Guy: Loop + Probe Authoring
+- Added loop marker components (`loop-start`, `loop-end`) and nested loop expansion support in Builder/Interpreter.
+- Added loop bracket UI in timeline editing and hid loop marker components from the normal library picker (markers are now timeline-structure controls).
+- Added `mw-probe` as a first-class component with the same full question editor flow as `survey-response`.
+- Added probe interval fields (`min_interval_ms`, `max_interval_ms`) to support interruption-style probe placement in looped block runs.
+
+#### Sachi: RDM Lifetime Clarification
+- Added explicit runtime diagnostics for RDM continuous mode (debug overlay + debug panel) to expose effective coherence, speed, direction, reseed rate, and lifetime behavior.
+- Aligned continuous lifetime handling with refresh-rate-independent timing so `lifetime_frames` behaves consistently across displays.
+
+#### Documentation / Sync
+- Synced latest loop + mw-probe + RDM diagnostic/lifetime updates to platform and JATOS interpreter copies, including cache-busted loader references.
+
+### Builder Updates
+
+#### Tariq Follow-up Fixes
+- Fixed instruction alignment export for Builder-authored rich text:
+  - `instructions` and `html-keyboard-response` now expose a `text_align` control in the Builder UI.
+  - Export now converts Quill alignment classes (for example `ql-align-center`) into inline HTML styles so alignment renders correctly in the Interpreter without Quill CSS.
+- Prevented accidental mouse-wheel changes on focused number inputs in the Builder.
+- Fixed timeline template save/load:
+  - Templates are now serialized from the live timeline DOM instead of the stale internal `timeline` array.
+  - Loading a saved template restores the timeline cards correctly.
+- Fixed SART block seeding from experiment defaults:
+  - New SART Blocks now inherit the current experiment-level no-go digit, go key, and timing defaults.
+- Added SART no-go probability authoring support:
+  - Builder block editor now exposes `sart_nogo_probability`.
+  - Export preserves the full configured SART digit set and the explicit `nogo_probability` value.
+  - Builder preview and Interpreter block expansion now apply the configured no-go probability during trial sampling rather than shrinking the exported digit list.
+
+#### SOC SART Copy Adjustment
+- Replaced the SOC SART default instructions with more neutral wording to avoid hard-coding harmful/benign response semantics while `go_condition` naming remains under review.
+
+#### SOC SART Field Rename and Backward Compatibility
+- **Renamed field**: `go_condition` values changed from `['target', 'distractor']` to `['block', 'allow']` for clearer semantics.
+  - `'block'` mode: GO on distractor entries (responds to harmful/distracted state)
+  - `'allow'` mode: GO on target entries (responds to normal/benign state)
+  - Default changed from `'distractor'` to `'block'`
+- **Backward compatibility**: Both Builder preview and runtime Interpreter accept old values (`'target'`, `'distractor'`) and automatically normalize them to the new scheme.
+  - Old `'distractor'` → new `'block'` (GO on distractors)
+  - Old `'target'` → new `'allow'` (GO on targets)
+  - Existing experiment configs with old field values continue to work without modification.
+- Updated Builder schema description to clarify the GO rule semantics for each mode.
+- Updated Interpreter runtime mapping (`goRule` display and `shouldGoFor()` logic) to use new field values while transparently handling legacy configs.
+
+#### Deployment / Sync
+- Synced the above Builder changes (alignment export, wheel prevention, template save/load, SART defaults, SART probability) to platform and JATOS Builder copies (6 instances total).
+- Synced the SART probability sampling and SOC SART copy adjustments to platform and JATOS Interpreter copies (6 instances total).
+- Synced the SOC SART field rename (`go_condition: target|distractor` → `go_condition: block|allow`) with full backward compatibility to all platform and JATOS copies (12 deployed copies verified).
+
+#### Remaining Follow-ups
+- JATOS template storage remains browser-local for now; server-backed template persistence is deferred.
+
 ## March 20, 2026
 
 ### Builder Updates
