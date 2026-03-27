@@ -5494,10 +5494,21 @@ class JsonBuilder {
                 mouse_start_angle_deg: { type: 'number', default: 0, min: 0, max: 359 },
                 mouse_selection_mode: { type: 'select', default: 'click', options: ['click', 'hover'] },
 
+                // Shared RDM timing windows (set min=max for constant per-block timing)
+                stimulus_duration_min: { type: 'number', default: 1500, min: 100, max: 30000 },
+                stimulus_duration_max: { type: 'number', default: 1500, min: 100, max: 30000 },
+                response_deadline_min: { type: 'number', default: 2500, min: 100, max: 60000 },
+                response_deadline_max: { type: 'number', default: 2500, min: 100, max: 60000 },
+                inter_trial_interval_min: { type: 'number', default: 1200, min: 0, max: 30000 },
+                inter_trial_interval_max: { type: 'number', default: 1200, min: 0, max: 30000 },
+
                 // rdm-trial windows
                 coherence_min: { type: 'number', default: 0.2, min: 0, max: 1, step: 0.01 },
                 coherence_max: { type: 'number', default: 0.8, min: 0, max: 1, step: 0.01 },
                 direction_options: { type: 'string', default: '0,180' },
+                direction_transition_mode: { type: 'select', default: 'random_each_trial', options: ['random_each_trial', 'every_n_trials', 'exact_count'] },
+                direction_transition_every_n_trials: { type: 'number', default: 1, min: 1, max: 10000 },
+                direction_transition_count: { type: 'number', default: 0, min: 0, max: 10000 },
                 speed_min: { type: 'number', default: 4, min: 0, max: 50 },
                 speed_max: { type: 'number', default: 10, min: 0, max: 50 },
                 lifetime_frames_min: { type: 'number', default: 3, min: 1, max: 300 },
@@ -9243,15 +9254,37 @@ class JsonBuilder {
             return Array.from(new Set(nums));
         };
 
+        const addDirectionTransitionControls = () => {
+            const rawMode = (blockComponent.direction_transition_mode ?? '').toString().trim();
+            if (rawMode === 'random_each_trial' || rawMode === 'every_n_trials' || rawMode === 'exact_count') {
+                values.direction_transition_mode = rawMode;
+            }
+
+            const everyN = Number.parseInt(blockComponent.direction_transition_every_n_trials, 10);
+            if (Number.isFinite(everyN)) {
+                values.direction_transition_every_n_trials = Math.max(1, everyN);
+            }
+
+            const count = Number.parseInt(blockComponent.direction_transition_count, 10);
+            if (Number.isFinite(count)) {
+                values.direction_transition_count = Math.max(0, count);
+            }
+        };
+
         if (resolvedComponentType === 'rdm-trial') {
             addWindow('coherence', blockComponent.coherence_min, blockComponent.coherence_max);
             addWindow('speed', blockComponent.speed_min, blockComponent.speed_max);
             addWindow('lifetime_frames', blockComponent.lifetime_frames_min, blockComponent.lifetime_frames_max);
+            addWindow('stimulus_duration', blockComponent.stimulus_duration_min, blockComponent.stimulus_duration_max);
+            addWindow('response_deadline', blockComponent.response_deadline_min, blockComponent.response_deadline_max);
+            addWindow('inter_trial_interval', blockComponent.inter_trial_interval_min, blockComponent.inter_trial_interval_max);
 
             const dirs = parseNumberList(blockComponent.direction_options, { min: 0, max: 359 });
             if (dirs.length > 0) {
                 values.direction = dirs;
             }
+
+            addDirectionTransitionControls();
 
             if (typeof blockComponent.dot_color === 'string' && blockComponent.dot_color.trim() !== '') {
                 values.dot_color = blockComponent.dot_color;
@@ -9260,11 +9293,16 @@ class JsonBuilder {
             addWindow('coherence', blockComponent.practice_coherence_min, blockComponent.practice_coherence_max);
             addWindow('feedback_duration', blockComponent.practice_feedback_duration_min, blockComponent.practice_feedback_duration_max);
             addWindow('lifetime_frames', blockComponent.lifetime_frames_min, blockComponent.lifetime_frames_max);
+            addWindow('stimulus_duration', blockComponent.stimulus_duration_min, blockComponent.stimulus_duration_max);
+            addWindow('response_deadline', blockComponent.response_deadline_min, blockComponent.response_deadline_max);
+            addWindow('inter_trial_interval', blockComponent.inter_trial_interval_min, blockComponent.inter_trial_interval_max);
 
             const dirs = parseNumberList(blockComponent.practice_direction_options, { min: 0, max: 359 });
             if (dirs.length > 0) {
                 values.direction = dirs;
             }
+
+            addDirectionTransitionControls();
 
             if (typeof blockComponent.dot_color === 'string' && blockComponent.dot_color.trim() !== '') {
                 values.dot_color = blockComponent.dot_color;
@@ -9273,6 +9311,9 @@ class JsonBuilder {
             addWindow('initial_coherence', blockComponent.adaptive_initial_coherence_min, blockComponent.adaptive_initial_coherence_max);
             addWindow('step_size', blockComponent.adaptive_step_size_min, blockComponent.adaptive_step_size_max);
             addWindow('lifetime_frames', blockComponent.lifetime_frames_min, blockComponent.lifetime_frames_max);
+            addWindow('stimulus_duration', blockComponent.stimulus_duration_min, blockComponent.stimulus_duration_max);
+            addWindow('response_deadline', blockComponent.response_deadline_min, blockComponent.response_deadline_max);
+            addWindow('inter_trial_interval', blockComponent.inter_trial_interval_min, blockComponent.inter_trial_interval_max);
 
             const algo = blockComponent.adaptive_algorithm;
             if (typeof algo === 'string' && algo.trim() !== '') {
@@ -9294,6 +9335,9 @@ class JsonBuilder {
             addWindow('group_2_coherence', blockComponent.group_2_coherence_min, blockComponent.group_2_coherence_max);
             addWindow('group_2_speed', blockComponent.group_2_speed_min, blockComponent.group_2_speed_max);
             addWindow('lifetime_frames', blockComponent.lifetime_frames_min, blockComponent.lifetime_frames_max);
+            addWindow('stimulus_duration', blockComponent.stimulus_duration_min, blockComponent.stimulus_duration_max);
+            addWindow('response_deadline', blockComponent.response_deadline_min, blockComponent.response_deadline_max);
+            addWindow('inter_trial_interval', blockComponent.inter_trial_interval_min, blockComponent.inter_trial_interval_max);
 
             const g1Dirs = parseNumberList(blockComponent.group_1_direction_options, { min: 0, max: 359 });
             if (g1Dirs.length > 0) {
@@ -9303,6 +9347,8 @@ class JsonBuilder {
             if (g2Dirs.length > 0) {
                 values.group_2_direction = g2Dirs;
             }
+
+            addDirectionTransitionControls();
 
             // Dot colors (for cue-border target-group-color and general group styling)
             const fallbackDotColor = (typeof blockComponent.dot_color === 'string' && blockComponent.dot_color.trim() !== '')

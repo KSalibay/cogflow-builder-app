@@ -6,6 +6,29 @@ Note: parts of this document describe conceptual/legacy schema ideas (e.g., expl
 
 ## Overview of Control Methods
 
+## Within-Block Direction Transition Scheduling (Current RDM Block Feature)
+
+In addition to parameter windows, current RDM Blocks support a direction transition schedule that controls how direction changes are distributed across generated trials.
+
+Supported controls:
+
+- `direction_transition_mode`
+  - `random_each_trial`: direction can vary trial-by-trial (existing behavior)
+  - `every_n_trials`: direction changes every N generated trials
+  - `exact_count`: exactly K direction changes are placed across the block
+- `direction_transition_every_n_trials`
+- `direction_transition_count`
+
+Scope:
+
+- Applies to Block expansion for `rdm-trial`, `rdm-practice`, and `rdm-dot-groups`.
+- Works for both trial-based and continuous experiments because both consume the same expanded trial stream.
+
+Usage note:
+
+- Use `every_n_trials` when you want predictable cadence.
+- Use `exact_count` when you care about total number of switches in a block independent of block length.
+
 ### 1. Frame-by-Frame Control (`rdm_frame_control_schema.json`)
 **Best for:** Continuous, dynamic experiments with changing parameters during stimulus presentation
 

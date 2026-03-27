@@ -140,11 +140,16 @@ Blocks export compactly:
     "speed": { "min": 4, "max": 10 }
   },
   "parameter_values": {
-    "direction": [0, 180]
+    "direction": [0, 180],
+    "direction_transition_mode": "every_n_trials",
+    "direction_transition_every_n_trials": 5,
+    "direction_transition_count": 0
   },
   "response_parameters_override": { "response_device": "mouse" }
 }
 ```
+
+Direction transition scheduling fields are optional and currently supported for RDM block types (`rdm-trial`, `rdm-practice`, `rdm-dot-groups`).
 
 ### Dot groups (`rdm-dot-groups`)
 

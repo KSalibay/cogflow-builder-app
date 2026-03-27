@@ -199,6 +199,8 @@ Below is a “what you can add to the timeline” inventory by task type. For pa
 - `block` (block_component_type can be `rdm-trial`, `rdm-practice`, `rdm-adaptive`, `rdm-dot-groups`, `html-keyboard-response`, `html-button-response`, or `image-keyboard-response`)
   - For `image-keyboard-response` blocks, you can provide `stimulus_images` as a comma/newline-separated list to sample from across generated trials.
   - RDM Blocks can sample `lifetime_frames` per generated trial in addition to `coherence` and `speed`, which allows dot lifetime to vary within and across Blocks.
+  - RDM Blocks also expose timing windows for `stimulus_duration`, `response_deadline`, and `inter_trial_interval` directly in the Block modal.
+  - Direction transitions within an RDM Block can be controlled with `direction_transition_mode` (`random_each_trial`, `every_n_trials`, `exact_count`) plus `every_n`/`count` controls.
 
 ### Gabor components (`task_type: "gabor"`)
 

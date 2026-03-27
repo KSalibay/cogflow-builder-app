@@ -1,5 +1,26 @@
 # CogFlow Builder & Interpreter Changelog
 
+## March 27, 2026
+
+### RDM Block Direction Transition Scheduling
+
+- Added new RDM Block controls so researchers can define how often direction changes happen within generated block trials:
+  - `direction_transition_mode`: `random_each_trial` | `every_n_trials` | `exact_count`
+  - `direction_transition_every_n_trials`
+  - `direction_transition_count`
+- Added these controls to Builder block modal/schema for:
+  - `rdm-trial`
+  - `rdm-practice`
+  - `rdm-dot-groups`
+- Export now preserves these controls in block `parameter_values` so the Interpreter can apply scheduling at runtime.
+
+#### Deployment / Sync
+
+- Synced Builder changes to active local JATOS Builder paths:
+  - `/study_assets_root/cogflow/builder/`
+  - `/study_assets_root/cogflow_clone/builder/`
+  - plus clone mirror builder paths under `/study_assets_root/cogflow_clone/cogflow-builder-app/`
+
 ## March 25, 2026
 
 ### Cross-Team Follow-up (Sachi, Tariq, Guy)
