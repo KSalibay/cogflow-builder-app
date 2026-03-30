@@ -19,6 +19,20 @@ Note: some older sections in this file may reference legacy/aspirational schema 
   - `rdm-trial`, `rdm-practice`, `rdm-adaptive`, `rdm-dot-groups`
   - `html-keyboard-response` (used for Instructions)
 
+Block schema note (continuous-mode sizing):
+
+- `block_sizing_mode`: `by_frames | by_duration`
+- `block_duration_seconds`: positive float used when `block_sizing_mode = by_duration`
+- `block_length`: frame count (legacy/default sizing path; still exported and used by runtime expansion)
+
+When a continuous block is authored with `by_duration`, Builder derives `block_length` from `block_duration_seconds * frame_rate` and validates/clamps against experiment-wide duration limits.
+
+Block list shorthand note (numeric CSV-style list fields):
+
+- Builder accepts integer range shorthand such as `1-4`, `4-1`, and `-3--1` in relevant Block list fields.
+- Builder expands these to explicit comma-separated values before export.
+- Interpreter includes a runtime fallback that can also interpret numeric range shorthand if present in incoming config strings.
+
 ### `RDMTaskSchema`
 
 - Purpose: additional RDM-specific validation helpers

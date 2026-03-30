@@ -392,6 +392,34 @@ html[data-cf-theme="dark"] #publishMetadataModal .modal-footer {
     flex-direction: column;
 }
 
+.timeline-corner-icon {
+    position: absolute;
+    top: 0.45rem;
+    z-index: 5;
+    width: 0.85rem;
+    height: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.6);
+    color: #495057;
+    pointer-events: none;
+}
+
+.timeline-corner-icon-left {
+    left: 2px;
+}
+
+.timeline-corner-icon-right {
+    right: 2px;
+}
+
+html[data-cf-theme="dark"] .timeline-corner-icon {
+    background: rgba(58, 68, 99, 0.7);
+    color: #bac7be;
+}
+
 .main-panel .card-body {
     flex: 1;
     overflow-y: auto;
@@ -476,6 +504,8 @@ html[data-cf-theme="dark"] #publishMetadataModal .modal-footer {
     overflow-y: auto;
     border: 2px dashed rgba(58, 64, 90, 0.30);
     background-color: var(--cf-surface);
+    position: relative;
+    scrollbar-gutter: auto;
 }
 
 /* Compact parameter forms */
@@ -528,10 +558,14 @@ html[data-cf-theme="dark"] #publishMetadataModal .modal-footer {
     font-size: 0.75rem;
 }
 
-/* Parameter modal: align switch rows with other input fields (small left indent) */
-#parameterModal .parameter-row .form-check.form-switch {
-    padding-left: 1.75rem;
-    margin-left: 0.35rem;
+/* Parameter modal: align switch rows with other input fields */
+#parameterModal .mb-3 > .form-check.form-switch {
+    padding-left: 2.75rem;
+    margin-left: 0;
+}
+
+#parameterModal .mb-3 > .form-check.form-switch .form-check-input {
+    margin-left: -2.75rem;
 }
 
 /* Compact sections */
@@ -1351,12 +1385,13 @@ template {
 /* Timeline Sortable Styles */
 .timeline-components-container {
     min-height: 200px;
-    padding: 0.5rem;
+    padding: 2rem 0.5rem 0.5rem;
 }
 
 .timeline-components-container.cf-loop-ui-enabled {
     position: relative;
     padding-left: 2rem;
+    padding-right: 2rem;
 }
 
 .timeline-loop-layer {
@@ -1387,6 +1422,22 @@ template {
     background: rgba(74, 108, 247, 0.14);
 }
 
+.timeline-random-bracket {
+    position: absolute;
+    width: 12px;
+    border-right: 2px solid #8a3ffc;
+    border-top: 2px solid #8a3ffc;
+    border-bottom: 2px solid #8a3ffc;
+    border-radius: 0 6px 6px 0;
+    pointer-events: auto;
+    cursor: pointer;
+    background: rgba(138, 63, 252, 0.08);
+}
+
+.timeline-random-bracket:hover {
+    background: rgba(138, 63, 252, 0.16);
+}
+
 .timeline-loop-handle {
     position: absolute;
     left: -5px;
@@ -1405,15 +1456,48 @@ template {
     bottom: -4px;
 }
 
+.timeline-random-handle {
+    position: absolute;
+    right: -5px;
+    width: 8px;
+    height: 8px;
+    background: #8a3ffc;
+    border-radius: 50%;
+    cursor: ns-resize;
+}
+
+.timeline-random-handle.top {
+    top: -4px;
+}
+
+.timeline-random-handle.bottom {
+    bottom: -4px;
+}
+
 .timeline-loop-gutter-hitbox {
     position: absolute;
     left: 0;
     top: 0;
-    width: 26px;
+    width: 20px;
     height: 100%;
     pointer-events: auto;
     z-index: 2;
     cursor: crosshair;
+    border-right: 1px solid rgba(58, 64, 90, 0.16);
+    background: rgba(74, 108, 247, 0.20);
+}
+
+.timeline-random-gutter-hitbox {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 20px;
+    height: 100%;
+    pointer-events: auto;
+    z-index: 2;
+    cursor: crosshair;
+    border-left: 1px solid rgba(58, 64, 90, 0.16);
+    background: rgba(138, 63, 252, 0.22);
 }
 
 .timeline-component.cf-loop-marker-hidden {
@@ -1525,7 +1609,6 @@ template {
 }
 
 /* Keep gutters stable in inner scroll areas too */
-.timeline-container,
 .json-preview {
     scrollbar-gutter: stable;
 }
