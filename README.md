@@ -45,6 +45,9 @@ Key features:
 - Timeline authoring ergonomics:
   - Component-level **Duplicate Below** action
   - Stable row alignment and truncation behavior for long timeline labels
+  - Structural timeline rails for looping and randomization:
+    - Left rail (blue): draw loop ranges (loop start/end markers)
+    - Right rail (purple): draw randomization ranges (randomize start/end markers)
 - Export paths:
   - Local JSON download
   - Token Store export (Cloudflare Worker; optional R2 assets) + JATOS Component Properties bundle generation
@@ -91,6 +94,16 @@ Key ideas:
 - **Components** are single timeline items (instructions, trials, SOC subtasks, etc.).
 - **Blocks** are a compact “generate many trials” representation. In preview, Blocks are rendered by sampling a representative trial; at runtime, the Interpreter expands Blocks to trials/frames according to the block definition.
 
+The timeline also supports structural marker ranges (created from the Timeline rails, not from the normal library picker):
+
+- **Loop ranges** (left/blue rail): wrap enclosed sibling items and repeat them for the configured iteration count.
+- **Randomization ranges** (right/purple rail): shuffle only the enclosed sibling items once per run/participant.
+
+Immutability rule for non-group items:
+
+- Items not enclosed by a randomization range keep their authored order.
+- Example: `A, [randomize B C], D` runs as `A, (B/C shuffled), D`; `A` and `D` stay fixed.
+
 Block export example (abridged):
 
 ```json
@@ -110,6 +123,24 @@ Block export example (abridged):
   }
 }
 ```
+
+Continuous-mode block sizing supports two authoring modes:
+
+- `by_frames` (legacy): use `block_length` directly.
+- `by_duration`: set `block_duration_seconds`; Builder derives `block_length = round(block_duration_seconds * frame_rate)`.
+
+Builder-side validation and save-time clamping enforce experiment-wide caps:
+
+- For continuous experiments, `block_duration_seconds` cannot exceed experiment `duration`.
+- Derived or direct `block_length` cannot exceed `duration * frame_rate`.
+
+For Block list fields that accept numeric CSV values (for example direction/digit option lists), Builder also supports integer range shorthand:
+
+- `1-4` is expanded to `1,2,3,4`
+- `4-1` is expanded to `4,3,2,1`
+- Negative ranges like `-3--1` are supported
+
+This expansion happens in the Builder before export, so exported config JSON stores explicit values rather than dash shorthand.
 
 For RDM Blocks, `lifetime_frames` now uses the same per-trial sampling path as `coherence` and `speed`. The Builder exports it under `parameter_windows`, the Interpreter samples it while expanding the Block to generated trials, and the sampled value is passed through to the RDM renderer for the actual dot update loop.
 
@@ -201,6 +232,9 @@ Below is a “what you can add to the timeline” inventory by task type. For pa
   - RDM Blocks can sample `lifetime_frames` per generated trial in addition to `coherence` and `speed`, which allows dot lifetime to vary within and across Blocks.
   - RDM Blocks also expose timing windows for `stimulus_duration`, `response_deadline`, and `inter_trial_interval` directly in the Block modal.
   - Direction transitions within an RDM Block can be controlled with `direction_transition_mode` (`random_each_trial`, `every_n_trials`, `exact_count`) plus `every_n`/`count` controls.
+  - `rdm-dot-groups` Blocks can optionally enable dynamic target-group switching. When enabled, the Builder exposes an `every N-N frames` field (for example `120-240`) that tells the runtime to alternate the response target between group 1 and group 2 at random frame intervals sampled from that inclusive range.
+  - When `rdm-dot-groups` uses `cue_border_mode: target-group-color`, the cue border follows the currently active target group during those runtime switches.
+  - `rdm-dot-groups` Blocks also support a dependent direction of movement mode. When `dependent_direction_of_movement_enabled` is enabled, the independent `group_1_direction_options` / `group_2_direction_options` fields are replaced by `dependent_group_1_direction_options` (range or list for group 1) and `dependent_group_direction_difference_options` (offset list for group 2). At runtime, group 1's direction is sampled from the first field and group 2's direction is computed as `(group_1_direction + sampled_difference) mod 360`. For example, with group 1 range `0-15` and difference list `180,270`, the two groups can move at pairs such as `{0, 270}` or `{10, 190}`.
 
 ### Gabor components (`task_type: "gabor"`)
 
