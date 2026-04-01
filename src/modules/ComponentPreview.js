@@ -4888,15 +4888,20 @@ class ComponentPreview {
         const N    = Math.max(2, parseInt(params.num_objects, 10) || 8);
         const T    = Math.min(N - 1, Math.max(1, parseInt(params.num_targets, 10) || 4));
         const note = params._previewContextNote || '';
+        const apertureShape = String(params.aperture_shape || 'rectangle').toLowerCase();
+        const borderEnabled = params.aperture_border_enabled !== false;
+        const borderColor = params.aperture_border_color || '#444444';
 
         const canvasId = 'motPreviewCanvas_' + Date.now();
+        const borderInfo = borderEnabled ? ` (border: ${borderColor})` : '';
         const bodyHtml = `
             <div class="text-center">
                 <canvas id="${canvasId}" width="${W}" height="${H}"
                     style="background:${bg};max-width:100%;border:1px solid #555;"></canvas>
                 ${note ? `<p class="text-muted small mt-1">${note}</p>` : ''}
                 <p class="text-muted small">Static preview — ${T} target(s) (orange flash) among ${N} object(s).
-                  Speed: ${params.speed_px_per_s ?? 150} px/s &middot; ${params.motion_type ?? 'linear'} &middot; ${params.probe_mode ?? 'click'} probe</p>
+                  Speed: ${params.speed_px_per_s ?? 150} px/s &middot; ${params.motion_type ?? 'linear'} &middot; ${params.probe_mode ?? 'click'} probe
+                  <br/>Aperture: <strong>${apertureShape}</strong>${borderInfo}</p>
             </div>`;
 
         const titleEl = modalEl.querySelector('.modal-title');
@@ -4922,27 +4927,60 @@ class ComponentPreview {
         const N   = Math.max(2, parseInt(params.num_objects, 10) || 8);
         const T   = Math.min(N - 1, Math.max(1, parseInt(params.num_targets, 10) || 4));
 
+        // Aperture settings
+        const apertureShape = String(params.aperture_shape || 'rectangle').toLowerCase();
+        const borderEnabled = params.aperture_border_enabled !== false;
+        const borderColor = params.aperture_border_color || '#444444';
+        const borderWidth = Math.max(0, parseInt(params.aperture_border_width_px, 10) || 2);
+        
+        const cx = W / 2;
+        const cy = H / 2;
+        const isCircular = apertureShape === 'circle';
+        const apertureRadius = isCircular ? Math.min(W, H) / 2 - (borderEnabled ? borderWidth / 2 : 1) : null;
+
         ctx.fillStyle = bg;
         ctx.fillRect(0, 0, W, H);
 
-        // Place circles with rejection sampling to avoid overlap
+        // Helper: check if point is within aperture
+        const isInAperture = (x, y) => {
+            if (isCircular) {
+                return Math.hypot(x - cx, y - cy) <= apertureRadius;
+            } else {
+                return x >= r && x <= W - r && y >= r && y <= H - r;
+            }
+        };
+
+        // Place circles with rejection sampling to avoid overlap, constrained to aperture
         const minDist   = 2 * r + 6;
         const positions = [];
         for (let i = 0; i < N; i++) {
             let x, y, ok, attempts = 0;
             do {
-                x = r + Math.random() * (W - 2 * r);
-                y = r + Math.random() * (H - 2 * r);
-                ok = positions.every(p => Math.hypot(p.x - x, p.y - y) >= minDist);
+                if (isCircular) {
+                    // Place within circular aperture using polar coordinates
+                    const theta = Math.random() * 2 * Math.PI;
+                    const rnd = Math.sqrt(Math.random());
+                    x = cx + rnd * (apertureRadius - r) * Math.cos(theta);
+                    y = cy + rnd * (apertureRadius - r) * Math.sin(theta);
+                } else {
+                    // Place within rectangular aperture
+                    x = r + Math.random() * (W - 2 * r);
+                    y = r + Math.random() * (H - 2 * r);
+                }
+                ok = isInAperture(x, y) && positions.every(p => Math.hypot(p.x - x, p.y - y) >= minDist);
             } while (!ok && ++attempts < 500);
-            positions.push({ x, y, isTarget: i < T });
+            if (ok) {
+                positions.push({ x, y, isTarget: i < T });
+            }
         }
+        
         // Shuffle so targets are not always top-left
         for (let i = positions.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [positions[i], positions[j]] = [positions[j], positions[i]];
         }
 
+        // Draw objects
         for (const p of positions) {
             ctx.beginPath();
             ctx.arc(p.x, p.y, r, 0, 2 * Math.PI);
@@ -4951,6 +4989,19 @@ class ComponentPreview {
             ctx.strokeStyle = 'rgba(136,136,136,0.5)';
             ctx.lineWidth   = 1.5;
             ctx.stroke();
+        }
+
+        // Draw aperture border if enabled
+        if (borderEnabled) {
+            ctx.strokeStyle = borderColor;
+            ctx.lineWidth = borderWidth;
+            if (isCircular) {
+                ctx.beginPath();
+                ctx.arc(cx, cy, apertureRadius, 0, 2 * Math.PI);
+                ctx.stroke();
+            } else {
+                ctx.strokeRect(r, r, W - 2 * r, H - 2 * r);
+            }
         }
     }
 }
