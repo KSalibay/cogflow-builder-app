@@ -8,22 +8,6 @@ CogFlow Builder is a static (non-bundled) web app for authoring **CogFlow JSON c
 
 This repo is intentionally plain HTML/CSS/JS loaded via classic `<script>` tags (globals; no `import`/`export`).
 
-## Recent updates (Apr 2026)
-
-Highlights from the latest Builder/Interpreter integration pass:
-
-- JSON import can now rehydrate the Builder timeline:
-  - Importing a single local JSON can rebuild task/experiment state and timeline rows directly in Builder.
-  - Rebuild is gated by schema validation (invalid configs are rejected with clear errors).
-  - Nested timeline structures are reconstructed (loops, randomize groups), and SOC composed timelines are de-composed back into Builder-friendly helper rows.
-- SOC Dashboard authoring now aligns with updated runtime behavior:
-  - MW-probe helper components are supported in SOC timelines and exported consistently for SOC sub-window/modal execution.
-  - SOC SART-like subtasks preserve explicit `go_condition` semantics (`block` vs `allow`) through export/compile.
-- DRT authoring path is explicitly componentized:
-  - Use timeline items `detection-response-task-start` and `detection-response-task-stop` (instead of legacy inline flags).
-- MOT authoring defaults were expanded to match runtime capabilities:
-  - Aperture shape (`rectangle` / `circle`) and aperture border controls are available in defaults and block/task export paths.
-
 ## Repositories
 
 - Builder repo: https://github.com/KSalibay/cogflow-builder-app

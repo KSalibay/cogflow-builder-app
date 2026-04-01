@@ -2,7 +2,7 @@
 
 Generated from `src/schemas/JSPsychSchemas.js`.
 
-Generated at: 2026-03-19T19:35:49Z
+Generated at: 2026-04-01T21:39:11Z
 
 ---
 
@@ -24,8 +24,10 @@ Generate many trials from parameter windows/ranges (compact representation for l
 | adaptive_target_performance | FLOAT | 0.82 | RDM Adaptive: target performance (fixed) | blockTarget: rdm-adaptive |
 | aperture_outline_color | COLOR | #FFFFFF | Outline color when overriding outline visibility | blockTarget: rdm-* |
 | aperture_outline_width | FLOAT | 2 | Outline width (px) when overriding outline visibility | blockTarget: rdm-* |
-| block_component_type | SELECT | rdm-trial | What component type this block generates | options: rdm-trial, rdm-practice, rdm-adaptive, rdm-dot-groups, flanker-trial, sart-trial, simon-trial, pvt-trial, task-switching-trial, stroop-trial, emotional-stroop-trial, gabor-trial, gabor-quest, gabor-learning, nback-block, html-button-response, html-keyboard-response, image-keyboard-response, continuous-image-presentation \| required |
+| block_component_type | SELECT | rdm-trial | What component type this block generates | options: rdm-trial, rdm-practice, rdm-adaptive, rdm-dot-groups, flanker-trial, sart-trial, simon-trial, pvt-trial, task-switching-trial, stroop-trial, emotional-stroop-trial, gabor-trial, gabor-quest, gabor-learning, nback-block, mot-trial, html-button-response, html-keyboard-response, image-keyboard-response, continuous-image-presentation \| required |
+| block_duration_seconds | FLOAT | 1 | Continuous mode only: block duration in seconds when sizing mode is by_duration | min: 0.01 \| max: 36000 |
 | block_length | INT | 100 | Number of trials/frames this block represents | required |
+| block_sizing_mode | SELECT | by_frames | Continuous mode only: size this block by frames (legacy) or by duration (seconds) | options: by_frames, by_duration |
 | button_choices | STRING | Continue | Button labels (comma/newline separated) | blockTarget: html-button-response |
 | button_html | HTML_STRING |  | Optional custom button HTML template (advanced) | blockTarget: html-button-response |
 | choices | STRING | ALL_KEYS | Keyboard choices: ALL_KEYS, NO_KEYS, or a comma/space-separated list (e.g., "f j") | blockTarget: html-keyboard-response,image-keyboard-response |
@@ -49,6 +51,9 @@ Generate many trials from parameter windows/ranges (compact representation for l
 | cue_border_mode | SELECT | off | RDM Groups: aperture border cue mode | options: off, target-group-color, custom \| blockTarget: rdm-dot-groups |
 | cue_border_width | INT | 4 | RDM Groups: cue border width in pixels | blockTarget: rdm-dot-groups |
 | direction_options | STRING | 0,180 | RDM Trial: comma-separated directions (degrees; 0=right, 90=down, 180=left, 270=up) to sample from. Allowed range: 0 to 359. | blockTarget: rdm-trial |
+| direction_transition_count | INT | 0 | When mode = exact_count, total number of direction transitions inside the block | blockTarget: rdm-trial,rdm-practice,rdm-dot-groups |
+| direction_transition_every_n_trials | INT | 1 | When mode = every_n_trials, switch direction after this many generated trials | blockTarget: rdm-trial,rdm-practice,rdm-dot-groups |
+| direction_transition_mode | SELECT | random_each_trial | Direction transition schedule within the block | options: random_each_trial, every_n_trials, exact_count \| blockTarget: rdm-trial,rdm-practice,rdm-dot-groups |
 | dot_color | COLOR | #FFFFFF | Dot color (hex). For dot-groups blocks, set Group 1/2 colors below. | blockTarget: rdm-* |
 | end_condition_on_response_mode | SELECT | inherit | Continuous mode only: end the current condition immediately after a response | options: inherit, true, false \| blockTarget: rdm-* |
 | feedback_duration_ms | INT | 500 | Feedback duration (ms) when feedback_mode is enabled (corner-text/arrow/custom) | blockTarget: rdm-* |
@@ -137,6 +142,26 @@ Generate many trials from parameter windows/ranges (compact representation for l
 | group_2_direction_options | STRING | 0,180 | RDM Groups: group 2 comma-separated direction options (degrees; 0=right, 90=down, 180=left, 270=up). Allowed range: 0 to 359. | blockTarget: rdm-dot-groups |
 | group_2_speed_max | FLOAT | 10 | RDM Groups: group 2 speed max | blockTarget: rdm-dot-groups |
 | group_2_speed_min | FLOAT | 4 | RDM Groups: group 2 speed min | blockTarget: rdm-dot-groups |
+| inter_trial_interval_max | INT | 1200 | RDM: inter-trial interval max (ms) | blockTarget: rdm-* |
+| inter_trial_interval_min | INT | 1200 | RDM: inter-trial interval min (ms) | blockTarget: rdm-* |
+| mot_aperture_border_color | COLOR | #444444 | MOT: aperture border color for all trials in this block | blockTarget: mot-trial |
+| mot_aperture_border_enabled | BOOL | True | MOT: whether aperture border is shown for all trials in this block | blockTarget: mot-trial |
+| mot_aperture_border_width_px_max | INT | 2 | MOT: maximum aperture border width (px) for block sampling | blockTarget: mot-trial |
+| mot_aperture_border_width_px_min | INT | 2 | MOT: minimum aperture border width (px) for block sampling | blockTarget: mot-trial |
+| mot_aperture_shape | SELECT | rectangle | MOT: fixed aperture shape for all trials in this block | options: rectangle, circle \| blockTarget: mot-trial |
+| mot_cue_duration_ms_max | INT | 2500 | MOT: maximum cue duration (ms) for block sampling | blockTarget: mot-trial |
+| mot_cue_duration_ms_min | INT | 1500 | MOT: minimum cue duration (ms) for block sampling | blockTarget: mot-trial |
+| mot_iti_ms_max | INT | 1500 | MOT: maximum ITI (ms) for block sampling | blockTarget: mot-trial |
+| mot_iti_ms_min | INT | 800 | MOT: minimum ITI (ms) for block sampling | blockTarget: mot-trial |
+| mot_motion_type | SELECT | linear | MOT: fixed motion type for all trials in this block | options: linear, curved \| blockTarget: mot-trial |
+| mot_num_objects_options | STRING | 6,8,10 | MOT: comma-separated integers for num_objects sampling | blockTarget: mot-trial |
+| mot_num_targets_options | STRING | 2,3,4 | MOT: comma-separated integers for num_targets sampling | blockTarget: mot-trial |
+| mot_probe_mode | SELECT | click | MOT: fixed probe mode for all trials in this block | options: click, number_entry \| blockTarget: mot-trial |
+| mot_show_feedback | BOOL | False | MOT: whether to show feedback for all trials in this block | blockTarget: mot-trial |
+| mot_speed_px_per_s_max | FLOAT | 200 | MOT: maximum speed (px/s) for block sampling | blockTarget: mot-trial |
+| mot_speed_px_per_s_min | FLOAT | 100 | MOT: minimum speed (px/s) for block sampling | blockTarget: mot-trial |
+| mot_tracking_duration_ms_max | INT | 10000 | MOT: maximum tracking duration (ms) for block sampling | blockTarget: mot-trial |
+| mot_tracking_duration_ms_min | INT | 5000 | MOT: minimum tracking duration (ms) for block sampling | blockTarget: mot-trial |
 | mouse_segments | INT | 2 | Mouse response: number of aperture segments (used when response_device = mouse) | blockTarget: rdm-* |
 | mouse_selection_mode | SELECT | click | Mouse response: how a segment selection is registered | options: click, hover \| blockTarget: rdm-* |
 | mouse_start_angle_deg | FLOAT | 0 | Mouse response: segment start angle offset in degrees (0=right; 90=down; 180=left; 270=up). Angles increase clockwise (screen/canvas coordinates). | blockTarget: rdm-* |
@@ -173,6 +198,8 @@ Generate many trials from parameter windows/ranges (compact representation for l
 | pvt_trial_duration_max | INT | 10000 | PVT: trial duration max (ms) | blockTarget: pvt-trial |
 | pvt_trial_duration_min | INT | 10000 | PVT: trial duration min (ms) | blockTarget: pvt-trial |
 | require_response_mode | SELECT | inherit | Override require_response for this block | options: inherit, true, false \| blockTarget: rdm-* |
+| response_deadline_max | INT | 2500 | RDM: response deadline max (ms) | blockTarget: rdm-* |
+| response_deadline_min | INT | 2500 | RDM: response deadline min (ms) | blockTarget: rdm-* |
 | response_device | SELECT | inherit | Override response device for this block (inherit uses experiment defaults) | options: inherit, keyboard, mouse, touch, voice, custom \| blockTarget: rdm-* |
 | response_keys | STRING |  | Comma-separated keys for keyboard responses (blank = inherit) | blockTarget: rdm-* |
 | response_target_group | SELECT | none | RDM Groups: which dot group the participant should respond to | options: none, group_1, group_2 \| blockTarget: rdm-dot-groups |
@@ -203,6 +230,8 @@ Generate many trials from parameter windows/ranges (compact representation for l
 | simon_trial_duration_min | INT | 1500 | Simon: total trial duration min (ms) | blockTarget: simon-trial |
 | speed_max | FLOAT | 10 | RDM Trial: speed range max | blockTarget: rdm-trial |
 | speed_min | FLOAT | 4 | RDM Trial: speed range min | blockTarget: rdm-trial |
+| stimulus_duration_max | INT | 1500 | RDM: stimulus duration max (ms) | blockTarget: rdm-* |
+| stimulus_duration_min | INT | 1500 | RDM: stimulus duration min (ms) | blockTarget: rdm-* |
 | stimulus_html | HTML_STRING | <p>Replace this with your HTML.</p> | HTML stimulus content for generated trials | blockTarget: html-keyboard-response,html-button-response |
 | stimulus_image | IMAGE |  | Single image URL or filename (e.g., "img1.png" after uploading assets). If you provide stimulus_images, it takes precedence. | blockTarget: image-keyboard-response |
 | stimulus_images | HTML_STRING |  | List of images (comma or newline separated). Use this to sample different images across trials in the Block (works with uploaded assets filenames). | blockTarget: image-keyboard-response |
@@ -366,6 +395,45 @@ Display instructions to participants
 | key_forward | KEY | ArrowRight | Key to advance to next page |  |
 | pages | HTML_STRING |  | Array of instruction pages to display | required |
 | show_clickable_nav | BOOL | False | Show clickable navigation buttons |  |
+
+---
+
+## mot-trial
+
+**Type:** `mot-trial`
+
+Multiple Object Tracking (MOT) trial — animate objects on canvas, cue targets by flashing, then probe
+
+### Parameters
+
+| Name | Type | Default | Description | Notes |
+|---|---|---|---|---|
+| aperture_border_color | COLOR | #444444 | Aperture border color |  |
+| aperture_border_enabled | BOOL | True | Whether to render an aperture border |  |
+| aperture_border_width_px | INT | 2 | Aperture border thickness in pixels | min: 0 \| max: 20 |
+| aperture_shape | SELECT | rectangle | Aperture geometry used to constrain MOT motion | options: rectangle, circle |
+| arena_height_px | INT | 500 | Height of the arena canvas in pixels | min: 150 \| max: 1000 |
+| arena_width_px | INT | 700 | Width of the arena canvas in pixels | min: 200 \| max: 1400 |
+| background_color | COLOR | #111111 | Canvas background color |  |
+| boundary_behavior | SELECT | bounce | How objects behave at arena boundaries | options: bounce, wrap |
+| cue_duration_ms | INT | 2000 | Duration of the cue phase (ms) during which targets flash | min: 500 \| max: 5000 |
+| cue_flash_rate_hz | FLOAT | 3 | Flash frequency (Hz) for target cue color alternation | min: 0.5 \| max: 10 |
+| curve_strength | FLOAT | 0.3 | Turning rate for curved motion (ignored when motion_type is linear) | min: 0 \| max: 1 |
+| feedback_duration_ms | INT | 1500 | Duration of feedback display in ms (ignored when show_feedback is false) | min: 0 \| max: 10000 |
+| iti_ms | INT | 1000 | Inter-trial interval (ms) shown as blank canvas after the response | min: 0 \| max: 10000 |
+| min_separation_px | INT | 50 | Minimum center-to-center distance when placing objects initially | min: 0 \| max: 200 |
+| motion_type | SELECT | linear | Trajectory type: linear (straight paths) or curved (smooth random turns) | options: linear, curved |
+| num_objects | INT | 8 | Total number of objects on screen | min: 2 \| max: 20 |
+| num_targets | INT | 4 | Number of target objects to track | min: 1 \| max: 10 |
+| object_color | COLOR | #FFFFFF | Fill color for all objects (outside cue phase) |  |
+| object_radius_px | INT | 22 | Radius of each object in pixels | min: 5 \| max: 80 |
+| probe_mode | SELECT | click | Probe interaction: click objects to select targets, or type numbered labels shown inside objects | options: click, number_entry |
+| probe_timeout_ms | INT | 0 | Probe phase time limit in ms (0 = no time limit) | min: 0 \| max: 30000 |
+| show_feedback | BOOL | False | Show correct/incorrect feedback after probe response |  |
+| speed_px_per_s | FLOAT | 150 | Object speed in pixels per second | min: 20 \| max: 600 |
+| speed_variability | FLOAT | 0 | Per-object speed jitter (0 = all same speed, 1 = ±100% of base speed) | min: 0 \| max: 1 |
+| target_cue_color | COLOR | #FF9900 | Alternate flash color used to cue targets during the cue phase |  |
+| tracking_duration_ms | INT | 8000 | Duration of the tracking phase (ms) where all objects move unlabeled | min: 1000 \| max: 30000 |
 
 ---
 
@@ -690,10 +758,10 @@ SOC subtask window (SART-like). Composed into the nearest SOC Dashboard session 
 | distractor_subdomains | HTML_STRING | cdn.news.example<br/>static.video.example<br/>api.store.example | Distractor domain/subdomain list (comma- or newline-separated) |  |
 | duration_ms | INT | 0 | Scheduled duration (ms). If 0, scheduling is disabled unless end_at_ms is provided manually in JSON. | min: 0 \| max: 3600000 |
 | go_button | SELECT | action | Mouse-only: which button the participant clicks to respond (controls the in-window action UI) | options: action, change |
-| go_condition | SELECT | target | Which class requires a Go response | options: target, distractor |
+| go_condition | SELECT | block | Response condition: "block" to respond to distractors, "allow" to respond to targets | options: block, allow |
 | go_key | STRING | space | Keyboard go key (ignored if response_device = mouse) |  |
 | highlight_subdomains | BOOL | True | Highlight target/distractor entries in the feed |  |
-| instructions | HTML_STRING | <p>Please press <b>{{GO_CONTROL}}</b> to filter through login attempts.</p><br/><p>Press <b>{{GO_CONTROL}}</b> to allow safe logins, and block harmful ones.</p><br/><p><b>Harmful (targets)</b>: {{TARGETS}}</p><br/><p><b>Benign (distractors)</b>: {{DISTRACTORS}}</p><br/><p><i>Click this popup to begin.</i></p> | Optional instructions shown in a popup before this subtask begins (closing the popup marks the subtask start time) |  |
+| instructions | HTML_STRING | <p>Log entries will stream past. Your job is to triage each one:</p><br/><p>Press <b>{{GO_CONTROL}}</b> when the current entry matches the class configured for a response in this subtask.</p><br/><p><b>Withhold</b> your response for the other class.</p><br/><p><b>Harmful:</b> {{TARGETS}}</p><br/><p><b>Benign:</b> {{DISTRACTORS}}</p><br/><p><i>Click this popup to begin.</i></p> | Optional instructions shown in a popup before this subtask begins (closing the popup marks the subtask start time) |  |
 | instructions_title | STRING | Filtering harmful logins | Popup title for the subtask instructions overlay |  |
 | max_run_ms | INT | 60000 | Maximum subtask runtime in ms (0 = no maximum). If max < min, values are swapped at runtime. | min: 0 \| max: 3600000 |
 | min_run_ms | INT | 30000 | Minimum subtask runtime in ms (0 = no minimum) | min: 0 \| max: 3600000 |
