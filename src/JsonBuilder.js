@@ -930,6 +930,18 @@ class JsonBuilder {
                 const files = Array.from(importInput.files || []);
                 if (files.length === 0) return;
                 try {
+                    // Single-file imports can now rehydrate the Builder timeline directly.
+                    if (files.length === 1) {
+                        const shouldLoadIntoBuilder = confirm(
+                            'Load this JSON into the Builder and rebuild the Timeline?\n\nClick OK to rehydrate the Builder.\nClick Cancel to keep using Token Store import only.'
+                        );
+
+                        if (shouldLoadIntoBuilder) {
+                            await this.importJsonFileIntoBuilder(files[0]);
+                            return;
+                        }
+                    }
+
                     await this.importLocalJsonFilesToTokenStore(files);
                 } catch (e) {
                     console.error('importLocalJsonFilesToTokenStore failed:', e);
@@ -1605,6 +1617,268 @@ class JsonBuilder {
         return code;
     }
 
+    readFileAsText(file) {
+        return new Promise((resolve, reject) => {
+            try {
+                const reader = new FileReader();
+                reader.onload = () => resolve((reader.result ?? '').toString());
+                reader.onerror = () => reject(reader.error || new Error('Failed to read file'));
+                reader.readAsText(file);
+            } catch (e) {
+                reject(e);
+            }
+        });
+    }
+
+    extractEnabledFlag(raw, fallback = false) {
+        if (typeof raw === 'boolean') return raw;
+        if (raw && typeof raw === 'object' && typeof raw.enabled === 'boolean') return raw.enabled;
+        return fallback;
+    }
+
+    toBuilderTimelineComponentName(type) {
+        const s = (type || 'Component').toString();
+        return s
+            .replace(/[-_]+/g, ' ')
+            .replace(/\b\w/g, (m) => m.toUpperCase());
+    }
+
+    mapSocSubtaskTypeToBuilderType(rawType) {
+        const t = (rawType || '').toString().trim().toLowerCase();
+        if (t === 'sart-like') return 'soc-subtask-sart-like';
+        if (t === 'flanker-like') return 'soc-subtask-flanker-like';
+        if (t === 'nback-like') return 'soc-subtask-nback-like';
+        if (t === 'wcst-like') return 'soc-subtask-wcst-like';
+        if (t === 'pvt-like') return 'soc-subtask-pvt-like';
+        if (t === 'mw-probe') return 'mw-probe';
+        return '';
+    }
+
+    convertImportedTimelineToBuilderComponents(timeline, taskTypeForDefs) {
+        const defs = this.getComponentDefinitions({ taskTypeOverride: taskTypeForDefs });
+        const defById = new Map((Array.isArray(defs) ? defs : []).map((d) => [d.id, d]));
+
+        const out = [];
+        let loopCounter = 0;
+        let randomCounter = 0;
+
+        const pushPlain = (item, explicitType = null) => {
+            if (!item || typeof item !== 'object') return;
+
+            const type = (explicitType || item.type || '').toString().trim();
+            if (!type) return;
+
+            const params = {};
+            for (const [k, v] of Object.entries(item)) {
+                if (k === 'type' || k === 'name') continue;
+                params[k] = v;
+            }
+
+            const comp = {
+                type,
+                name: (item.name || this.toBuilderTimelineComponentName(type)).toString(),
+                parameters: params
+            };
+
+            if (item.label !== undefined && item.label !== null && item.label !== '') {
+                comp.label = item.label;
+            }
+
+            if (type === 'html-keyboard-response') {
+                const pluginType = (params?.data?.plugin_type || '').toString();
+                if (pluginType === 'eye-tracking-calibration-instructions') {
+                    comp.builderComponentId = 'eye-tracking-calibration-instructions';
+                } else if (params.auto_generated === true) {
+                    comp.builderComponentId = 'instructions';
+                }
+            }
+
+            if (!comp.builderComponentId && defById.has(type)) {
+                comp.builderComponentId = type;
+            }
+
+            out.push(comp);
+        };
+
+        const walk = (items) => {
+            const arr = Array.isArray(items) ? items : [];
+            for (const item of arr) {
+                if (!item || typeof item !== 'object') continue;
+
+                const t = (item.type || '').toString().trim().toLowerCase();
+
+                if (t === 'loop' && Array.isArray(item.items)) {
+                    const markerId = (item.loop_id || `import_loop_${++loopCounter}`).toString();
+                    pushPlain({
+                        type: 'loop-start',
+                        name: 'Loop Start',
+                        loop_id: markerId,
+                        iterations: Number.isFinite(Number(item.iterations)) ? Number(item.iterations) : 1,
+                        label: item.label
+                    });
+                    walk(item.items);
+                    pushPlain({ type: 'loop-end', name: 'Loop End', loop_id: markerId });
+                    continue;
+                }
+
+                if (t === 'randomize-group' && Array.isArray(item.items)) {
+                    const markerId = (item.random_group_id || `import_random_${++randomCounter}`).toString();
+                    pushPlain({
+                        type: 'randomize-start',
+                        name: 'Randomize Start',
+                        random_group_id: markerId,
+                        randomizable_across_markers: item.randomizable_across_markers !== false,
+                        label: item.label
+                    });
+                    walk(item.items);
+                    pushPlain({ type: 'randomize-end', name: 'Randomize End', random_group_id: markerId });
+                    continue;
+                }
+
+                if (t === 'soc-dashboard') {
+                    const session = { ...item };
+                    delete session.subtasks;
+                    delete session.desktop_icons;
+                    pushPlain({
+                        ...session,
+                        type: 'soc-dashboard',
+                        name: (item.name || item.title || 'SOC Dashboard Session').toString()
+                    });
+
+                    const icons = Array.isArray(item.desktop_icons) ? item.desktop_icons : [];
+                    for (const icon of icons) {
+                        pushPlain({
+                            type: 'soc-dashboard-icon',
+                            name: (icon?.label || 'SOC Desktop Icon').toString(),
+                            ...icon
+                        });
+                    }
+
+                    const subtasks = Array.isArray(item.subtasks) ? item.subtasks : [];
+                    for (const st of subtasks) {
+                        const bt = this.mapSocSubtaskTypeToBuilderType(st?.type);
+                        if (!bt) continue;
+                        const subtaskPayload = { ...(st || {}) };
+                        delete subtaskPayload.type;
+                        pushPlain({
+                            type: bt,
+                            name: (st?.title || this.toBuilderTimelineComponentName(bt)).toString(),
+                            ...subtaskPayload
+                        });
+                    }
+                    continue;
+                }
+
+                pushPlain(item);
+            }
+        };
+
+        walk(timeline);
+        return out;
+    }
+
+    rebuildTimelineDOMFromImportedComponents(components) {
+        const timelineContainer = document.getElementById('timelineComponents');
+        if (!timelineContainer) return 0;
+
+        timelineContainer.querySelectorAll('.timeline-component').forEach((el) => el.remove());
+
+        const list = Array.isArray(components) ? components : [];
+        for (const comp of list) {
+            const el = this.timelineBuilder?.createComponentElementNew(comp, 0);
+            if (!el) continue;
+            if (comp.builderComponentId) {
+                el.dataset.builderComponentId = comp.builderComponentId;
+            }
+            timelineContainer.appendChild(el);
+        }
+
+        const emptyState = timelineContainer.querySelector('.empty-timeline');
+        if (emptyState) {
+            emptyState.style.display = list.length > 0 ? 'none' : 'block';
+        }
+
+        return list.length;
+    }
+
+    applyImportedConfigState(config) {
+        const rawTaskType = (config?.task_type || config?.taskType || '').toString().trim();
+        const importedTaskType = rawTaskType || this.currentTaskType || 'rdm';
+
+        let nextExperimentType = (config?.experiment_type || config?.experimentType || this.experimentType || 'trial-based').toString();
+        nextExperimentType = (nextExperimentType === 'continuous') ? 'continuous' : 'trial-based';
+
+        if ((importedTaskType === 'soc-dashboard' || importedTaskType === 'continuous-image') && nextExperimentType !== 'continuous') {
+            nextExperimentType = 'continuous';
+        }
+
+        this.experimentType = nextExperimentType;
+        this.currentTaskType = importedTaskType;
+
+        this.setElementChecked('trialBased', nextExperimentType === 'trial-based');
+        this.setElementChecked('continuous', nextExperimentType === 'continuous');
+        this.setElementValue('taskType', importedTaskType);
+
+        const importedTheme = (config?.ui_settings?.theme || '').toString().trim().toLowerCase();
+        if (importedTheme === 'light' || importedTheme === 'dark') {
+            this.setElementValue('experimentTheme', importedTheme);
+        }
+
+        const dc = (config?.data_collection && typeof config.data_collection === 'object') ? config.data_collection : {};
+        this.dataCollection['reaction-time'] = this.extractEnabledFlag(dc['reaction-time'] ?? dc.reaction_time, this.dataCollection['reaction-time']);
+        this.dataCollection['accuracy'] = this.extractEnabledFlag(dc.accuracy, this.dataCollection['accuracy']);
+        this.dataCollection['correctness'] = this.extractEnabledFlag(dc.correctness, this.dataCollection['correctness']);
+        this.dataCollection['eye-tracking'] = this.extractEnabledFlag(dc['eye-tracking'] ?? dc.eye_tracking, this.dataCollection['eye-tracking']);
+
+        document.querySelectorAll('.data-collection-checkbox').forEach((cb) => {
+            const key = (cb?.value || '').toString();
+            if (key && Object.prototype.hasOwnProperty.call(this.dataCollection, key)) {
+                cb.checked = !!this.dataCollection[key];
+            }
+        });
+
+        this.updateExperimentTypeUI();
+        this.loadComponentLibrary();
+        this.updateConditionalUI();
+    }
+
+    async importJsonFileIntoBuilder(file) {
+        const filename = (file?.name || 'config.json').toString();
+        const text = await this.readFileAsText(file);
+
+        let config;
+        try {
+            config = JSON.parse(text);
+        } catch (e) {
+            this.showValidationResult('error', `Invalid JSON in ${filename} (${e?.message || 'parse error'})`);
+            return;
+        }
+
+        if (!config || typeof config !== 'object' || Array.isArray(config)) {
+            this.showValidationResult('error', `Import failed: ${filename} must contain a top-level JSON object.`);
+            return;
+        }
+
+        const validation = this.schemaValidator?.validate?.(config);
+        if (validation && validation.valid === false) {
+            const errs = Array.isArray(validation.errors) ? validation.errors.filter(Boolean) : [];
+            const detail = errs.slice(0, 6).join(' | ');
+            this.showValidationResult('error', `Import validation failed${detail ? `: ${detail}` : ''}`);
+            return;
+        }
+
+        this.applyImportedConfigState(config);
+
+        const taskType = (config?.task_type || config?.taskType || this.currentTaskType || 'rdm').toString();
+        const importedTimeline = Array.isArray(config.timeline) ? config.timeline : [];
+        const builderComponents = this.convertImportedTimelineToBuilderComponents(importedTimeline, taskType);
+        const rebuiltCount = this.rebuildTimelineDOMFromImportedComponents(builderComponents);
+
+        this.updateJSON();
+
+        this.showValidationResult('success', `Loaded ${filename}. Rebuilt ${rebuiltCount} timeline component(s).`);
+    }
+
     async importLocalJsonFilesToTokenStore(files) {
         const inputFiles = Array.isArray(files) ? files : [];
         if (inputFiles.length === 0) return;
@@ -1622,19 +1896,6 @@ class JsonBuilder {
             this.showValidationResult('error', 'Invalid Token Store base URL.');
             return;
         }
-
-        const readFileAsText = (file) => {
-            return new Promise((resolve, reject) => {
-                try {
-                    const reader = new FileReader();
-                    reader.onload = () => resolve((reader.result ?? '').toString());
-                    reader.onerror = () => reject(reader.error || new Error('Failed to read file'));
-                    reader.readAsText(file);
-                } catch (e) {
-                    reject(e);
-                }
-            });
-        };
 
         const ensureJsonFilename = (name) => {
             const raw = (name || '').toString().trim() || 'config.json';
@@ -1655,7 +1916,7 @@ class JsonBuilder {
             let config;
             let jsonText;
             try {
-                jsonText = await readFileAsText(file);
+                jsonText = await this.readFileAsText(file);
                 config = JSON.parse(jsonText);
             } catch (e) {
                 results.push({ ok: false, filename, error: `Invalid JSON (${e?.message || 'parse error'})` });
@@ -2393,6 +2654,7 @@ class JsonBuilder {
             if (type === 'soc-subtask-nback-like') return true;
             if (type === 'soc-subtask-wcst-like') return true;
             if (type === 'soc-subtask-pvt-like') return true;
+            if (type === 'mw-probe') return true;
             return false;
         }
 
@@ -3216,7 +3478,44 @@ class JsonBuilder {
                     <select class="form-control parameter-input" id="motProbeModeDefault">
                         <option value="click" selected>Click</option>
                         <option value="number_entry">Number entry</option>
+                        <option value="yes_no_recognition">Yes/No recognition</option>
                     </select>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Yes Key (recognition):</label>
+                    <input type="text" class="form-control parameter-input" id="motYesKeyDefault" value="y">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">No Key (recognition):</label>
+                    <input type="text" class="form-control parameter-input" id="motNoKeyDefault" value="n">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Recognition Probes / Trial:</label>
+                    <input type="number" class="form-control parameter-input" id="motRecognitionProbeCountDefault" value="1" min="1" max="20">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Aperture Shape:</label>
+                    <select class="form-control parameter-input" id="motApertureShapeDefault">
+                        <option value="rectangle" selected>Rectangle</option>
+                        <option value="circle">Circle</option>
+                    </select>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Aperture Border:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="motApertureBorderEnabledDefault" checked>
+                            <label class="form-check-label" for="motApertureBorderEnabledDefault">Show aperture border</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Border Color:</label>
+                    <input type="color" class="form-control form-control-color parameter-input" id="motApertureBorderColorDefault" value="#444444">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Border Width (px):</label>
+                    <input type="number" class="form-control parameter-input" id="motApertureBorderWidthPxDefault" value="2" min="0" max="20">
                 </div>
                 <div class="parameter-row">
                     <label class="parameter-label">Cue Duration (ms):</label>
@@ -4408,7 +4707,44 @@ class JsonBuilder {
                     <select class="form-control parameter-input" id="motProbeModeDefault">
                         <option value="click" selected>Click</option>
                         <option value="number_entry">Number entry</option>
+                        <option value="yes_no_recognition">Yes/No recognition</option>
                     </select>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Yes Key (recognition):</label>
+                    <input type="text" class="form-control parameter-input" id="motYesKeyDefault" value="y">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">No Key (recognition):</label>
+                    <input type="text" class="form-control parameter-input" id="motNoKeyDefault" value="n">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Recognition Probes / Trial:</label>
+                    <input type="number" class="form-control parameter-input" id="motRecognitionProbeCountDefault" value="1" min="1" max="20">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Aperture Shape:</label>
+                    <select class="form-control parameter-input" id="motApertureShapeDefault">
+                        <option value="rectangle" selected>Rectangle</option>
+                        <option value="circle">Circle</option>
+                    </select>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Aperture Border:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="motApertureBorderEnabledDefault" checked>
+                            <label class="form-check-label" for="motApertureBorderEnabledDefault">Show aperture border</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Border Color:</label>
+                    <input type="color" class="form-control form-control-color parameter-input" id="motApertureBorderColorDefault" value="#444444">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Border Width (px):</label>
+                    <input type="number" class="form-control parameter-input" id="motApertureBorderWidthPxDefault" value="2" min="0" max="20">
                 </div>
                 <div class="parameter-row">
                     <label class="parameter-label">Cue Duration (ms):</label>
@@ -5441,7 +5777,13 @@ class JsonBuilder {
                 mot_num_objects_options: { type: 'string', default: (document.getElementById('motNumObjectsDefault')?.value || '8').toString() },
                 mot_num_targets_options: { type: 'string', default: (document.getElementById('motNumTargetsDefault')?.value || '4').toString() },
                 mot_motion_type: { type: 'select', default: (document.getElementById('motMotionTypeDefault')?.value || 'linear').toString(), options: ['linear', 'curved'] },
-                mot_probe_mode: { type: 'select', default: (document.getElementById('motProbeModeDefault')?.value || 'click').toString(), options: ['click', 'number_entry'] },
+                mot_probe_mode: { type: 'select', default: (document.getElementById('motProbeModeDefault')?.value || 'click').toString(), options: ['click', 'number_entry', 'yes_no_recognition'] },
+                mot_yes_key: { type: 'string', default: (document.getElementById('motYesKeyDefault')?.value || 'y').toString() },
+                mot_no_key: { type: 'string', default: (document.getElementById('motNoKeyDefault')?.value || 'n').toString() },
+                mot_recognition_probe_count: { type: 'number', default: Number.parseInt(document.getElementById('motRecognitionProbeCountDefault')?.value || '1', 10), min: 1, max: 20 },
+                mot_aperture_shape: { type: 'select', default: (document.getElementById('motApertureShapeDefault')?.value || 'rectangle').toString(), options: ['rectangle', 'circle'] },
+                mot_aperture_border_enabled: { type: 'boolean', default: !!document.getElementById('motApertureBorderEnabledDefault')?.checked },
+                mot_aperture_border_color: { type: 'COLOR', default: (document.getElementById('motApertureBorderColorDefault')?.value || '#444444').toString() },
                 mot_show_feedback: { type: 'boolean', default: !!document.getElementById('motShowFeedbackDefault')?.checked },
                 mot_speed_px_per_s_min: { type: 'number', default: Number.parseFloat(document.getElementById('motSpeedDefault')?.value || '150'), min: 20, max: 600 },
                 mot_speed_px_per_s_max: { type: 'number', default: Number.parseFloat(document.getElementById('motSpeedDefault')?.value || '150'), min: 20, max: 600 },
@@ -5450,7 +5792,9 @@ class JsonBuilder {
                 mot_cue_duration_ms_min: { type: 'number', default: Number.parseInt(document.getElementById('motCueDurationMsDefault')?.value || '2000', 10), min: 0, max: 30000 },
                 mot_cue_duration_ms_max: { type: 'number', default: Number.parseInt(document.getElementById('motCueDurationMsDefault')?.value || '2000', 10), min: 0, max: 30000 },
                 mot_iti_ms_min: { type: 'number', default: Number.parseInt(document.getElementById('motItiMsDefault')?.value || '1000', 10), min: 0, max: 30000 },
-                mot_iti_ms_max: { type: 'number', default: Number.parseInt(document.getElementById('motItiMsDefault')?.value || '1000', 10), min: 0, max: 30000 }
+                mot_iti_ms_max: { type: 'number', default: Number.parseInt(document.getElementById('motItiMsDefault')?.value || '1000', 10), min: 0, max: 30000 },
+                mot_aperture_border_width_px_min: { type: 'number', default: Number.parseInt(document.getElementById('motApertureBorderWidthPxDefault')?.value || '2', 10), min: 0, max: 20 },
+                mot_aperture_border_width_px_max: { type: 'number', default: Number.parseInt(document.getElementById('motApertureBorderWidthPxDefault')?.value || '2', 10), min: 0, max: 20 }
             };
 
             const continuousImageOnlyParams = {
@@ -6105,7 +6449,13 @@ class JsonBuilder {
                         num_targets: { type: 'number', default: 4, min: 1, max: 10 },
                         speed_px_per_s: { type: 'number', default: 150, min: 20, max: 600 },
                         motion_type: { type: 'select', default: 'linear', options: ['linear', 'curved'] },
-                        probe_mode: { type: 'select', default: 'click', options: ['click', 'number_entry'] },
+                        probe_mode: { type: 'select', default: 'click', options: ['click', 'number_entry', 'yes_no_recognition'] },
+                        yes_key: { type: 'string', default: 'y' },
+                        no_key: { type: 'string', default: 'n' },
+                        aperture_shape: { type: 'select', default: 'rectangle', options: ['rectangle', 'circle'] },
+                        aperture_border_enabled: { type: 'boolean', default: true },
+                        aperture_border_color: { type: 'COLOR', default: '#444444' },
+                        aperture_border_width_px: { type: 'number', default: 2, min: 0, max: 20 },
                         cue_duration_ms: { type: 'number', default: 2000, min: 0, max: 30000 },
                         tracking_duration_ms: { type: 'number', default: 8000, min: 0, max: 60000 },
                         iti_ms: { type: 'number', default: 1000, min: 0, max: 30000 }
@@ -7315,9 +7665,16 @@ class JsonBuilder {
             const speed = Number.parseFloat(document.getElementById('motSpeedDefault')?.value || '150');
             const motionType = (document.getElementById('motMotionTypeDefault')?.value || 'linear').toString();
             const probeMode = (document.getElementById('motProbeModeDefault')?.value || 'click').toString();
+            const yesKey = (document.getElementById('motYesKeyDefault')?.value || 'y').toString().trim() || 'y';
+            const noKey = (document.getElementById('motNoKeyDefault')?.value || 'n').toString().trim() || 'n';
+            const recognitionProbeCount = Number.parseInt(document.getElementById('motRecognitionProbeCountDefault')?.value || '1', 10);
             const cueMs = Number.parseInt(document.getElementById('motCueDurationMsDefault')?.value || '2000', 10);
             const trackingMs = Number.parseInt(document.getElementById('motTrackingDurationMsDefault')?.value || '8000', 10);
             const itiMs = Number.parseInt(document.getElementById('motItiMsDefault')?.value || '1000', 10);
+            const apertureShape = (document.getElementById('motApertureShapeDefault')?.value || 'rectangle').toString();
+            const apertureBorderEnabled = !!document.getElementById('motApertureBorderEnabledDefault')?.checked;
+            const apertureBorderColor = (document.getElementById('motApertureBorderColorDefault')?.value || '#444444').toString();
+            const apertureBorderWidth = Number.parseInt(document.getElementById('motApertureBorderWidthPxDefault')?.value || '2', 10);
             const showFeedback = !!document.getElementById('motShowFeedbackDefault')?.checked;
 
             config.mot_settings = {
@@ -7326,9 +7683,16 @@ class JsonBuilder {
                 speed_px_per_s: Number.isFinite(speed) ? speed : 150,
                 motion_type: motionType,
                 probe_mode: probeMode,
+                yes_key: yesKey,
+                no_key: noKey,
+                recognition_probe_count: Number.isFinite(recognitionProbeCount) ? Math.max(1, Math.min(20, recognitionProbeCount)) : 1,
                 cue_duration_ms: Number.isFinite(cueMs) ? cueMs : 2000,
                 tracking_duration_ms: Number.isFinite(trackingMs) ? trackingMs : 8000,
                 iti_ms: Number.isFinite(itiMs) ? itiMs : 1000,
+                aperture_shape: apertureShape,
+                aperture_border_enabled: apertureBorderEnabled,
+                aperture_border_color: apertureBorderColor,
+                aperture_border_width_px: Number.isFinite(apertureBorderWidth) ? apertureBorderWidth : 2,
                 show_feedback: showFeedback
             };
         }
@@ -7771,9 +8135,16 @@ class JsonBuilder {
             speed_px_per_s: Number.isFinite(Number(d.speed_px_per_s)) ? Number(d.speed_px_per_s) : 150,
             motion_type: (d.motion_type || 'linear').toString(),
             probe_mode: (d.probe_mode || 'click').toString(),
+            yes_key: (d.yes_key || 'y').toString(),
+            no_key: (d.no_key || 'n').toString(),
+            recognition_probe_count: Number.isFinite(Number(d.recognition_probe_count)) ? Math.max(1, Number(d.recognition_probe_count)) : 1,
             cue_duration_ms: Number.isFinite(Number(d.cue_duration_ms)) ? Number(d.cue_duration_ms) : 2000,
             tracking_duration_ms: Number.isFinite(Number(d.tracking_duration_ms)) ? Number(d.tracking_duration_ms) : 8000,
             iti_ms: Number.isFinite(Number(d.iti_ms)) ? Number(d.iti_ms) : 1000,
+            aperture_shape: (d.aperture_shape || 'rectangle').toString(),
+            aperture_border_enabled: d.aperture_border_enabled !== false,
+            aperture_border_color: (d.aperture_border_color || '#444444').toString(),
+            aperture_border_width_px: Number.isFinite(Number(d.aperture_border_width_px)) ? Number(d.aperture_border_width_px) : 2,
             show_feedback: !!d.show_feedback
         };
     }
@@ -8018,9 +8389,16 @@ class JsonBuilder {
             speed_px_per_s: Number.parseFloat(document.getElementById('motSpeedDefault')?.value || '150'),
             motion_type: (document.getElementById('motMotionTypeDefault')?.value || 'linear').toString(),
             probe_mode: (document.getElementById('motProbeModeDefault')?.value || 'click').toString(),
+            yes_key: (document.getElementById('motYesKeyDefault')?.value || 'y').toString().trim() || 'y',
+            no_key: (document.getElementById('motNoKeyDefault')?.value || 'n').toString().trim() || 'n',
+            recognition_probe_count: Number.parseInt(document.getElementById('motRecognitionProbeCountDefault')?.value || '1', 10),
             cue_duration_ms: Number.parseInt(document.getElementById('motCueDurationMsDefault')?.value || '2000', 10),
             tracking_duration_ms: Number.parseInt(document.getElementById('motTrackingDurationMsDefault')?.value || '8000', 10),
             iti_ms: Number.parseInt(document.getElementById('motItiMsDefault')?.value || '1000', 10),
+            aperture_shape: (document.getElementById('motApertureShapeDefault')?.value || 'rectangle').toString(),
+            aperture_border_enabled: !!document.getElementById('motApertureBorderEnabledDefault')?.checked,
+            aperture_border_color: (document.getElementById('motApertureBorderColorDefault')?.value || '#444444').toString(),
+            aperture_border_width_px: Number.parseInt(document.getElementById('motApertureBorderWidthPxDefault')?.value || '2', 10),
             show_feedback: !!document.getElementById('motShowFeedbackDefault')?.checked
         };
     }
@@ -8033,6 +8411,8 @@ class JsonBuilder {
         const iti = Number.isFinite(Number(d.iti_ms)) ? Number(d.iti_ms) : 1000;
         const nums = Number.isFinite(Number(d.num_objects)) ? Number(d.num_objects) : 8;
         const tgts = Number.isFinite(Number(d.num_targets)) ? Number(d.num_targets) : 4;
+        const recognitionProbeCount = Number.isFinite(Number(d.recognition_probe_count)) ? Math.max(1, Number(d.recognition_probe_count)) : 1;
+        const borderWidth = Number.isFinite(Number(d.aperture_border_width_px)) ? Number(d.aperture_border_width_px) : 2;
 
         return {
             block_component_type: 'mot-trial',
@@ -8040,6 +8420,12 @@ class JsonBuilder {
             mot_num_targets_options: String(tgts),
             mot_motion_type: (d.motion_type || 'linear').toString(),
             mot_probe_mode: (d.probe_mode || 'click').toString(),
+            mot_yes_key: (d.yes_key || 'y').toString(),
+            mot_no_key: (d.no_key || 'n').toString(),
+            mot_recognition_probe_count: recognitionProbeCount,
+            mot_aperture_shape: (d.aperture_shape || 'rectangle').toString(),
+            mot_aperture_border_enabled: d.aperture_border_enabled !== false,
+            mot_aperture_border_color: (d.aperture_border_color || '#444444').toString(),
             mot_show_feedback: !!d.show_feedback,
             mot_speed_px_per_s_min: speed,
             mot_speed_px_per_s_max: speed,
@@ -8048,7 +8434,9 @@ class JsonBuilder {
             mot_cue_duration_ms_min: cue,
             mot_cue_duration_ms_max: cue,
             mot_iti_ms_min: iti,
-            mot_iti_ms_max: iti
+            mot_iti_ms_max: iti,
+            mot_aperture_border_width_px_min: borderWidth,
+            mot_aperture_border_width_px_max: borderWidth
         };
     }
 
@@ -9013,7 +9401,8 @@ class JsonBuilder {
                 || t === 'soc-subtask-flanker-like'
                 || t === 'soc-subtask-nback-like'
                 || t === 'soc-subtask-wcst-like'
-                || t === 'soc-subtask-pvt-like';
+                || t === 'soc-subtask-pvt-like'
+                || t === 'mw-probe';
         }
 
         function mapSocSubtaskKind(t) {
@@ -9023,6 +9412,7 @@ class JsonBuilder {
                 case 'soc-subtask-nback-like': return 'nback-like';
                 case 'soc-subtask-wcst-like': return 'wcst-like';
                 case 'soc-subtask-pvt-like': return 'pvt-like';
+                case 'mw-probe': return 'mw-probe';
                 default: return 'unknown';
             }
         }
@@ -10033,6 +10423,21 @@ class JsonBuilder {
             if (mtype) values.motion_type = mtype;
             const pm = (blockComponent.mot_probe_mode ?? '').toString().trim();
             if (pm) values.probe_mode = pm;
+            const yesKey = (blockComponent.mot_yes_key ?? '').toString().trim();
+            if (yesKey) values.yes_key = yesKey;
+            const noKey = (blockComponent.mot_no_key ?? '').toString().trim();
+            if (noKey) values.no_key = noKey;
+            if (blockComponent.mot_recognition_probe_count !== undefined && blockComponent.mot_recognition_probe_count !== null && blockComponent.mot_recognition_probe_count !== '') {
+                const rpc = Number.parseInt(blockComponent.mot_recognition_probe_count, 10);
+                if (Number.isFinite(rpc)) values.recognition_probe_count = Math.max(1, rpc);
+            }
+            const apertureShape = (blockComponent.mot_aperture_shape ?? '').toString().trim();
+            if (apertureShape) values.aperture_shape = apertureShape;
+            if (blockComponent.mot_aperture_border_enabled !== undefined) {
+                values.aperture_border_enabled = !!blockComponent.mot_aperture_border_enabled;
+            }
+            const apertureBorderColor = (blockComponent.mot_aperture_border_color ?? '').toString().trim();
+            if (apertureBorderColor) values.aperture_border_color = apertureBorderColor;
             if (blockComponent.mot_show_feedback !== undefined) {
                 values.show_feedback = !!blockComponent.mot_show_feedback;
             }
@@ -10040,6 +10445,7 @@ class JsonBuilder {
             addWindow('tracking_duration_ms', blockComponent.mot_tracking_duration_ms_min, blockComponent.mot_tracking_duration_ms_max);
             addWindow('cue_duration_ms', blockComponent.mot_cue_duration_ms_min, blockComponent.mot_cue_duration_ms_max);
             addWindow('iti_ms', blockComponent.mot_iti_ms_min, blockComponent.mot_iti_ms_max);
+            addWindow('aperture_border_width_px', blockComponent.mot_aperture_border_width_px_min, blockComponent.mot_aperture_border_width_px_max);
         } else if (resolvedComponentType === 'html-keyboard-response') {
             const stim = (blockComponent.stimulus_html ?? blockComponent.stimulus ?? '').toString();
             if (stim.trim() !== '') {
