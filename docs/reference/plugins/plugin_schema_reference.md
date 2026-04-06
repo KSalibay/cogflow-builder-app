@@ -156,7 +156,8 @@ Generate many trials from parameter windows/ranges (compact representation for l
 | mot_motion_type | SELECT | linear | MOT: fixed motion type for all trials in this block | options: linear, curved \| blockTarget: mot-trial |
 | mot_num_objects_options | STRING | 6,8,10 | MOT: comma-separated integers for num_objects sampling | blockTarget: mot-trial |
 | mot_num_targets_options | STRING | 2,3,4 | MOT: comma-separated integers for num_targets sampling | blockTarget: mot-trial |
-| mot_probe_mode | SELECT | click | MOT: fixed probe mode for all trials in this block | options: click, number_entry \| blockTarget: mot-trial |
+| mot_probe_mode | SELECT | click | MOT: fixed probe mode for all trials in this block | options: click, number_entry, yes_no_recognition \| blockTarget: mot-trial |
+| mot_recognition_probe_count | INT | 1 | MOT: number of yes/no recognition probes shown per trial before advancing | min: 1 \| max: 20 \| blockTarget: mot-trial |
 | mot_show_feedback | BOOL | False | MOT: whether to show feedback for all trials in this block | blockTarget: mot-trial |
 | mot_speed_px_per_s_max | FLOAT | 200 | MOT: maximum speed (px/s) for block sampling | blockTarget: mot-trial |
 | mot_speed_px_per_s_min | FLOAT | 100 | MOT: minimum speed (px/s) for block sampling | blockTarget: mot-trial |
@@ -427,8 +428,11 @@ Multiple Object Tracking (MOT) trial — animate objects on canvas, cue targets 
 | num_targets | INT | 4 | Number of target objects to track | min: 1 \| max: 10 |
 | object_color | COLOR | #FFFFFF | Fill color for all objects (outside cue phase) |  |
 | object_radius_px | INT | 22 | Radius of each object in pixels | min: 5 \| max: 80 |
-| probe_mode | SELECT | click | Probe interaction: click objects to select targets, or type numbered labels shown inside objects | options: click, number_entry |
+| probe_mode | SELECT | click | Probe interaction: click objects, type numbered labels, or answer yes/no recognition probes | options: click, number_entry, yes_no_recognition |
+| recognition_probe_count | INT | 1 | Number of yes/no recognition probes asked per trial before advancing | min: 1 \| max: 20 |
 | probe_timeout_ms | INT | 0 | Probe phase time limit in ms (0 = no time limit) | min: 0 \| max: 30000 |
+| yes_key | STRING | y | Recognition mode key for YES |  |
+| no_key | STRING | n | Recognition mode key for NO |  |
 | show_feedback | BOOL | False | Show correct/incorrect feedback after probe response |  |
 | speed_px_per_s | FLOAT | 150 | Object speed in pixels per second | min: 20 \| max: 600 |
 | speed_variability | FLOAT | 0 | Per-object speed jitter (0 = all same speed, 1 = ±100% of base speed) | min: 0 \| max: 1 |
@@ -867,7 +871,7 @@ Collect survey/questionnaire responses in a single HTML form
 |---|---|---|---|---|
 | allow_empty_on_timeout | BOOL | False | If true, allow continuing with empty responses after timeout_ms |  |
 | instructions | HTML_STRING |  | Optional instructions shown above the form |  |
-| questions | COMPLEX |  | Array of question objects (id, type, prompt, required, and type-specific fields) | required |
+| questions | COMPLEX |  | Array of question objects (id, type, prompt, required, optional visible_if, and type-specific fields) | required |
 | submit_label | STRING | Continue | Submit button text |  |
 | timeout_ms | INT | null | Optional timeout in ms for auto-continue (null/omitted = off) |  |
 | title | STRING | Survey | Survey title/header |  |

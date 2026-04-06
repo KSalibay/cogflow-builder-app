@@ -3478,7 +3478,20 @@ class JsonBuilder {
                     <select class="form-control parameter-input" id="motProbeModeDefault">
                         <option value="click" selected>Click</option>
                         <option value="number_entry">Number entry</option>
+                        <option value="yes_no_recognition">Yes/No recognition</option>
                     </select>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Yes Key (recognition):</label>
+                    <input type="text" class="form-control parameter-input" id="motYesKeyDefault" value="y">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">No Key (recognition):</label>
+                    <input type="text" class="form-control parameter-input" id="motNoKeyDefault" value="n">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Recognition Probes / Trial:</label>
+                    <input type="number" class="form-control parameter-input" id="motRecognitionProbeCountDefault" value="1" min="1" max="20">
                 </div>
                 <div class="parameter-row">
                     <label class="parameter-label">Aperture Shape:</label>
@@ -4694,7 +4707,20 @@ class JsonBuilder {
                     <select class="form-control parameter-input" id="motProbeModeDefault">
                         <option value="click" selected>Click</option>
                         <option value="number_entry">Number entry</option>
+                        <option value="yes_no_recognition">Yes/No recognition</option>
                     </select>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Yes Key (recognition):</label>
+                    <input type="text" class="form-control parameter-input" id="motYesKeyDefault" value="y">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">No Key (recognition):</label>
+                    <input type="text" class="form-control parameter-input" id="motNoKeyDefault" value="n">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Recognition Probes / Trial:</label>
+                    <input type="number" class="form-control parameter-input" id="motRecognitionProbeCountDefault" value="1" min="1" max="20">
                 </div>
                 <div class="parameter-row">
                     <label class="parameter-label">Aperture Shape:</label>
@@ -5751,7 +5777,10 @@ class JsonBuilder {
                 mot_num_objects_options: { type: 'string', default: (document.getElementById('motNumObjectsDefault')?.value || '8').toString() },
                 mot_num_targets_options: { type: 'string', default: (document.getElementById('motNumTargetsDefault')?.value || '4').toString() },
                 mot_motion_type: { type: 'select', default: (document.getElementById('motMotionTypeDefault')?.value || 'linear').toString(), options: ['linear', 'curved'] },
-                mot_probe_mode: { type: 'select', default: (document.getElementById('motProbeModeDefault')?.value || 'click').toString(), options: ['click', 'number_entry'] },
+                mot_probe_mode: { type: 'select', default: (document.getElementById('motProbeModeDefault')?.value || 'click').toString(), options: ['click', 'number_entry', 'yes_no_recognition'] },
+                mot_yes_key: { type: 'string', default: (document.getElementById('motYesKeyDefault')?.value || 'y').toString() },
+                mot_no_key: { type: 'string', default: (document.getElementById('motNoKeyDefault')?.value || 'n').toString() },
+                mot_recognition_probe_count: { type: 'number', default: Number.parseInt(document.getElementById('motRecognitionProbeCountDefault')?.value || '1', 10), min: 1, max: 20 },
                 mot_aperture_shape: { type: 'select', default: (document.getElementById('motApertureShapeDefault')?.value || 'rectangle').toString(), options: ['rectangle', 'circle'] },
                 mot_aperture_border_enabled: { type: 'boolean', default: !!document.getElementById('motApertureBorderEnabledDefault')?.checked },
                 mot_aperture_border_color: { type: 'COLOR', default: (document.getElementById('motApertureBorderColorDefault')?.value || '#444444').toString() },
@@ -6420,7 +6449,9 @@ class JsonBuilder {
                         num_targets: { type: 'number', default: 4, min: 1, max: 10 },
                         speed_px_per_s: { type: 'number', default: 150, min: 20, max: 600 },
                         motion_type: { type: 'select', default: 'linear', options: ['linear', 'curved'] },
-                        probe_mode: { type: 'select', default: 'click', options: ['click', 'number_entry'] },
+                        probe_mode: { type: 'select', default: 'click', options: ['click', 'number_entry', 'yes_no_recognition'] },
+                        yes_key: { type: 'string', default: 'y' },
+                        no_key: { type: 'string', default: 'n' },
                         aperture_shape: { type: 'select', default: 'rectangle', options: ['rectangle', 'circle'] },
                         aperture_border_enabled: { type: 'boolean', default: true },
                         aperture_border_color: { type: 'COLOR', default: '#444444' },
@@ -7634,6 +7665,9 @@ class JsonBuilder {
             const speed = Number.parseFloat(document.getElementById('motSpeedDefault')?.value || '150');
             const motionType = (document.getElementById('motMotionTypeDefault')?.value || 'linear').toString();
             const probeMode = (document.getElementById('motProbeModeDefault')?.value || 'click').toString();
+            const yesKey = (document.getElementById('motYesKeyDefault')?.value || 'y').toString().trim() || 'y';
+            const noKey = (document.getElementById('motNoKeyDefault')?.value || 'n').toString().trim() || 'n';
+            const recognitionProbeCount = Number.parseInt(document.getElementById('motRecognitionProbeCountDefault')?.value || '1', 10);
             const cueMs = Number.parseInt(document.getElementById('motCueDurationMsDefault')?.value || '2000', 10);
             const trackingMs = Number.parseInt(document.getElementById('motTrackingDurationMsDefault')?.value || '8000', 10);
             const itiMs = Number.parseInt(document.getElementById('motItiMsDefault')?.value || '1000', 10);
@@ -7649,6 +7683,9 @@ class JsonBuilder {
                 speed_px_per_s: Number.isFinite(speed) ? speed : 150,
                 motion_type: motionType,
                 probe_mode: probeMode,
+                yes_key: yesKey,
+                no_key: noKey,
+                recognition_probe_count: Number.isFinite(recognitionProbeCount) ? Math.max(1, Math.min(20, recognitionProbeCount)) : 1,
                 cue_duration_ms: Number.isFinite(cueMs) ? cueMs : 2000,
                 tracking_duration_ms: Number.isFinite(trackingMs) ? trackingMs : 8000,
                 iti_ms: Number.isFinite(itiMs) ? itiMs : 1000,
@@ -8098,6 +8135,9 @@ class JsonBuilder {
             speed_px_per_s: Number.isFinite(Number(d.speed_px_per_s)) ? Number(d.speed_px_per_s) : 150,
             motion_type: (d.motion_type || 'linear').toString(),
             probe_mode: (d.probe_mode || 'click').toString(),
+            yes_key: (d.yes_key || 'y').toString(),
+            no_key: (d.no_key || 'n').toString(),
+            recognition_probe_count: Number.isFinite(Number(d.recognition_probe_count)) ? Math.max(1, Number(d.recognition_probe_count)) : 1,
             cue_duration_ms: Number.isFinite(Number(d.cue_duration_ms)) ? Number(d.cue_duration_ms) : 2000,
             tracking_duration_ms: Number.isFinite(Number(d.tracking_duration_ms)) ? Number(d.tracking_duration_ms) : 8000,
             iti_ms: Number.isFinite(Number(d.iti_ms)) ? Number(d.iti_ms) : 1000,
@@ -8349,6 +8389,9 @@ class JsonBuilder {
             speed_px_per_s: Number.parseFloat(document.getElementById('motSpeedDefault')?.value || '150'),
             motion_type: (document.getElementById('motMotionTypeDefault')?.value || 'linear').toString(),
             probe_mode: (document.getElementById('motProbeModeDefault')?.value || 'click').toString(),
+            yes_key: (document.getElementById('motYesKeyDefault')?.value || 'y').toString().trim() || 'y',
+            no_key: (document.getElementById('motNoKeyDefault')?.value || 'n').toString().trim() || 'n',
+            recognition_probe_count: Number.parseInt(document.getElementById('motRecognitionProbeCountDefault')?.value || '1', 10),
             cue_duration_ms: Number.parseInt(document.getElementById('motCueDurationMsDefault')?.value || '2000', 10),
             tracking_duration_ms: Number.parseInt(document.getElementById('motTrackingDurationMsDefault')?.value || '8000', 10),
             iti_ms: Number.parseInt(document.getElementById('motItiMsDefault')?.value || '1000', 10),
@@ -8368,6 +8411,7 @@ class JsonBuilder {
         const iti = Number.isFinite(Number(d.iti_ms)) ? Number(d.iti_ms) : 1000;
         const nums = Number.isFinite(Number(d.num_objects)) ? Number(d.num_objects) : 8;
         const tgts = Number.isFinite(Number(d.num_targets)) ? Number(d.num_targets) : 4;
+        const recognitionProbeCount = Number.isFinite(Number(d.recognition_probe_count)) ? Math.max(1, Number(d.recognition_probe_count)) : 1;
         const borderWidth = Number.isFinite(Number(d.aperture_border_width_px)) ? Number(d.aperture_border_width_px) : 2;
 
         return {
@@ -8376,6 +8420,9 @@ class JsonBuilder {
             mot_num_targets_options: String(tgts),
             mot_motion_type: (d.motion_type || 'linear').toString(),
             mot_probe_mode: (d.probe_mode || 'click').toString(),
+            mot_yes_key: (d.yes_key || 'y').toString(),
+            mot_no_key: (d.no_key || 'n').toString(),
+            mot_recognition_probe_count: recognitionProbeCount,
             mot_aperture_shape: (d.aperture_shape || 'rectangle').toString(),
             mot_aperture_border_enabled: d.aperture_border_enabled !== false,
             mot_aperture_border_color: (d.aperture_border_color || '#444444').toString(),
@@ -10376,6 +10423,14 @@ class JsonBuilder {
             if (mtype) values.motion_type = mtype;
             const pm = (blockComponent.mot_probe_mode ?? '').toString().trim();
             if (pm) values.probe_mode = pm;
+            const yesKey = (blockComponent.mot_yes_key ?? '').toString().trim();
+            if (yesKey) values.yes_key = yesKey;
+            const noKey = (blockComponent.mot_no_key ?? '').toString().trim();
+            if (noKey) values.no_key = noKey;
+            if (blockComponent.mot_recognition_probe_count !== undefined && blockComponent.mot_recognition_probe_count !== null && blockComponent.mot_recognition_probe_count !== '') {
+                const rpc = Number.parseInt(blockComponent.mot_recognition_probe_count, 10);
+                if (Number.isFinite(rpc)) values.recognition_probe_count = Math.max(1, rpc);
+            }
             const apertureShape = (blockComponent.mot_aperture_shape ?? '').toString().trim();
             if (apertureShape) values.aperture_shape = apertureShape;
             if (blockComponent.mot_aperture_border_enabled !== undefined) {

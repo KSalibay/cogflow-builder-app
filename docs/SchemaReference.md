@@ -73,7 +73,9 @@ The MOT component schema (`mot-trial`) defines the following block-level paramet
 | `mot_num_objects_options` | options list | Candidate values for total object count |
 | `mot_num_targets_options` | options list | Candidate values for number of targets to track |
 | `mot_motion_type` | select | `linear` or `curved` |
-| `mot_probe_mode` | select | `click` or `number_entry` |
+| `mot_probe_mode` | select | `click`, `number_entry`, or `yes_no_recognition` |
+| `mot_yes_key` / `mot_no_key` | string | Recognition-mode keyboard mappings |
+| `mot_recognition_probe_count` | int | Number of yes/no probes asked per trial before advancing |
 | `mot_show_feedback` | boolean | Whether to show post-probe feedback rings |
 | `mot_speed_px_per_s_min` / `_max` | range | Speed window in pixels/second |
 | `mot_tracking_duration_ms_min` / `_max` | range | Tracking phase duration window |
@@ -112,6 +114,18 @@ Global defaults export: `config.mot_settings` (merged into each `mot-trial` at r
 - **`instructions`**:
   - Parameters:
     - `stimulus`: Instruction text to display.
+
+- **`survey-response` / `mw-probe` questions**:
+  - Optional conditional visibility per question:
+    - `visible_if.question_id`: id of a prior question
+    - `visible_if.equals`: value that must match for the question to be shown
+  - Runtime fallback also accepts legacy conditional keys:
+    - `show_if_question_id`
+    - `show_if_value`
+
+- **`soc-subtask-sart-like`**:
+  - `go_condition` values are `block` / `allow`.
+  - Runtime keeps backward compatibility for legacy `target` / `distractor` values.
 
 - **`html-keyboard-response`**:
   - Parameters:
