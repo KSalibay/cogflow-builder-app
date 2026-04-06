@@ -2,7 +2,7 @@
 
 Generated from `src/schemas/JSPsychSchemas.js`.
 
-Generated at: 2026-04-01T21:39:11Z
+Generated at: 2026-04-06T21:27:48Z
 
 ---
 
@@ -154,15 +154,17 @@ Generate many trials from parameter windows/ranges (compact representation for l
 | mot_iti_ms_max | INT | 1500 | MOT: maximum ITI (ms) for block sampling | blockTarget: mot-trial |
 | mot_iti_ms_min | INT | 800 | MOT: minimum ITI (ms) for block sampling | blockTarget: mot-trial |
 | mot_motion_type | SELECT | linear | MOT: fixed motion type for all trials in this block | options: linear, curved \| blockTarget: mot-trial |
+| mot_no_key | STRING | n | MOT: no key in yes/no recognition probe mode | blockTarget: mot-trial |
 | mot_num_objects_options | STRING | 6,8,10 | MOT: comma-separated integers for num_objects sampling | blockTarget: mot-trial |
 | mot_num_targets_options | STRING | 2,3,4 | MOT: comma-separated integers for num_targets sampling | blockTarget: mot-trial |
 | mot_probe_mode | SELECT | click | MOT: fixed probe mode for all trials in this block | options: click, number_entry, yes_no_recognition \| blockTarget: mot-trial |
-| mot_recognition_probe_count | INT | 1 | MOT: number of yes/no recognition probes shown per trial before advancing | min: 1 \| max: 20 \| blockTarget: mot-trial |
+| mot_recognition_probe_count | INT | 1 | MOT: number of yes/no probes per trial in recognition mode | min: 1 \| max: 20 \| blockTarget: mot-trial |
 | mot_show_feedback | BOOL | False | MOT: whether to show feedback for all trials in this block | blockTarget: mot-trial |
 | mot_speed_px_per_s_max | FLOAT | 200 | MOT: maximum speed (px/s) for block sampling | blockTarget: mot-trial |
 | mot_speed_px_per_s_min | FLOAT | 100 | MOT: minimum speed (px/s) for block sampling | blockTarget: mot-trial |
 | mot_tracking_duration_ms_max | INT | 10000 | MOT: maximum tracking duration (ms) for block sampling | blockTarget: mot-trial |
 | mot_tracking_duration_ms_min | INT | 5000 | MOT: minimum tracking duration (ms) for block sampling | blockTarget: mot-trial |
+| mot_yes_key | STRING | y | MOT: yes key in yes/no recognition probe mode | blockTarget: mot-trial |
 | mouse_segments | INT | 2 | Mouse response: number of aperture segments (used when response_device = mouse) | blockTarget: rdm-* |
 | mouse_selection_mode | SELECT | click | Mouse response: how a segment selection is registered | options: click, hover \| blockTarget: rdm-* |
 | mouse_start_angle_deg | FLOAT | 0 | Mouse response: segment start angle offset in degrees (0=right; 90=down; 180=left; 270=up). Angles increase clockwise (screen/canvas coordinates). | blockTarget: rdm-* |
@@ -424,20 +426,20 @@ Multiple Object Tracking (MOT) trial — animate objects on canvas, cue targets 
 | iti_ms | INT | 1000 | Inter-trial interval (ms) shown as blank canvas after the response | min: 0 \| max: 10000 |
 | min_separation_px | INT | 50 | Minimum center-to-center distance when placing objects initially | min: 0 \| max: 200 |
 | motion_type | SELECT | linear | Trajectory type: linear (straight paths) or curved (smooth random turns) | options: linear, curved |
+| no_key | STRING | n | Recognition mode: keyboard key for NO response |  |
 | num_objects | INT | 8 | Total number of objects on screen | min: 2 \| max: 20 |
 | num_targets | INT | 4 | Number of target objects to track | min: 1 \| max: 10 |
 | object_color | COLOR | #FFFFFF | Fill color for all objects (outside cue phase) |  |
 | object_radius_px | INT | 22 | Radius of each object in pixels | min: 5 \| max: 80 |
-| probe_mode | SELECT | click | Probe interaction: click objects, type numbered labels, or answer yes/no recognition probes | options: click, number_entry, yes_no_recognition |
-| recognition_probe_count | INT | 1 | Number of yes/no recognition probes asked per trial before advancing | min: 1 \| max: 20 |
+| probe_mode | SELECT | click | Probe interaction: click selected targets, type numbered labels, or answer a yes/no recognition question for a probed object | options: click, number_entry, yes_no_recognition |
 | probe_timeout_ms | INT | 0 | Probe phase time limit in ms (0 = no time limit) | min: 0 \| max: 30000 |
-| yes_key | STRING | y | Recognition mode key for YES |  |
-| no_key | STRING | n | Recognition mode key for NO |  |
+| recognition_probe_count | INT | 1 | Recognition mode: number of yes/no probes to present before advancing to feedback/ITI | min: 1 \| max: 20 |
 | show_feedback | BOOL | False | Show correct/incorrect feedback after probe response |  |
 | speed_px_per_s | FLOAT | 150 | Object speed in pixels per second | min: 20 \| max: 600 |
 | speed_variability | FLOAT | 0 | Per-object speed jitter (0 = all same speed, 1 = ±100% of base speed) | min: 0 \| max: 1 |
 | target_cue_color | COLOR | #FF9900 | Alternate flash color used to cue targets during the cue phase |  |
 | tracking_duration_ms | INT | 8000 | Duration of the tracking phase (ms) where all objects move unlabeled | min: 1000 \| max: 30000 |
+| yes_key | STRING | y | Recognition mode: keyboard key for YES response |  |
 
 ---
 
@@ -757,26 +759,27 @@ SOC subtask window (SART-like). Composed into the nearest SOC Dashboard session 
 
 | Name | Type | Default | Description | Notes |
 |---|---|---|---|---|
-| distractor_highlight_color | COLOR | #3dd6ff | Distractor highlight color |  |
-| distractor_probability | FLOAT | 0.35 | Probability a new entry is a distractor (0–1). Remaining probability becomes neutral. | min: 0 \| max: 1 |
-| distractor_subdomains | HTML_STRING | cdn.news.example<br/>static.video.example<br/>api.store.example | Distractor domain/subdomain list (comma- or newline-separated) |  |
+| distractor_highlight_color | COLOR | #3dd6ff | Benign highlight color |  |
+| distractor_probability | FLOAT | 0.35 | Probability a new entry is benign (0–1). Remaining probability becomes neutral. | min: 0 \| max: 1 |
+| distractor_subdomains | HTML_STRING | cdn.news.example<br/>static.video.example<br/>api.store.example | Benign domain/subdomain list (comma- or newline-separated) |  |
 | duration_ms | INT | 0 | Scheduled duration (ms). If 0, scheduling is disabled unless end_at_ms is provided manually in JSON. | min: 0 \| max: 3600000 |
 | go_button | SELECT | action | Mouse-only: which button the participant clicks to respond (controls the in-window action UI) | options: action, change |
-| go_condition | SELECT | block | Response condition: "block" to respond to distractors, "allow" to respond to targets | options: block, allow |
+| go_condition | SELECT | block | Response condition: "block" to respond to harmful entries, "allow" to respond to benign entries | options: block, allow |
 | go_key | STRING | space | Keyboard go key (ignored if response_device = mouse) |  |
-| highlight_subdomains | BOOL | True | Highlight target/distractor entries in the feed |  |
-| instructions | HTML_STRING | <p>Log entries will stream past. Your job is to triage each one:</p><br/><p>Press <b>{{GO_CONTROL}}</b> when the current entry matches the class configured for a response in this subtask.</p><br/><p><b>Withhold</b> your response for the other class.</p><br/><p><b>Harmful:</b> {{TARGETS}}</p><br/><p><b>Benign:</b> {{DISTRACTORS}}</p><br/><p><i>Click this popup to begin.</i></p> | Optional instructions shown in a popup before this subtask begins (closing the popup marks the subtask start time) |  |
+| highlight_subdomains | BOOL | True | Highlight harmful/benign entries in the feed |  |
+| include_neutral_entries | BOOL | True | If false, feed contains only target and distractor entries (no neutral rows). |  |
+| instructions | HTML_STRING | <p>Log entries will stream past. Your job is to triage each one:</p><br/><p>Press <b>{{GO_CONTROL}}</b> when the current entry matches the class configured for a response in this subtask.</p><br/><p><b>Withhold</b> your response for the other class.</p><br/><p><b>Harmful:</b> {{HARMFUL}}</p><br/><p><b>Benign:</b> {{BENIGN}}</p><br/><p><i>Click this popup to begin.</i></p> | Optional instructions shown in a popup before this subtask begins (closing the popup marks the subtask start time) |  |
 | instructions_title | STRING | Filtering harmful logins | Popup title for the subtask instructions overlay |  |
 | max_run_ms | INT | 60000 | Maximum subtask runtime in ms (0 = no maximum). If max < min, values are swapped at runtime. | min: 0 \| max: 3600000 |
 | min_run_ms | INT | 30000 | Minimum subtask runtime in ms (0 = no minimum) | min: 0 \| max: 3600000 |
 | neutral_subdomains | HTML_STRING |  | Optional neutral domain/subdomain list (comma- or newline-separated). If blank, neutrals are auto-generated. |  |
 | response_device | SELECT | keyboard | Primary response device for this subtask | options: keyboard, mouse |
 | scroll_interval_ms | INT | 900 | Milliseconds between new log entries (auto-scroll rate) | min: 100 \| max: 10000 |
-| show_markers | BOOL | False | Show TARGET/DISTRACTOR markers inside the task UI (off by default) |  |
+| show_markers | BOOL | False | Show HARMFUL/BENIGN markers inside the task UI (off by default) |  |
 | start_at_ms | INT | 0 | Scheduled start time (ms) from SOC session start. If used with duration_ms, the window appears/disappears automatically. | min: 0 \| max: 3600000 |
-| target_highlight_color | COLOR | #ff4d4d | Target highlight color |  |
-| target_probability | FLOAT | 0.15 | Probability a new entry is a target (0–1) | min: 0 \| max: 1 |
-| target_subdomains | HTML_STRING | login.bank.example<br/>vpn.bank.example<br/>admin.bank.example | Target domain/subdomain list (comma- or newline-separated) |  |
+| target_highlight_color | COLOR | #ff4d4d | Harmful highlight color |  |
+| target_probability | FLOAT | 0.15 | Probability a new entry is harmful (0–1) | min: 0 \| max: 1 |
+| target_subdomains | HTML_STRING | login.bank.example<br/>vpn.bank.example<br/>admin.bank.example | Harmful domain/subdomain list (comma- or newline-separated) |  |
 | title | STRING | Login monitor | Subtask window title |  |
 | visible_entries | INT | 8 | Number of log entries visible at once (older entries scroll out of view) | min: 3 \| max: 25 |
 
@@ -871,7 +874,7 @@ Collect survey/questionnaire responses in a single HTML form
 |---|---|---|---|---|
 | allow_empty_on_timeout | BOOL | False | If true, allow continuing with empty responses after timeout_ms |  |
 | instructions | HTML_STRING |  | Optional instructions shown above the form |  |
-| questions | COMPLEX |  | Array of question objects (id, type, prompt, required, optional visible_if, and type-specific fields) | required |
+| questions | COMPLEX |  | Array of question objects (id, type, prompt, required, and type-specific fields) | required |
 | submit_label | STRING | Continue | Submit button text |  |
 | timeout_ms | INT | null | Optional timeout in ms for auto-continue (null/omitted = off) |  |
 | title | STRING | Survey | Survey title/header |  |
