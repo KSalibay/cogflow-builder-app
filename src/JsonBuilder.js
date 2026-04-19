@@ -968,6 +968,13 @@ class JsonBuilder {
             this.loadTemplate();
         });
 
+        const newStudyBtn = document.getElementById('newStudyBtn');
+        if (newStudyBtn) {
+            newStudyBtn.addEventListener('click', async () => {
+                await this.startNewStudy();
+            });
+        }
+
         document.getElementById('saveTemplateBtn').addEventListener('click', () => {
             this.saveTemplate();
         });
@@ -4037,10 +4044,11 @@ class JsonBuilder {
                     <label class="parameter-label">Randomize Order:</label>
                     <div class="parameter-input">
                         <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" id="randomizeOrder" checked>
-                            <label class="form-check-label" for="randomizeOrder">Enable randomization</label>
+                            <input class="form-check-input" type="checkbox" id="randomizeOrder">
+                            <label class="form-check-label" for="randomizeOrder">Enable global randomization</label>
                         </div>
                     </div>
+                    <div class="parameter-help">Shuffles top-level timeline components (non-randomization-marker mode).</div>
                 </div>
                 <div class="parameter-row">
                     <label class="parameter-label">Rewards Enabled:</label>
@@ -5580,11 +5588,15 @@ class JsonBuilder {
                 gabor_spatial_cue_options: { type: 'string', default: 'none,left,right,both' },
                 gabor_spatial_cue_probability: { type: 'number', default: 1, min: 0, max: 1, step: 0.01 },
                 gabor_spatial_cue_validity_probability: { type: 'number', default: 1, min: 0, max: 1, step: 0.01 },
+                gabor_target_left_probability: { type: 'number', default: null, min: 0, max: 1, step: 0.01 },
+                gabor_spatial_cue_target_mode: { type: 'select', default: 'couple_target_to_cue', options: ['couple_target_to_cue', 'preserve_target_distribution'] },
                 gabor_value_cue_enabled: { type: 'boolean', default: true },
                 gabor_left_value_options: { type: 'string', default: 'neutral,high,low' },
                 gabor_right_value_options: { type: 'string', default: 'neutral,high,low' },
                 gabor_value_cue_probability: { type: 'number', default: 1, min: 0, max: 1, step: 0.01 },
                 gabor_value_target_value: { type: 'select', default: 'any', options: ['any', 'high', 'low', 'neutral'] },
+                gabor_value_non_target_value: { type: 'select', default: 'any', options: ['any', 'high', 'low', 'neutral'] },
+                gabor_use_stored_thresholds: { type: 'boolean', default: false },
                 gabor_reward_availability_high: { type: 'number', default: 0.8, min: 0, max: 1, step: 0.01 },
                 gabor_reward_availability_low: { type: 'number', default: 0.8, min: 0, max: 1, step: 0.01 },
                 gabor_reward_availability_neutral: { type: 'number', default: 0, min: 0, max: 1, step: 0.01 },
@@ -7202,21 +7214,58 @@ class JsonBuilder {
     /**
      * Clear timeline
      */
-    clearTimeline() {
-        if (confirm('Are you sure you want to clear the entire timeline?')) {
-            try {
-                const assetCache = window.CogFlowAssetCache || window.PsychJsonAssetCache;
-                if (assetCache && typeof assetCache.clearAll === 'function') {
-                    assetCache.clearAll();
-                }
-            } catch {
-                // ignore
+    async startNewStudy() {
+        const timelineContainer = document.getElementById('timelineComponents');
+        const hasExistingTimeline = !!timelineContainer?.querySelector('.timeline-component');
+
+        if (hasExistingTimeline) {
+            const proceed = confirm(
+                'You are about to start a new study. This will clear the current timeline and create a new one with only an Instructions component.\n\nContinue?'
+            );
+            if (!proceed) return;
+
+            const publishFirst = confirm(
+                'Would you like to publish the current timeline before creating a new study?\n\nClick OK to publish now.\nClick Cancel to continue without publishing.'
+            );
+            if (publishFirst) {
+                await this.publishToPlatform();
+                const continueAfterPublish = confirm('Proceed with creating a new study now?');
+                if (!continueAfterPublish) return;
             }
-            this.timeline = [];
-            this.componentCounter = 0;
-            this.timelineBuilder.renderTimeline();
+        }
+
+        this.clearTimeline({ confirm: false });
+
+        const defs = this.getComponentDefinitions();
+        const instructionsDef = defs.find((d) => d.id === 'instructions');
+        if (instructionsDef) {
+            this.addComponentToTimeline(instructionsDef);
+        } else {
             this.updateJSON();
         }
+
+        this.showValidationResult('success', 'Started a new study with a fresh timeline (Instructions component added).');
+    }
+
+    clearTimeline(options = {}) {
+        const shouldConfirm = options?.confirm !== false;
+        if (shouldConfirm && !confirm('Are you sure you want to clear the entire timeline?')) {
+            return false;
+        }
+
+        try {
+            const assetCache = window.CogFlowAssetCache || window.PsychJsonAssetCache;
+            if (assetCache && typeof assetCache.clearAll === 'function') {
+                assetCache.clearAll();
+            }
+        } catch {
+            // ignore
+        }
+        this.timeline = [];
+        this.componentCounter = 0;
+        this.timelineBuilder.renderTimeline();
+        this.updateJSON();
+        return true;
     }
 
     /**
@@ -9135,11 +9184,14 @@ class JsonBuilder {
             gabor_spatial_cue_enabled: !!document.getElementById('gaborSpatialCueEnabled')?.checked,
             gabor_spatial_cue_options: (document.getElementById('gaborSpatialCueOptions')?.value || 'none,left,right,both').toString(),
             gabor_spatial_cue_probability: Number.parseFloat(document.getElementById('gaborSpatialCueProbability')?.value || '1'),
+            gabor_spatial_cue_target_mode: 'couple_target_to_cue',
+            gabor_target_left_probability: null,
 
             gabor_value_cue_enabled: !!document.getElementById('gaborValueCueEnabled')?.checked,
             gabor_left_value_options: (document.getElementById('gaborLeftValueOptions')?.value || 'neutral,high,low').toString(),
             gabor_right_value_options: (document.getElementById('gaborRightValueOptions')?.value || 'neutral,high,low').toString(),
             gabor_value_cue_probability: Number.parseFloat(document.getElementById('gaborValueCueProbability')?.value || '1'),
+            gabor_value_non_target_value: 'any',
 
             gabor_adaptive_mode: 'none',
             gabor_quest_parameter: 'target_tilt_deg',
@@ -9151,6 +9203,7 @@ class JsonBuilder {
             gabor_quest_gamma: 0.5,
             gabor_quest_min_value: -90,
             gabor_quest_max_value: 90,
+            gabor_use_stored_thresholds: false,
             gabor_stimulus_duration_min: Number.isFinite(stim) ? stim : 67,
             gabor_stimulus_duration_max: Number.isFinite(stim) ? stim : 67,
             gabor_mask_duration_min: Number.isFinite(mask) ? mask : 67,
@@ -10074,6 +10127,14 @@ class JsonBuilder {
             if (Number.isFinite(pSpatialValidity)) {
                 values.spatial_cue_validity_probability = Math.max(0, Math.min(1, pSpatialValidity));
             }
+            const pTargetLeft = Number(blockComponent.gabor_target_left_probability);
+            if (Number.isFinite(pTargetLeft)) {
+                values.target_left_probability = Math.max(0, Math.min(1, pTargetLeft));
+            }
+            const spatialCueTargetMode = (blockComponent.gabor_spatial_cue_target_mode ?? '').toString().trim().toLowerCase();
+            if (spatialCueTargetMode === 'couple_target_to_cue' || spatialCueTargetMode === 'preserve_target_distribution') {
+                values.spatial_cue_target_mode = spatialCueTargetMode;
+            }
 
             const lv = parseStringList(blockComponent.gabor_left_value_options);
             if (lv.length > 0) {
@@ -10096,6 +10157,13 @@ class JsonBuilder {
             const valueTarget = (blockComponent.gabor_value_target_value ?? '').toString().trim().toLowerCase();
             if (valueTarget === 'high' || valueTarget === 'low' || valueTarget === 'neutral' || valueTarget === 'any') {
                 values.value_target_value = valueTarget;
+            }
+            const valueNonTarget = (blockComponent.gabor_value_non_target_value ?? '').toString().trim().toLowerCase();
+            if (valueNonTarget === 'high' || valueNonTarget === 'low' || valueNonTarget === 'neutral' || valueNonTarget === 'any') {
+                values.value_non_target_value = valueNonTarget;
+            }
+            if (blockComponent.gabor_use_stored_thresholds !== undefined) {
+                values.use_stored_thresholds = !!blockComponent.gabor_use_stored_thresholds;
             }
 
             const pRewardHigh = Number(blockComponent.gabor_reward_availability_high);

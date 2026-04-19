@@ -3,7 +3,6 @@
 Generated from `src/schemas/JSPsychSchemas.js`.
 
 Generated at: 2026-04-19T21:03:04Z
-
 ---
 
 ## block
