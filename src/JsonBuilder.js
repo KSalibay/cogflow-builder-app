@@ -6720,6 +6720,9 @@ class JsonBuilder {
                         dot_color: { type: 'COLOR', default: '#FFFFFF' },
                         aperture_diameter: { type: 'number', default: 350, min: 50, max: 800 },
                         stimulus_duration: { type: 'number', default: 1500, min: 100, max: 10000 },
+                        response_deadline: { type: 'number', default: 1500, min: 100, max: 10000 },
+                        feedback_mode: { type: 'select', default: 'inherit', options: ['inherit', 'off', 'arrow', 'corner-text', 'custom'] },
+                        feedback_duration_ms: { type: 'number', default: 1000, min: 0, max: 5000 },
                         trial_duration: { type: 'number', default: 3000, min: 500, max: 30000 },
                         transition_duration: { type: 'number', default: 500, min: 0, max: 2000 }
                     }
@@ -6733,10 +6736,15 @@ class JsonBuilder {
                     parameters: {
                         coherence: { type: 'number', default: 0.8, min: 0, max: 1, step: 0.01 },
                         direction: { type: 'number', default: 0, min: 0, max: 360 },
+                        speed: { type: 'number', default: 6, min: 1, max: 20 },
+                        total_dots: { type: 'number', default: 150, min: 10, max: 1000 },
+                        dot_size: { type: 'number', default: 4, min: 1, max: 20 },
                         dot_color: { type: 'COLOR', default: '#FFFFFF' },
-                        feedback_duration: { type: 'number', default: 1000, min: 500, max: 3000 },
-                        show_feedback: { type: 'boolean', default: true },
-                        practice_instructions: { type: 'string', default: 'Practice trial - feedback provided' },
+                        aperture_diameter: { type: 'number', default: 350, min: 50, max: 800 },
+                        stimulus_duration: { type: 'number', default: 1500, min: 100, max: 10000 },
+                        response_deadline: { type: 'number', default: 1500, min: 100, max: 10000 },
+                        feedback_mode: { type: 'select', default: 'arrow', options: ['inherit', 'off', 'arrow', 'corner-text', 'custom'] },
+                        feedback_duration_ms: { type: 'number', default: 1000, min: 0, max: 5000 },
                         trial_duration: { type: 'number', default: 3000, min: 500, max: 30000 },
                         transition_duration: { type: 'number', default: 500, min: 0, max: 2000 }
                     }
