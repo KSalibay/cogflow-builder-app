@@ -13,9 +13,55 @@
     <script>
         // Apply Accessibility Mode + Theme early to avoid flash of wrong styling
         (function () {
+            const normalizeA11yMode = (raw) => {
+                const mode = (raw || '').toString().trim().toLowerCase();
+                if (mode === 'contrast' || mode === 'large' || mode === 'contrast-large') return mode;
+                return 'standard';
+            };
+
+            const getUserScope = () => {
+                try {
+                    const params = new URLSearchParams(window.location.search || '');
+                    const fromQuery = (params.get('builder_user') || '').trim();
+                    if (fromQuery) {
+                        localStorage.setItem('cogflow_builder_user', fromQuery);
+                        return fromQuery;
+                    }
+                } catch (e) {
+                    // ignore
+                }
+                try {
+                    return (localStorage.getItem('cogflow_builder_user') || 'default').trim() || 'default';
+                } catch (e) {
+                    return 'default';
+                }
+            };
+
+            const applyA11yMode = (modeRaw) => {
+                const mode = normalizeA11yMode(modeRaw);
+                const html = document.documentElement;
+                html.classList.remove('cf-a11y', 'cf-a11y-contrast', 'cf-a11y-large');
+                if (mode === 'contrast') html.classList.add('cf-a11y-contrast');
+                if (mode === 'large') html.classList.add('cf-a11y-large');
+                if (mode === 'contrast-large') html.classList.add('cf-a11y-contrast', 'cf-a11y-large');
+            };
+
             try {
-                const enabled = localStorage.getItem('cogflow_builder_a11y') === '1';
-                if (enabled) document.documentElement.classList.add('cf-a11y');
+                const params = new URLSearchParams(window.location.search || '');
+                const fromQuery = normalizeA11yMode((params.get('a11y_mode') || '').trim());
+                if (fromQuery !== 'standard') {
+                    applyA11yMode(fromQuery);
+                }
+
+                const scope = getUserScope();
+                const modeKey = `cogflow_builder_a11y_mode::${scope}`;
+                const mode = normalizeA11yMode(localStorage.getItem(modeKey));
+                if (fromQuery === 'standard' && mode !== 'standard') {
+                    applyA11yMode(mode);
+                } else {
+                    const legacyEnabled = fromQuery === 'standard' && localStorage.getItem('cogflow_builder_a11y') === '1';
+                    if (legacyEnabled) applyA11yMode('contrast');
+                }
             } catch (e) {
                 // Ignore storage errors (privacy mode, etc.)
             }
@@ -41,7 +87,7 @@
     <link href="vendor/quill.snow.css" rel="stylesheet">
 
     <!-- App theme + Bootstrap overrides (must load AFTER Bootstrap) -->
-    <link rel="stylesheet" href="css/style.css?v=20260324-1">
+    <link rel="stylesheet" href="css/style.css?v=20260415-2">
 
     <!-- Prevent aggressive caching when opened via file:// or a simple static server -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
@@ -59,9 +105,12 @@
             <span class="navbar-brand mb-0 h1">
                 <img src="img/logo_builder_light.png" alt="CogFlow Builder" class="cf-brand-logo">
             </span>
-            <div class="d-flex">
+            <div class="d-flex cf-navbar-actions">
                 <button class="btn btn-outline-light me-2" id="newStudyBtn" title="Start a new study with a fresh timeline">
                     <i class="fas fa-file-circle-plus"></i> New Study
+                </button>
+                <button class="btn btn-outline-light me-2" id="loadStudyBtn" title="Load latest published study config from CogFlow Platform">
+                    <i class="fas fa-database"></i> Load Study
                 </button>
                 <button class="btn btn-outline-light me-2" id="loadTemplateBtn">
                     <i class="fas fa-folder-open"></i> Load Template
@@ -78,14 +127,8 @@
                 <button class="btn btn-outline-light me-2" id="importLocalJsonBtn">
                     <i class="fas fa-file-arrow-up"></i> Import JSON(s)
                 </button>
-                <button class="btn btn-outline-light me-2" id="prepJatosPropsBtn">
-                    <i class="fas fa-clipboard"></i> JATOS Props
-                </button>
                 <button class="btn btn-warning me-2" id="platformPublishBtn" style="display:none" title="Publish config to CogFlow Platform">
                     <i class="fas fa-server"></i> Publish
-                </button>
-                <button class="btn btn-success" id="exportJsonBtn">
-                    <i class="fas fa-cloud-arrow-up"></i> Export
                 </button>
 
                 <!-- Hidden input: local JSON import for Token Store uploads -->
@@ -284,7 +327,7 @@
                 <div class="modal-content">
                     <div class="modal-header">
                         <h5 class="modal-title" id="publishMetadataTitle">
-                            <i class="fas fa-upload"></i> Publish Study Metadata
+                            <i class="fas fa-upload"></i> Publish Study and Task Target
                         </h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
@@ -303,13 +346,46 @@
                         </div>
 
                         <div class="mb-1">
-                            <label for="publishConfigVersion" class="form-label">Config Version</label>
-                            <input type="text" class="form-control" id="publishConfigVersion" placeholder="e.g. v2026-03-24" />
+                            <label for="publishConfigVersion" class="form-label">Task Name (Saved Config Label)</label>
+                            <input type="text" class="form-control" id="publishConfigVersion" placeholder="e.g. Block 1 - RDM High Coherence" />
+                            <div class="form-text">Use the same Study Name/Slug to keep variants under one study, and change this field to save a separate task/config entry.</div>
                         </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                         <button type="button" class="btn btn-primary" id="publishMetaConfirmBtn">Continue Publish</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Load Published Study Modal -->
+        <div class="modal fade" id="loadStudyModal" tabindex="-1" aria-labelledby="loadStudyModalTitle" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="loadStudyModalTitle">
+                            <i class="fas fa-database"></i> Load Published Study
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="loadStudyError" class="alert alert-danger py-2 d-none" role="alert"></div>
+                        <p class="text-muted mb-3">Select a study, then optionally choose a subtask/config to load.</p>
+                        <div id="loadStudyLoading" class="text-muted mb-2 d-none">Loading studies...</div>
+                        <div id="loadStudyEmpty" class="text-muted mb-2 d-none">No published studies available for your account.</div>
+                        <div id="loadStudyList" class="list-group" style="max-height: 360px; overflow: auto;"></div>
+                        <div class="mt-3">
+                            <label for="loadStudyTaskSelect" class="form-label">Subtask</label>
+                            <select id="loadStudyTaskSelect" class="form-select" disabled>
+                                <option value="">Latest / default</option>
+                            </select>
+                            <div class="form-text">For multi-task studies under one slug, choose which subtask timeline to load.</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" id="loadStudyConfirmBtn" disabled>Load Selected Study</button>
                     </div>
                 </div>
             </div>
@@ -405,10 +481,7 @@
     <footer class="cf-footer">
         <div class="container-fluid cf-footer-inner">
             <div class="cf-footer-a11y">
-                <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" role="switch" id="accessibilityModeToggle">
-                    <label class="form-check-label" for="accessibilityModeToggle">Accessibility Mode</label>
-                </div>
+                <span style="font-size:.75rem;opacity:.9;">Accessibility is managed from the Portal top bar.</span>
             </div>
             <div class="cf-footer-spacer"></div>
             <div class="cf-footer-text">
@@ -426,31 +499,21 @@
     <!-- Quill WYSIWYG editor (used by instructions/html-keyboard-response editor) -->
     <script src="vendor/quill.min.js"></script>
 
-    <!-- Microsoft Graph export (MSAL + helper). Requires serving via http(s), not file:// -->
-    <script src="vendor/msal-browser.min.js"></script>
-    <script src="src/graphConfig.js?v=20260123-1"></script>
-    <script src="src/GraphSharePointClient.js?v=20260123-1"></script>
-
-    <!-- Demo default: Token Store (Cloudflare Worker) base URL -->
+    <!-- Platform runtime marker (Django-backed publish + internal asset storage) -->
     <script>
-        // For distribution: change this value (or remove to re-enable prompt).
-        window.COGFLOW_TOKEN_STORE_BASE_URL = 'https://cool-star-379d.kami-salibayeva.workers.dev';
-
-        // Initial deployment mode: disables SharePoint/Graph prompts and uses Token Store by default.
-        // Remove this line (or set to false) to re-enable Graph/SharePoint export setup prompts.
-        window.COGFLOW_INITIAL_DEPLOYMENT = true;
+        window.COGFLOW_RUNTIME_MODE = 'django';
     </script>
 
     <!-- Cache-bust local scripts -->
-    <script src="src/JsonBuilder.js?v=20260407-2"></script>
+    <script src="src/JsonBuilder.js?v=20260415-1"></script>
     <script src="src/modules/DataCollectionModules.js?v=20260114-1"></script>
     <script src="src/modules/TrialManager.js?v=20260113-10"></script>
-    <script src="src/modules/TimelineBuilder.js?v=20260407-1"></script>
-    <script src="src/modules/SocDashboardPreview.js?v=20260406-3"></script>
-    <script src="src/modules/ComponentPreview.js?v=20260407-4"></script>
+    <script src="src/modules/TimelineBuilder.js?v=20260309-1"></script>
+    <script src="src/modules/SocDashboardPreview.js?v=20260218-1"></script>
+    <script src="src/modules/ComponentPreview.js?v=20260305-4"></script>
     <script src="src/schemas/RDMTaskSchema.js?v=20260113-10"></script>
-    <script src="src/schemas/JSPsychSchemas.js?v=20260407-3"></script>
-    <script src="src/schemas/UnifiedSchema.js?v=20260407-2"></script>
+    <script src="src/schemas/JSPsychSchemas.js?v=20260305-1"></script>
+    <script src="src/schemas/UnifiedSchema.js?v=20260113-10"></script>
 
     <script>
         function setBuilderTheme(theme) {
@@ -513,6 +576,22 @@
                 if (!e || e.origin !== window.location.origin) return;
                 if (e.data && e.data.type === 'cogflow:set-theme') {
                     setBuilderTheme(e.data.theme);
+                }
+                if (e.data && e.data.type === 'cogflow:set-a11y' && window.jsonBuilderInstance && typeof window.jsonBuilderInstance.setAccessibilityMode === 'function') {
+                    window.jsonBuilderInstance.setAccessibilityMode(e.data.mode || 'standard');
+                }
+                if (e.data && e.data.type === 'cogflow:load-study' && window.jsonBuilderInstance && typeof window.jsonBuilderInstance.loadStudyIntoBuilder === 'function') {
+                    const slug = (e.data.studySlug || '').toString().trim();
+                    const configVersionId = (e.data.configVersionId || '').toString().trim();
+                    if (!slug) return;
+                    window.jsonBuilderInstance
+                        .loadStudyIntoBuilder(slug, { configVersionId: configVersionId || null })
+                        .catch((err) => {
+                            const msg = err && err.message ? err.message : String(err || 'Unknown error');
+                            if (typeof window.jsonBuilderInstance.showValidationResult === 'function') {
+                                window.jsonBuilderInstance.showValidationResult('error', `Failed to load duplicated study: ${msg}`);
+                            }
+                        });
                 }
             });
 
@@ -1585,6 +1664,15 @@
                 showInstructionsEditor(component, componentData);
             } else {
                 // Use TimelineBuilder system for other components
+                if (window.jsonBuilderInstance && !window.jsonBuilderInstance.timelineBuilder && typeof window.TimelineBuilder === 'function') {
+                    try {
+                        window.jsonBuilderInstance.timelineBuilder = new window.TimelineBuilder(window.jsonBuilderInstance);
+                        console.info('TimelineBuilder recovered lazily for edit flow');
+                    } catch (e) {
+                        console.error('TimelineBuilder lazy init failed:', e);
+                    }
+                }
+
                 if (window.jsonBuilderInstance && window.jsonBuilderInstance.timelineBuilder) {
                     window.jsonBuilderInstance.setEditingComponent(component);
                     

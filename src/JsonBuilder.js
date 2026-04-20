@@ -35,6 +35,7 @@ class JsonBuilder {
         this.onDataCollectionChange = this.onDataCollectionChange.bind(this);
         this.onTaskTypeChange = this.onTaskTypeChange.bind(this);
     }
+
     /**
      * Show/hide UI sections based on current settings
      */
@@ -42,6 +43,7 @@ class JsonBuilder {
         const defaultDevice = document.getElementById('defaultResponseDevice')?.value || 'keyboard';
 
         const feedbackType = document.getElementById('defaultFeedbackType')?.value || 'off';
+        const feedbackArrowColorMode = document.getElementById('defaultFeedbackArrowColorMode')?.value || 'auto';
 
         const mouseSettings = document.getElementById('mouseResponseSettings');
         if (mouseSettings) {
@@ -71,6 +73,51 @@ class JsonBuilder {
             const show = feedbackType !== 'off';
             feedbackDurationRow.style.display = show ? '' : 'none';
             feedbackDurationInput.disabled = !show;
+        }
+
+        const feedbackArrowStyleSettings = document.getElementById('feedbackArrowStyleSettings');
+        if (feedbackArrowStyleSettings) {
+            const showArrowSettings = (feedbackType === 'arrow');
+            feedbackArrowStyleSettings.style.display = showArrowSettings ? '' : 'none';
+            feedbackArrowStyleSettings.querySelectorAll('input, select, textarea').forEach((el) => {
+                el.disabled = !showArrowSettings;
+            });
+        }
+
+        const feedbackArrowNeutralColorRow = document.getElementById('feedbackArrowNeutralColorRow');
+        if (feedbackArrowNeutralColorRow) {
+            const showNeutral = (feedbackType === 'arrow' && feedbackArrowColorMode === 'neutral');
+            feedbackArrowNeutralColorRow.style.display = showNeutral ? '' : 'none';
+            feedbackArrowNeutralColorRow.querySelectorAll('input, select, textarea').forEach((el) => {
+                el.disabled = !showNeutral;
+            });
+        }
+
+        const feedbackArrowCustomColorRow = document.getElementById('feedbackArrowCustomColorRow');
+        if (feedbackArrowCustomColorRow) {
+            const showCustom = (feedbackType === 'arrow' && feedbackArrowColorMode === 'custom');
+            feedbackArrowCustomColorRow.style.display = showCustom ? '' : 'none';
+            feedbackArrowCustomColorRow.querySelectorAll('input, select, textarea').forEach((el) => {
+                el.disabled = !showCustom;
+            });
+        }
+
+        const feedbackArrowAutoColorsRow = document.getElementById('feedbackArrowAutoColorsRow');
+        if (feedbackArrowAutoColorsRow) {
+            const showAutoColors = (feedbackType === 'arrow' && feedbackArrowColorMode === 'auto');
+            feedbackArrowAutoColorsRow.style.display = showAutoColors ? '' : 'none';
+            feedbackArrowAutoColorsRow.querySelectorAll('input, select, textarea').forEach((el) => {
+                el.disabled = !showAutoColors;
+            });
+        }
+
+        const mouseAccuracySettings = document.getElementById('mouseAccuracySettings');
+        if (mouseAccuracySettings) {
+            const showMouseAccuracy = (defaultDevice === 'mouse');
+            mouseAccuracySettings.style.display = showMouseAccuracy ? '' : 'none';
+            mouseAccuracySettings.querySelectorAll('input, select, textarea').forEach((el) => {
+                el.disabled = !showMouseAccuracy;
+            });
         }
 
         // N-back defaults: only show template HTML when render_mode=custom_html
@@ -799,11 +846,32 @@ class JsonBuilder {
         console.log('CogFlow Builder initialized successfully');
     }
 
-    setAccessibilityMode(enabled) {
-        const on = !!enabled;
-        document.documentElement.classList.toggle('cf-a11y', on);
+    setAccessibilityMode(modeOrEnabled) {
+        const normalizeMode = (raw) => {
+            if (raw === true) return 'contrast';
+            if (raw === false || raw == null) return 'standard';
+            const mode = String(raw).trim().toLowerCase();
+            if (mode === 'contrast' || mode === 'large' || mode === 'contrast-large' || mode === 'standard') {
+                return mode;
+            }
+            return 'standard';
+        };
+
+        const mode = normalizeMode(modeOrEnabled);
+        const html = document.documentElement;
+
+        html.classList.remove('cf-a11y', 'cf-a11y-contrast', 'cf-a11y-large');
+
+        if (mode === 'contrast') {
+            html.classList.add('cf-a11y', 'cf-a11y-contrast');
+        } else if (mode === 'large') {
+            html.classList.add('cf-a11y-large');
+        } else if (mode === 'contrast-large') {
+            html.classList.add('cf-a11y', 'cf-a11y-contrast', 'cf-a11y-large');
+        }
+
         try {
-            localStorage.setItem('cogflow_builder_a11y', on ? '1' : '0');
+            localStorage.setItem('cogflow_builder_a11y', (mode === 'standard') ? '0' : '1');
         } catch (e) {
             // Ignore storage errors
         }
@@ -814,13 +882,30 @@ class JsonBuilder {
     initializeModules() {
         try {
             this.dataModules = new DataCollectionModules();
-            this.trialManager = new TrialManager(this);
-            this.timelineBuilder = new TimelineBuilder(this);
-            this.schemaValidator = new JSPsychSchemas();
-            
-            console.log('All modules initialized successfully');
         } catch (error) {
-            console.error('Error initializing modules:', error);
+            console.error('Error initializing DataCollectionModules:', error);
+        }
+
+        try {
+            this.trialManager = new TrialManager(this);
+        } catch (error) {
+            console.error('Error initializing TrialManager:', error);
+        }
+
+        try {
+            this.timelineBuilder = new TimelineBuilder(this);
+        } catch (error) {
+            console.error('Error initializing TimelineBuilder:', error);
+        }
+
+        try {
+            this.schemaValidator = new JSPsychSchemas();
+        } catch (error) {
+            console.error('Error initializing JSPsychSchemas:', error);
+        }
+
+        if (this.dataModules && this.trialManager && this.timelineBuilder && this.schemaValidator) {
+            console.log('All modules initialized successfully');
         }
     }
 
@@ -832,7 +917,10 @@ class JsonBuilder {
         const a11yToggle = document.getElementById('accessibilityModeToggle');
         if (a11yToggle && a11yToggle.dataset.bound !== '1') {
             a11yToggle.dataset.bound = '1';
-            a11yToggle.checked = document.documentElement.classList.contains('cf-a11y');
+            a11yToggle.checked = (
+                document.documentElement.classList.contains('cf-a11y') ||
+                document.documentElement.classList.contains('cf-a11y-contrast')
+            );
 
             a11yToggle.addEventListener('change', () => {
                 this.setAccessibilityMode(!!a11yToggle.checked);
@@ -875,7 +963,7 @@ class JsonBuilder {
             });
         }
 
-        // Assets folder upload -> Token Store assets + filename-to-URL index
+        // Assets folder upload -> CogFlow Platform internal storage (Django)
         const assetsBtn = document.getElementById('uploadAssetsFolderBtn');
         const assetsInput = document.getElementById('assetsFolderInput');
         if (assetsBtn && assetsInput && assetsBtn.dataset.bound !== '1') {
@@ -898,9 +986,9 @@ class JsonBuilder {
                 const files = Array.from(assetsInput.files || []);
                 if (files.length === 0) return;
                 try {
-                    await this.uploadAssetDirectoryToTokenStore(files);
+                    await this.uploadAssetDirectoryToPlatform(files);
                 } catch (e) {
-                    console.error('uploadAssetDirectoryToTokenStore failed:', e);
+                    console.error('uploadAssetDirectoryToPlatform failed:', e);
                     this.showValidationResult('error', `Asset folder upload failed. (${e?.message || 'Unknown error'})`);
                 }
             });
@@ -933,15 +1021,24 @@ class JsonBuilder {
                     // Single-file imports can now rehydrate the Builder timeline directly.
                     if (files.length === 1) {
                         const shouldLoadIntoBuilder = confirm(
-                            'Load this JSON into the Builder and rebuild the Timeline?\n\nClick OK to rehydrate the Builder.\nClick Cancel to keep using Token Store import only.'
+                            'Rebuild the Timeline from this JSON for editing?\n\nClick OK to load the file into the Builder and restore the editable Timeline.\nClick Cancel to skip Builder rehydration.'
                         );
 
                         if (shouldLoadIntoBuilder) {
                             await this.importJsonFileIntoBuilder(files[0]);
                             return;
                         }
+
+                        if (this.isPlatformMode()) {
+                            this.showValidationResult('warning', 'Import canceled. In Platform Builder, single-file JSON import must be loaded into the editor with OK before you can edit and publish it.');
+                            return;
+                        }
                     }
 
+                    if (this.isPlatformMode()) {
+                        this.showValidationResult('warning', 'Builder rehydration was skipped. Token Store import is disabled in Platform Builder, so use single-file import and click OK to load the study into the editor before publishing.');
+                        return;
+                    }
                     await this.importLocalJsonFilesToTokenStore(files);
                 } catch (e) {
                     console.error('importLocalJsonFilesToTokenStore failed:', e);
@@ -967,6 +1064,13 @@ class JsonBuilder {
         document.getElementById('loadTemplateBtn').addEventListener('click', () => {
             this.loadTemplate();
         });
+
+        const loadStudyBtn = document.getElementById('loadStudyBtn');
+        if (loadStudyBtn) {
+            loadStudyBtn.addEventListener('click', () => {
+                this.showLoadStudyModal();
+            });
+        }
 
         const newStudyBtn = document.getElementById('newStudyBtn');
         if (newStudyBtn) {
@@ -1086,6 +1190,57 @@ class JsonBuilder {
         return window.COGFLOW_INITIAL_DEPLOYMENT === true;
     }
 
+    isPlatformMode() {
+        return typeof window.COGFLOW_PLATFORM_URL === 'string' && window.COGFLOW_PLATFORM_URL.trim().length > 0;
+    }
+
+    getPlatformBaseUrl() {
+        if (!this.isPlatformMode()) return '';
+        return String(window.COGFLOW_PLATFORM_URL || '').trim().replace(/\/+$/, '');
+    }
+
+    getPlatformAssetIndex() {
+        const key = 'cogflow_platform_asset_index_v1';
+        try {
+            const raw = localStorage.getItem(key) || '';
+            const parsed = raw ? JSON.parse(raw) : {};
+            if (parsed && typeof parsed === 'object') return parsed;
+        } catch {
+            // ignore
+        }
+        return {};
+    }
+
+    setPlatformAssetIndex(index) {
+        const key = 'cogflow_platform_asset_index_v1';
+        try {
+            const obj = (index && typeof index === 'object') ? index : {};
+            localStorage.setItem(key, JSON.stringify(obj));
+        } catch {
+            // ignore
+        }
+    }
+
+    getPlatformAssetMap(studySlug) {
+        const slug = (studySlug || 'unscoped').toString().trim().toLowerCase() || 'unscoped';
+        const all = this.getPlatformAssetIndex();
+        const bySlug = all[slug];
+        if (!bySlug || typeof bySlug !== 'object') return null;
+        const files = bySlug.files;
+        if (!files || typeof files !== 'object') return null;
+        return files;
+    }
+
+    setPlatformAssetMap(studySlug, filesMap) {
+        const slug = (studySlug || 'unscoped').toString().trim().toLowerCase() || 'unscoped';
+        const all = this.getPlatformAssetIndex();
+        all[slug] = {
+            updated_at_local: new Date().toISOString(),
+            files: (filesMap && typeof filesMap === 'object') ? filesMap : {}
+        };
+        this.setPlatformAssetIndex(all);
+    }
+
     getTokenStoreRecords() {
         const key = 'cogflow_token_store_records_v1';
         const legacyKey = 'psychjson_token_store_records_v1';
@@ -1174,6 +1329,17 @@ class JsonBuilder {
         const direct = assetsByFilename && assetsByFilename[s];
         if (direct && direct.url) return direct.url;
 
+        // Also accept folder-prefixed references when index keys are bare filenames,
+        // e.g. "test_graphix/b1.png" -> key "b1.png".
+        const byBasename = (() => {
+            const parts = s.replace(/\\+/g, '/').split('/').filter(Boolean);
+            const base = parts.length ? parts[parts.length - 1] : '';
+            if (!base) return null;
+            const hit = assetsByFilename && assetsByFilename[base];
+            return (hit && hit.url) ? hit : null;
+        })();
+        if (byBasename && byBasename.url) return byBasename.url;
+
         // Replace occurrences inside HTML/templates safely.
         // Only replace when the filename appears as its own token (e.g., src="img1.png", url('img1.png')).
         let out = s;
@@ -1186,6 +1352,10 @@ class JsonBuilder {
             const escaped = this.escapeRegex(filename);
             const re = new RegExp(`(^|[\\s"'=:(),])(${escaped})(?=$|[\\s"'<>),;])`, 'g');
             out = out.replace(re, `$1${url}`);
+
+            // Path-prefixed token form, e.g. src="images/${filename}".
+            const rePath = new RegExp(`(^|[\\s"'=:(),])((?:[A-Za-z0-9._-]+\\/)+${escaped})(?=$|[\\s"'<>),;])`, 'g');
+            out = out.replace(rePath, `$1${url}`);
         }
         return out;
     }
@@ -1213,6 +1383,10 @@ class JsonBuilder {
     }
 
     async uploadAssetDirectoryToTokenStore(files) {
+        if (this.isPlatformMode()) {
+            return this.uploadAssetDirectoryToPlatform(files);
+        }
+
         const inputFiles = Array.isArray(files) ? files : [];
         if (inputFiles.length === 0) return;
 
@@ -1289,6 +1463,167 @@ class JsonBuilder {
 
         this.setTokenStoreAssetMapForCodeAndTask(code, taskType, nextMap);
         this.showValidationResult('success', `Uploaded ${uploaded} asset(s) to Token Store and saved a filename→URL index for code ${code} (${String(taskType).toUpperCase()}).`);
+    }
+
+    async uploadAssetToPlatform(platformUrl, file, filename, studySlug = '') {
+        const safeBase = String(platformUrl || '').trim().replace(/\/+$/, '');
+        if (!safeBase) throw new Error('Missing platform base URL');
+
+        const form = new FormData();
+        const outName = (filename && String(filename).trim()) ? String(filename).trim() : (file?.name || 'asset');
+        form.append('file', file, outName);
+        if (studySlug && String(studySlug).trim()) {
+            form.append('study_slug', String(studySlug).trim());
+        }
+
+        const getCsrfToken = () => {
+            try {
+                const fromCookie = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+                if (fromCookie && fromCookie[1]) return decodeURIComponent(fromCookie[1]);
+                return '';
+            } catch {
+                return '';
+            }
+        };
+
+        const csrfToken = getCsrfToken();
+        const res = await fetch(`${safeBase}/api/v1/assets/upload`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+                ...(csrfToken ? { 'X-CSRFToken': csrfToken } : {})
+            },
+            body: form
+        });
+
+        if (!res.ok) {
+            const text = await res.text().catch(() => '');
+            throw new Error(`Platform asset upload failed (${res.status})${text ? `: ${text.slice(0, 200)}` : ''}`);
+        }
+
+        const json = await res.json().catch(() => ({}));
+        const outUrl = (json && json.url) ? String(json.url).trim() : '';
+        if (!outUrl) throw new Error('Platform asset upload returned no URL');
+        return { url: outUrl, path: json.path || null };
+    }
+
+    async uploadAssetDirectoryToPlatform(files) {
+        const inputFiles = Array.isArray(files) ? files : [];
+        if (inputFiles.length === 0) return;
+
+        const platformUrl = this.getPlatformBaseUrl();
+        if (!platformUrl) {
+            this.showValidationResult('error', 'Platform URL is not configured for internal asset upload.');
+            return;
+        }
+
+        const studySlug = (window.COGFLOW_STUDY_SLUG || '').toString().trim();
+        const scopeKey = studySlug || 'unscoped';
+
+        const queue = inputFiles.slice().filter((f) => f && f.name).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+        const unique = [];
+        const seen = new Set();
+        for (const f of queue) {
+            const name = String(f.name || '').trim();
+            if (!name || seen.has(name)) continue;
+            seen.add(name);
+            unique.push(f);
+        }
+
+        const existing = this.getPlatformAssetMap(scopeKey) || {};
+        const nextMap = { ...existing };
+        let uploaded = 0;
+
+        for (const file of unique) {
+            const filename = String(file.name || '').trim();
+            if (!filename) continue;
+            const out = await this.uploadAssetToPlatform(platformUrl, file, filename, studySlug);
+            nextMap[filename] = { url: out.url };
+            uploaded += 1;
+        }
+
+        this.setPlatformAssetMap(scopeKey, nextMap);
+        this.showValidationResult('success', `Uploaded ${uploaded} asset(s) to CogFlow Platform internal storage (${scopeKey}).`);
+    }
+
+    rewriteBareAssetFilenamesToPlatformUrls(config, { studySlug }) {
+        const filesMap = this.getPlatformAssetMap(studySlug || 'unscoped');
+        if (!filesMap) return config;
+
+        const rewriteDeep = (x) => {
+            if (typeof x === 'string') {
+                return this.rewriteStringUsingTokenStoreAssets(x, filesMap);
+            }
+            if (Array.isArray(x)) return x.map(rewriteDeep);
+            if (x && typeof x === 'object') {
+                const out = {};
+                for (const [k, v] of Object.entries(x)) out[k] = rewriteDeep(v);
+                return out;
+            }
+            return x;
+        };
+
+        return rewriteDeep((config && typeof config === 'object') ? config : {});
+    }
+
+    async uploadAssetRefsToPlatformAndRewriteConfig(config, { studySlug, filenameBase }) {
+        const cfg = (config && typeof config === 'object') ? config : {};
+        const jsonText = JSON.stringify(cfg);
+        const refs = this.findAssetRefsInString(jsonText);
+        if (refs.length === 0) return cfg;
+
+        const platformUrl = this.getPlatformBaseUrl();
+        if (!platformUrl) return cfg;
+
+        const base = String(filenameBase || 'export').replace(/\.json$/i, '');
+        const sanitizeFileName = (s) => String(s || '').replace(/[^A-Za-z0-9._-]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '').slice(0, 160) || 'asset';
+        const uploadedByRef = new Map();
+
+        for (const ref of refs) {
+            const m = /^asset:\/\/([^/]+)\/([^/]+)$/.exec(ref);
+            if (!m) continue;
+            const componentId = m[1];
+            const field = m[2];
+
+            const assetCache = window.CogFlowAssetCache || window.PsychJsonAssetCache;
+            const entry = assetCache?.get?.(componentId, field);
+            const file = entry?.file;
+            if (!file) continue;
+
+            const originalName = entry?.filename || file.name || `${field}`;
+            const extMatch = /\.[A-Za-z0-9]{1,8}$/.exec(originalName);
+            const ext = extMatch ? extMatch[0] : '';
+            const outName = sanitizeFileName(`${base}-asset-${componentId}-${field}`) + ext;
+
+            if (!uploadedByRef.has(ref)) {
+                const uploaded = await this.uploadAssetToPlatform(platformUrl, file, outName, studySlug || '');
+                uploadedByRef.set(ref, uploaded.url);
+            }
+        }
+
+        const replaceInString = (s) => {
+            const raw = (s ?? '').toString();
+            return raw.replace(/asset:\/\/([A-Za-z0-9_-]+)\/([A-Za-z0-9_-]+)/g, (full) => uploadedByRef.get(full) || full);
+        };
+
+        const rewriteDeep = (x) => {
+            if (typeof x === 'string') return replaceInString(x);
+            if (Array.isArray(x)) return x.map(rewriteDeep);
+            if (x && typeof x === 'object') {
+                const out = {};
+                for (const [k, v] of Object.entries(x)) out[k] = rewriteDeep(v);
+                return out;
+            }
+            return x;
+        };
+
+        const rewritten = rewriteDeep(cfg);
+        if (uploadedByRef.size > 0) {
+            this.showValidationResult('success', `Uploaded ${uploadedByRef.size} asset(s) to CogFlow Platform storage and rewrote asset:// refs.`);
+        } else {
+            this.showValidationResult('warning', `Found ${refs.length} asset reference(s), but no cached files were available to upload.`);
+        }
+        return rewritten;
     }
 
     normalizeTokenStoreTaskType(taskType) {
@@ -1637,6 +1972,272 @@ class JsonBuilder {
         });
     }
 
+    async fetchAccessibleStudies() {
+        const platformBase = this.getPlatformBaseUrl();
+        if (!platformBase) {
+            throw new Error('Platform URL is not configured.');
+        }
+
+        const res = await fetch(`${platformBase}/api/v1/studies`, {
+            method: 'GET',
+            credentials: 'include',
+            headers: { 'Accept': 'application/json' }
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            const msg = data?.error || data?.detail || `Request failed (${res.status})`;
+            throw new Error(msg);
+        }
+
+        const rows = Array.isArray(data?.studies) ? data.studies : [];
+        return rows.filter((s) => (s?.latest_config_version || '').toString().trim() !== '');
+    }
+
+    async fetchLatestStudyConfig(studySlug) {
+        const slug = (studySlug || '').toString().trim();
+        if (!slug) throw new Error('Missing study slug');
+
+        const platformBase = this.getPlatformBaseUrl();
+        if (!platformBase) {
+            throw new Error('Platform URL is not configured.');
+        }
+
+        const res = await fetch(`${platformBase}/api/v1/studies/${encodeURIComponent(slug)}/latest-config`, {
+            method: 'GET',
+            credentials: 'include',
+            headers: { 'Accept': 'application/json' }
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            const msg = data?.error || data?.detail || `Request failed (${res.status})`;
+            throw new Error(msg);
+        }
+        if (!data || typeof data !== 'object' || typeof data.config !== 'object' || Array.isArray(data.config)) {
+            throw new Error('Latest config payload is malformed.');
+        }
+
+        return data;
+    }
+
+    async showLoadStudyModal() {
+        const modalEl = document.getElementById('loadStudyModal');
+        const listEl = document.getElementById('loadStudyList');
+        const loadingEl = document.getElementById('loadStudyLoading');
+        const emptyEl = document.getElementById('loadStudyEmpty');
+        const errorEl = document.getElementById('loadStudyError');
+        const confirmBtn = document.getElementById('loadStudyConfirmBtn');
+        const taskSelect = document.getElementById('loadStudyTaskSelect');
+
+        if (!modalEl || !listEl || !loadingEl || !emptyEl || !errorEl || !confirmBtn || !taskSelect || !window.bootstrap?.Modal) {
+            this.showValidationResult('error', 'Load Study UI is unavailable.');
+            return;
+        }
+
+        const setError = (msg) => {
+            const text = (msg || '').toString().trim();
+            errorEl.textContent = text;
+            errorEl.classList.toggle('d-none', !text);
+        };
+
+        const setLoading = (on) => {
+            loadingEl.classList.toggle('d-none', !on);
+            confirmBtn.disabled = true;
+        };
+
+        const clearList = () => {
+            listEl.innerHTML = '';
+        };
+
+        modalEl.dataset.selectedStudySlug = '';
+        modalEl.dataset.selectedConfigVersionId = '';
+
+        const resetTaskOptions = () => {
+            taskSelect.innerHTML = '<option value="">Latest / default</option>';
+            taskSelect.disabled = true;
+        };
+
+        const populateTaskOptions = async (studySlug) => {
+            resetTaskOptions();
+            const slug = (studySlug || '').toString().trim();
+            if (!slug) return;
+
+            const payload = await this.fetchLatestStudyConfig(slug);
+            const configs = Array.isArray(payload?.configs) ? payload.configs : [];
+            if (!configs.length) return;
+
+            const seen = new Set();
+            for (const c of configs) {
+                const versionId = (c?.config_version_id || '').toString().trim();
+                if (!versionId || seen.has(versionId)) continue;
+                seen.add(versionId);
+
+                const taskType = (c?.task_type || '').toString().trim();
+                const label = (c?.config_version_label || '').toString().trim();
+                const option = document.createElement('option');
+                option.value = versionId;
+                option.textContent = taskType
+                    ? `${taskType}${label ? ` (${label})` : ''}`
+                    : (label || versionId);
+                taskSelect.appendChild(option);
+            }
+
+            taskSelect.disabled = taskSelect.options.length <= 1;
+            modalEl.dataset.selectedConfigVersionId = '';
+        };
+
+        taskSelect.onchange = () => {
+            modalEl.dataset.selectedConfigVersionId = (taskSelect.value || '').toString().trim();
+        };
+
+        const updateConfirmState = () => {
+            const selected = (modalEl.dataset.selectedStudySlug || '').toString().trim();
+            confirmBtn.disabled = !selected;
+        };
+
+        const renderRow = (study) => {
+            const slug = (study?.study_slug || '').toString().trim();
+            if (!slug) return null;
+
+            const name = (study?.study_name || slug).toString();
+            const version = (study?.latest_config_version || 'latest').toString();
+
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'list-group-item list-group-item-action';
+            btn.dataset.studySlug = slug;
+
+            const row = document.createElement('div');
+            row.className = 'd-flex w-100 justify-content-between align-items-start';
+
+            const left = document.createElement('div');
+            const title = document.createElement('div');
+            title.className = 'fw-bold';
+            title.textContent = name;
+            const slugEl = document.createElement('small');
+            slugEl.className = 'text-muted';
+            slugEl.textContent = slug;
+            left.appendChild(title);
+            left.appendChild(slugEl);
+
+            const badge = document.createElement('span');
+            badge.className = 'badge text-bg-secondary';
+            badge.textContent = version;
+
+            row.appendChild(left);
+            row.appendChild(badge);
+            btn.appendChild(row);
+
+            btn.addEventListener('click', () => {
+                modalEl.dataset.selectedStudySlug = slug;
+                modalEl.dataset.selectedConfigVersionId = '';
+                listEl.querySelectorAll('.list-group-item').forEach((el) => el.classList.remove('active'));
+                btn.classList.add('active');
+                populateTaskOptions(slug).catch(() => {
+                    resetTaskOptions();
+                });
+                updateConfirmState();
+            });
+            return btn;
+        };
+
+        clearList();
+        resetTaskOptions();
+        setError('');
+        emptyEl.classList.add('d-none');
+        setLoading(true);
+
+        const modal = window.bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+
+        try {
+            const studies = await this.fetchAccessibleStudies();
+            clearList();
+
+            if (!Array.isArray(studies) || studies.length === 0) {
+                emptyEl.classList.remove('d-none');
+            } else {
+                studies.forEach((s) => {
+                    const row = renderRow(s);
+                    if (row) listEl.appendChild(row);
+                });
+                if (listEl.firstElementChild) {
+                    listEl.firstElementChild.click();
+                }
+            }
+        } catch (e) {
+            setError(`Could not load studies: ${e?.message || 'Unknown error'}`);
+        } finally {
+            setLoading(false);
+            updateConfirmState();
+        }
+
+        confirmBtn.onclick = async () => {
+            const selectedSlug = (modalEl.dataset.selectedStudySlug || '').toString().trim();
+            const selectedConfigVersionId = (modalEl.dataset.selectedConfigVersionId || '').toString().trim() || null;
+            if (!selectedSlug) return;
+            confirmBtn.disabled = true;
+            setError('');
+            try {
+                await this.loadStudyIntoBuilder(selectedSlug, { configVersionId: selectedConfigVersionId });
+                modal.hide();
+            } catch (e) {
+                setError(e?.message || 'Failed to load selected study.');
+            } finally {
+                updateConfirmState();
+            }
+        };
+    }
+
+    rehydrateBuilderFromConfig(config, sourceLabel = 'config') {
+        if (!config || typeof config !== 'object' || Array.isArray(config)) {
+            throw new Error('Config payload must be a JSON object.');
+        }
+
+        const validation = this.schemaValidator?.validate?.(config);
+        if (validation && validation.valid === false) {
+            const errs = Array.isArray(validation.errors) ? validation.errors.filter(Boolean) : [];
+            const detail = errs.slice(0, 6).join(' | ');
+            throw new Error(`Import validation failed${detail ? `: ${detail}` : ''}`);
+        }
+
+        this.applyImportedConfigState(config);
+
+        const taskType = (config?.task_type || config?.taskType || this.currentTaskType || 'rdm').toString();
+        const importedTimeline = Array.isArray(config.timeline) ? config.timeline : [];
+        const builderComponents = this.convertImportedTimelineToBuilderComponents(importedTimeline, taskType);
+        const rebuiltCount = this.rebuildTimelineDOMFromImportedComponents(builderComponents);
+
+        this.updateJSON();
+        this.showValidationResult('success', `Loaded ${sourceLabel}. Rebuilt ${rebuiltCount} timeline component(s).`);
+    }
+
+    async loadStudyIntoBuilder(studySlug, options = {}) {
+        const payload = await this.fetchLatestStudyConfig(studySlug);
+        const studyName = (payload?.study_name || payload?.study_slug || studySlug || 'study').toString();
+        const requestedVersionId = (options?.configVersionId || '').toString().trim();
+
+        let selected = null;
+        if (requestedVersionId && Array.isArray(payload?.configs)) {
+            selected = payload.configs.find((c) => (c?.config_version_id || '').toString().trim() === requestedVersionId) || null;
+        }
+
+        const config = (selected && selected.config && typeof selected.config === 'object')
+            ? selected.config
+            : payload.config;
+
+        if (!config || typeof config !== 'object' || Array.isArray(config)) {
+            throw new Error('Selected study config payload is malformed.');
+        }
+
+        const version = (selected?.config_version_label || payload?.config_version_label || 'latest').toString();
+        const taskType = (selected?.task_type || payload?.task_type || '').toString().trim();
+        const label = taskType ? `${studyName} (${taskType} · ${version})` : `${studyName} (${version})`;
+
+        this.rehydrateBuilderFromConfig(config, label);
+    }
+
     extractEnabledFlag(raw, fallback = false) {
         if (typeof raw === 'boolean') return raw;
         if (raw && typeof raw === 'object' && typeof raw.enabled === 'boolean') return raw.enabled;
@@ -1665,6 +2266,318 @@ class JsonBuilder {
         const defs = this.getComponentDefinitions({ taskTypeOverride: taskTypeForDefs });
         const defById = new Map((Array.isArray(defs) ? defs : []).map((d) => [d.id, d]));
 
+        const csv = (arr) => Array.isArray(arr) ? arr.map((v) => String(v)).join(',') : '';
+
+        const inflateBlockImportedParams = (rawParams) => {
+            const src = (rawParams && typeof rawParams === 'object') ? rawParams : {};
+            const out = { ...src };
+
+            const windows = (src.parameter_windows && typeof src.parameter_windows === 'object') ? src.parameter_windows : {};
+            const values = (src.parameter_values && typeof src.parameter_values === 'object') ? src.parameter_values : {};
+
+            const innerType = (
+                src.block_component_type
+                || src.component_type
+                || values.block_component_type
+                || values.component_type
+                || ''
+            ).toString();
+
+            if (!out.block_component_type && innerType) out.block_component_type = innerType;
+            if ((out.block_length === undefined || out.block_length === null || out.block_length === '') && src.length !== undefined) {
+                out.block_length = src.length;
+            }
+
+            const mapWindow = (sourceKey, minKey, maxKey) => {
+                const w = windows[sourceKey];
+                if (!w || typeof w !== 'object') return;
+                if (w.min !== undefined) out[minKey] = w.min;
+                if (w.max !== undefined) out[maxKey] = w.max;
+            };
+
+            // Generic fallback for tasks with matching names.
+            Object.entries(windows).forEach(([k, w]) => {
+                if (!w || typeof w !== 'object') return;
+                if (w.min !== undefined && out[`${k}_min`] === undefined) out[`${k}_min`] = w.min;
+                if (w.max !== undefined && out[`${k}_max`] === undefined) out[`${k}_max`] = w.max;
+            });
+
+            // Task-specific block window aliases used by Builder editors.
+            if (innerType === 'flanker-trial') {
+                mapWindow('stimulus_duration_ms', 'flanker_stimulus_duration_min', 'flanker_stimulus_duration_max');
+                mapWindow('trial_duration_ms', 'flanker_trial_duration_min', 'flanker_trial_duration_max');
+                mapWindow('iti_ms', 'flanker_iti_min', 'flanker_iti_max');
+            } else if (innerType === 'sart-trial') {
+                mapWindow('stimulus_duration_ms', 'sart_stimulus_duration_min', 'sart_stimulus_duration_max');
+                mapWindow('mask_duration_ms', 'sart_mask_duration_min', 'sart_mask_duration_max');
+                mapWindow('trial_duration_ms', 'sart_trial_duration_min', 'sart_trial_duration_max');
+                mapWindow('iti_ms', 'sart_iti_min', 'sart_iti_max');
+            } else if (innerType === 'mot-trial') {
+                mapWindow('speed_px_per_s', 'mot_speed_px_per_s_min', 'mot_speed_px_per_s_max');
+                mapWindow('tracking_duration_ms', 'mot_tracking_duration_ms_min', 'mot_tracking_duration_ms_max');
+                mapWindow('cue_duration_ms', 'mot_cue_duration_ms_min', 'mot_cue_duration_ms_max');
+                mapWindow('iti_ms', 'mot_iti_ms_min', 'mot_iti_ms_max');
+                mapWindow('aperture_border_width_px', 'mot_aperture_border_width_px_min', 'mot_aperture_border_width_px_max');
+            } else if (innerType === 'stroop-trial') {
+                mapWindow('stimulus_duration_ms', 'stroop_stimulus_duration_min', 'stroop_stimulus_duration_max');
+                mapWindow('trial_duration_ms', 'stroop_trial_duration_min', 'stroop_trial_duration_max');
+                mapWindow('iti_ms', 'stroop_iti_min', 'stroop_iti_max');
+            } else if (innerType === 'emotional-stroop-trial') {
+                mapWindow('stimulus_duration_ms', 'emostroop_stimulus_duration_min', 'emostroop_stimulus_duration_max');
+                mapWindow('trial_duration_ms', 'emostroop_trial_duration_min', 'emostroop_trial_duration_max');
+                mapWindow('iti_ms', 'emostroop_iti_min', 'emostroop_iti_max');
+            } else if (innerType === 'simon-trial') {
+                mapWindow('stimulus_duration_ms', 'simon_stimulus_duration_min', 'simon_stimulus_duration_max');
+                mapWindow('trial_duration_ms', 'simon_trial_duration_min', 'simon_trial_duration_max');
+                mapWindow('iti_ms', 'simon_iti_min', 'simon_iti_max');
+            } else if (innerType === 'task-switching-trial') {
+                mapWindow('stimulus_duration_ms', 'ts_stimulus_duration_min', 'ts_stimulus_duration_max');
+                mapWindow('trial_duration_ms', 'ts_trial_duration_min', 'ts_trial_duration_max');
+                mapWindow('iti_ms', 'ts_iti_min', 'ts_iti_max');
+            } else if (innerType === 'pvt-trial') {
+                mapWindow('foreperiod_ms', 'pvt_foreperiod_min', 'pvt_foreperiod_max');
+                mapWindow('trial_duration_ms', 'pvt_trial_duration_min', 'pvt_trial_duration_max');
+                mapWindow('iti_ms', 'pvt_iti_min', 'pvt_iti_max');
+            } else if (innerType === 'gabor-trial' || innerType === 'gabor-quest' || innerType === 'gabor-learning') {
+                mapWindow('spatial_frequency_cyc_per_px', 'gabor_spatial_frequency_min', 'gabor_spatial_frequency_max');
+                mapWindow('contrast', 'gabor_contrast_min', 'gabor_contrast_max');
+                mapWindow('patch_diameter_deg', 'gabor_patch_diameter_deg_min', 'gabor_patch_diameter_deg_max');
+                mapWindow('stimulus_duration_ms', 'gabor_stimulus_duration_min', 'gabor_stimulus_duration_max');
+                mapWindow('mask_duration_ms', 'gabor_mask_duration_min', 'gabor_mask_duration_max');
+            }
+
+            // Bring parameter_values back into Builder editor keys.
+            Object.entries(values).forEach(([k, v]) => {
+                if (out[k] === undefined) out[k] = v;
+            });
+
+            if (innerType === 'rdm-trial') {
+                if (Array.isArray(values.direction)) out.direction_options = csv(values.direction);
+                if (values.dot_color !== undefined) out.dot_color = values.dot_color;
+            } else if (innerType === 'rdm-practice') {
+                if (Array.isArray(values.direction)) out.practice_direction_options = csv(values.direction);
+                if (values.dot_color !== undefined) out.dot_color = values.dot_color;
+            } else if (innerType === 'rdm-adaptive') {
+                if (values.algorithm !== undefined) out.adaptive_algorithm = values.algorithm;
+                if (values.target_performance !== undefined) out.adaptive_target_performance = values.target_performance;
+                if (values.dot_color !== undefined) out.dot_color = values.dot_color;
+            } else if (innerType === 'rdm-dot-groups') {
+                if (Array.isArray(values.group_1_direction)) out.group_1_direction_options = csv(values.group_1_direction);
+                if (Array.isArray(values.group_2_direction)) out.group_2_direction_options = csv(values.group_2_direction);
+                if (Array.isArray(values.dependent_group_1_direction)) out.dependent_group_1_direction_options = csv(values.dependent_group_1_direction);
+                if (Array.isArray(values.dependent_group_direction_difference)) out.dependent_group_direction_difference_options = csv(values.dependent_group_direction_difference);
+                if (values.dependent_direction_of_movement_enabled !== undefined) out.dependent_direction_of_movement_enabled = !!values.dependent_direction_of_movement_enabled;
+                if (values.group_1_color !== undefined) out.group_1_color = values.group_1_color;
+                if (values.group_2_color !== undefined) out.group_2_color = values.group_2_color;
+                if (values.dynamic_target_group_switch_enabled !== undefined) out.dynamic_target_group_switch_enabled = !!values.dynamic_target_group_switch_enabled;
+                if (values.dynamic_target_group_every_n_frames !== undefined) out.dynamic_target_group_every_n_frames = values.dynamic_target_group_every_n_frames;
+            } else if (innerType === 'flanker-trial') {
+                if (Array.isArray(values.congruency)) out.flanker_congruency_options = csv(values.congruency);
+                if (values.stimulus_type !== undefined) out.flanker_stimulus_type = values.stimulus_type;
+                if (Array.isArray(values.target_direction)) out.flanker_target_direction_options = csv(values.target_direction);
+                if (Array.isArray(values.target_stimulus)) out.flanker_target_stimulus_options = csv(values.target_stimulus);
+                if (Array.isArray(values.distractor_stimulus)) out.flanker_distractor_stimulus_options = csv(values.distractor_stimulus);
+                if (Array.isArray(values.neutral_stimulus)) out.flanker_neutral_stimulus_options = csv(values.neutral_stimulus);
+                if (values.left_key !== undefined) out.flanker_left_key = values.left_key;
+                if (values.right_key !== undefined) out.flanker_right_key = values.right_key;
+                if (values.show_fixation_dot !== undefined) out.flanker_show_fixation_dot = !!values.show_fixation_dot;
+                if (values.show_fixation_cross_between_trials !== undefined) out.flanker_show_fixation_cross_between_trials = !!values.show_fixation_cross_between_trials;
+            } else if (innerType === 'sart-trial') {
+                if (Array.isArray(values.digit)) out.sart_digit_options = csv(values.digit);
+                if (values.nogo_digit !== undefined) out.sart_nogo_digit = values.nogo_digit;
+                if (values.nogo_probability !== undefined) out.sart_nogo_probability = values.nogo_probability;
+                if (values.go_key !== undefined) out.sart_go_key = values.go_key;
+            } else if (innerType === 'mot-trial') {
+                if (Array.isArray(values.num_objects)) out.mot_num_objects_options = csv(values.num_objects);
+                if (Array.isArray(values.num_targets)) out.mot_num_targets_options = csv(values.num_targets);
+                if (values.dot_size_px !== undefined) out.mot_dot_size_px = values.dot_size_px;
+                if (values.motion_type !== undefined) out.mot_motion_type = values.motion_type;
+                if (values.probe_mode !== undefined) out.mot_probe_mode = values.probe_mode;
+                if (values.yes_key !== undefined) out.mot_yes_key = values.yes_key;
+                if (values.no_key !== undefined) out.mot_no_key = values.no_key;
+                if (values.recognition_probe_count !== undefined) out.mot_recognition_probe_count = values.recognition_probe_count;
+                if (values.aperture_shape !== undefined) out.mot_aperture_shape = values.aperture_shape;
+                if (values.aperture_border_enabled !== undefined) out.mot_aperture_border_enabled = !!values.aperture_border_enabled;
+                if (values.aperture_border_color !== undefined) out.mot_aperture_border_color = values.aperture_border_color;
+                if (values.show_feedback !== undefined) out.mot_show_feedback = !!values.show_feedback;
+            } else if (innerType === 'stroop-trial') {
+                if (Array.isArray(values.word)) out.stroop_word_options = csv(values.word);
+                if (Array.isArray(values.ink_color_name)) out.stroop_ink_color_options = csv(values.ink_color_name);
+                if (Array.isArray(values.congruency)) out.stroop_congruency_options = csv(values.congruency);
+                if (values.response_mode !== undefined) out.stroop_response_mode = values.response_mode;
+                if (values.response_device !== undefined) out.stroop_response_device = values.response_device;
+                if (Array.isArray(values.choice_keys)) out.stroop_choice_keys = csv(values.choice_keys);
+                if (values.congruent_key !== undefined) out.stroop_congruent_key = values.congruent_key;
+                if (values.incongruent_key !== undefined) out.stroop_incongruent_key = values.incongruent_key;
+            } else if (innerType === 'emotional-stroop-trial') {
+                if (Array.isArray(values.ink_color_name)) out.emostroop_ink_color_options = csv(values.ink_color_name);
+                if (values.response_device !== undefined) out.emostroop_response_device = values.response_device;
+                if (Array.isArray(values.choice_keys)) out.emostroop_choice_keys = csv(values.choice_keys);
+            } else if (innerType === 'simon-trial') {
+                if (Array.isArray(values.stimulus_color_name)) out.simon_color_options = csv(values.stimulus_color_name);
+                if (Array.isArray(values.stimulus_side)) out.simon_side_options = csv(values.stimulus_side);
+                if (values.response_device !== undefined) out.simon_response_device = values.response_device;
+                if (values.left_key !== undefined) out.simon_left_key = values.left_key;
+                if (values.right_key !== undefined) out.simon_right_key = values.right_key;
+            } else if (innerType === 'task-switching-trial') {
+                if (values.trial_type !== undefined) out.ts_trial_type = values.trial_type;
+                if (values.single_task_index !== undefined) out.ts_single_task_index = values.single_task_index;
+                if (values.cue_type !== undefined) out.ts_cue_type = values.cue_type;
+                if (values.task_1_position !== undefined) out.ts_task_1_position = values.task_1_position;
+                if (values.task_2_position !== undefined) out.ts_task_2_position = values.task_2_position;
+                if (values.task_1_color_hex !== undefined) out.ts_task_1_color_hex = values.task_1_color_hex;
+                if (values.task_2_color_hex !== undefined) out.ts_task_2_color_hex = values.task_2_color_hex;
+                if (values.task_1_cue_text !== undefined) out.ts_task_1_cue_text = values.task_1_cue_text;
+                if (values.task_2_cue_text !== undefined) out.ts_task_2_cue_text = values.task_2_cue_text;
+                if (values.cue_font_size_px !== undefined) out.ts_cue_font_size_px = values.cue_font_size_px;
+                if (values.cue_duration_ms !== undefined) out.ts_cue_duration_ms = values.cue_duration_ms;
+                if (values.cue_gap_ms !== undefined) out.ts_cue_gap_ms = values.cue_gap_ms;
+                if (values.cue_color_hex !== undefined) out.ts_cue_color_hex = values.cue_color_hex;
+                if (values.stimulus_position !== undefined) out.ts_stimulus_position = values.stimulus_position;
+                if (values.stimulus_color_hex !== undefined) out.ts_stimulus_color_hex = values.stimulus_color_hex;
+                if (values.border_enabled !== undefined) out.ts_border_enabled = !!values.border_enabled;
+                if (values.left_key !== undefined) out.ts_left_key = values.left_key;
+                if (values.right_key !== undefined) out.ts_right_key = values.right_key;
+            } else if (innerType === 'pvt-trial') {
+                if (values.response_device !== undefined) out.pvt_response_device = values.response_device;
+                if (values.response_key !== undefined) out.pvt_response_key = values.response_key;
+            } else if (innerType === 'gabor-trial' || innerType === 'gabor-quest' || innerType === 'gabor-learning') {
+                if (values.response_task !== undefined) out.gabor_response_task = values.response_task;
+                if (values.left_key !== undefined) out.gabor_left_key = values.left_key;
+                if (values.right_key !== undefined) out.gabor_right_key = values.right_key;
+                if (values.yes_key !== undefined) out.gabor_yes_key = values.yes_key;
+                if (values.no_key !== undefined) out.gabor_no_key = values.no_key;
+                if (Array.isArray(values.target_location)) out.gabor_target_location_options = csv(values.target_location);
+                if (Array.isArray(values.target_tilt_deg)) out.gabor_target_tilt_options = csv(values.target_tilt_deg);
+                if (Array.isArray(values.distractor_orientation_deg)) out.gabor_distractor_orientation_options = csv(values.distractor_orientation_deg);
+                if (Array.isArray(values.spatial_cue)) out.gabor_spatial_cue_options = csv(values.spatial_cue);
+                if (values.spatial_cue_enabled !== undefined) out.gabor_spatial_cue_enabled = !!values.spatial_cue_enabled;
+                if (values.spatial_cue_probability !== undefined) out.gabor_spatial_cue_probability = values.spatial_cue_probability;
+                if (values.spatial_cue_validity_probability !== undefined) out.gabor_spatial_cue_validity_probability = values.spatial_cue_validity_probability;
+                if (values.target_left_probability !== undefined) out.gabor_target_left_probability = values.target_left_probability;
+                if (values.spatial_cue_target_mode !== undefined) out.gabor_spatial_cue_target_mode = values.spatial_cue_target_mode;
+                if (values.value_cue_enabled !== undefined) out.gabor_value_cue_enabled = !!values.value_cue_enabled;
+                if (Array.isArray(values.left_value)) out.gabor_left_value_options = csv(values.left_value);
+                if (Array.isArray(values.right_value)) out.gabor_right_value_options = csv(values.right_value);
+                if (values.value_cue_probability !== undefined) out.gabor_value_cue_probability = values.value_cue_probability;
+                if (values.value_target_value !== undefined) out.gabor_value_target_value = values.value_target_value;
+                if (values.value_non_target_value !== undefined) out.gabor_value_non_target_value = values.value_non_target_value;
+                if (values.use_stored_thresholds !== undefined) out.gabor_use_stored_thresholds = !!values.use_stored_thresholds;
+                if (values.reward_availability_high !== undefined) out.gabor_reward_availability_high = values.reward_availability_high;
+                if (values.reward_availability_low !== undefined) out.gabor_reward_availability_low = values.reward_availability_low;
+                if (values.reward_availability_neutral !== undefined) out.gabor_reward_availability_neutral = values.reward_availability_neutral;
+                if (Array.isArray(values.grating_waveform)) out.gabor_grating_waveform_options = csv(values.grating_waveform);
+                if (values.patch_border_enabled !== undefined) out.gabor_patch_border_enabled = !!values.patch_border_enabled;
+                if (values.patch_border_width_px !== undefined) out.gabor_patch_border_width_px = values.patch_border_width_px;
+                if (values.patch_border_color !== undefined) out.gabor_patch_border_color = values.patch_border_color;
+                if (values.patch_border_opacity !== undefined) out.gabor_patch_border_opacity = values.patch_border_opacity;
+                if (values.learning_streak_length !== undefined) out.gabor_learning_streak_length = values.learning_streak_length;
+                if (values.learning_target_accuracy !== undefined) out.gabor_learning_target_accuracy = values.learning_target_accuracy;
+                if (values.learning_max_trials !== undefined) out.gabor_learning_max_trials = values.learning_max_trials;
+                if (values.show_feedback !== undefined) out.gabor_show_feedback = !!values.show_feedback;
+                if (values.feedback_duration_ms !== undefined) out.gabor_feedback_duration_ms = values.feedback_duration_ms;
+                if (values.adaptive && typeof values.adaptive === 'object' && (values.adaptive.mode || '').toString() === 'quest') {
+                    const adaptive = values.adaptive;
+                    out.gabor_adaptive_mode = 'quest';
+                    if (adaptive.parameter !== undefined) out.gabor_quest_parameter = adaptive.parameter;
+                    if (adaptive.target_performance !== undefined) out.gabor_quest_target_performance = adaptive.target_performance;
+                    if (adaptive.start_value !== undefined) out.gabor_quest_start_value = adaptive.start_value;
+                    if (adaptive.start_sd !== undefined) out.gabor_quest_start_sd = adaptive.start_sd;
+                    if (adaptive.beta !== undefined) out.gabor_quest_beta = adaptive.beta;
+                    if (adaptive.delta !== undefined) out.gabor_quest_delta = adaptive.delta;
+                    if (adaptive.gamma !== undefined) out.gabor_quest_gamma = adaptive.gamma;
+                    if (adaptive.min_value !== undefined) out.gabor_quest_min_value = adaptive.min_value;
+                    if (adaptive.max_value !== undefined) out.gabor_quest_max_value = adaptive.max_value;
+                    if (adaptive.quest_trials_coarse !== undefined) out.gabor_quest_trials_coarse = adaptive.quest_trials_coarse;
+                    if (adaptive.quest_trials_fine !== undefined) out.gabor_quest_trials_fine = adaptive.quest_trials_fine;
+                    if (adaptive.staircase_per_location !== undefined) out.gabor_quest_staircase_per_location = !!adaptive.staircase_per_location;
+                    if (adaptive.store_location_threshold !== undefined) out.gabor_quest_store_location_threshold = !!adaptive.store_location_threshold;
+                }
+            } else if (innerType === 'html-keyboard-response') {
+                if (values.stimulus_html !== undefined && out.stimulus === undefined) out.stimulus = values.stimulus_html;
+                if (values.prompt !== undefined) out.prompt = values.prompt;
+                if (values.choices !== undefined) out.choices = values.choices;
+            } else if (innerType === 'html-button-response') {
+                if (values.stimulus_html !== undefined && out.stimulus === undefined) out.stimulus = values.stimulus_html;
+                if (values.prompt !== undefined) out.prompt = values.prompt;
+                if (values.choices !== undefined) out.choices = values.choices;
+                if (values.button_html !== undefined) out.button_html = values.button_html;
+            } else if (innerType === 'image-keyboard-response') {
+                if (values.stimulus_image !== undefined && out.stimulus === undefined) out.stimulus = values.stimulus_image;
+                if (values.stimulus_images !== undefined) out.stimulus_images = values.stimulus_images;
+                if (values.prompt !== undefined) out.prompt = values.prompt;
+                if (values.choices !== undefined) out.choices = values.choices;
+            }
+
+            return out;
+        };
+
+        const getTaskScopedBlockDisplayName = (taskTypeRaw) => {
+            const t = (taskTypeRaw || '').toString().trim().toLowerCase();
+            if (t === 'rdm') return 'RDM Block';
+            if (t === 'nback') return 'N-back Block';
+            if (t === 'flanker') return 'Flanker Block';
+            if (t === 'sart') return 'SART Block';
+            if (t === 'simon') return 'Simon Block';
+            if (t === 'task-switching') return 'Task Switching Block';
+            if (t === 'pvt') return 'PVT Block';
+            if (t === 'mot') return 'MOT Block';
+            if (t === 'gabor') return 'Gabor Block';
+            if (t === 'continuous-image') return 'Continuous Image Block';
+            if (t === 'stroop') return 'Stroop Block';
+            if (t === 'emotional-stroop') return 'Emotional Stroop Block';
+            return 'Block';
+        };
+
+        const isLikelyInstructionsTrial = (params, currentIndex) => {
+            const p = (params && typeof params === 'object') ? params : {};
+            const dataObj = (p.data && typeof p.data === 'object') ? p.data : {};
+            if (p.auto_generated === true || dataObj.auto_generated === true) return true;
+
+            const choiceRaw = p.choices;
+            const isAllKeys = (choiceRaw === 'ALL_KEYS')
+                || (Array.isArray(choiceRaw) && choiceRaw.length === 1 && choiceRaw[0] === 'ALL_KEYS');
+
+            // Published configs may strip builder metadata. First generic html-keyboard-response
+            // with ALL_KEYS is usually the Builder Instructions component.
+            if (currentIndex === 0 && isAllKeys) return true;
+
+            return false;
+        };
+
+        const normalizeName = (value) => {
+            return (value ?? '')
+                .toString()
+                .trim()
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '');
+        };
+
+        const isGenericImportedName = (name, type) => {
+            const raw = (name ?? '').toString().trim();
+            if (!raw) return true;
+
+            const n = normalizeName(raw);
+            const normalizedType = normalizeName(type);
+            const normalizedTitleCase = normalizeName(this.toBuilderTimelineComponentName(type));
+
+            if (!n) return true;
+            if (n === normalizedType || n === normalizedTitleCase) return true;
+            if (n === 'component') return true;
+
+            if (type === 'html-keyboard-response') {
+                return n === 'htmlkeyboardresponse' || n === 'htmlkeyboardres';
+            }
+            if (type === 'image-keyboard-response') {
+                return n === 'imagekeyboardresponse' || n === 'imagekeyboardres';
+            }
+            if (type === 'mw-probe') {
+                return n === 'mwprobe' || n === 'mindwanderingprobe';
+            }
+
+            return false;
+        };
+
         const out = [];
         let loopCounter = 0;
         let randomCounter = 0;
@@ -1681,10 +2594,17 @@ class JsonBuilder {
                 params[k] = v;
             }
 
+            const inflatedParams = (type === 'block') ? inflateBlockImportedParams(params) : params;
+
+            const explicitName = (item.name ?? '').toString();
+            const hasGenericName = isGenericImportedName(explicitName, type);
+            const defaultName = this.toBuilderTimelineComponentName(type);
+            let preferredDef = null;
+
             const comp = {
                 type,
-                name: (item.name || this.toBuilderTimelineComponentName(type)).toString(),
-                parameters: params
+                name: hasGenericName ? defaultName : explicitName,
+                parameters: inflatedParams
             };
 
             if (item.label !== undefined && item.label !== null && item.label !== '') {
@@ -1692,16 +2612,38 @@ class JsonBuilder {
             }
 
             if (type === 'html-keyboard-response') {
-                const pluginType = (params?.data?.plugin_type || '').toString();
+                const pluginType = (inflatedParams?.data?.plugin_type || '').toString();
                 if (pluginType === 'eye-tracking-calibration-instructions') {
                     comp.builderComponentId = 'eye-tracking-calibration-instructions';
-                } else if (params.auto_generated === true) {
+                    preferredDef = defById.get('eye-tracking-calibration-instructions') || preferredDef;
+                } else if (inflatedParams.auto_generated === true || inflatedParams?.data?.auto_generated === true || isLikelyInstructionsTrial(inflatedParams, out.length)) {
                     comp.builderComponentId = 'instructions';
+                    preferredDef = defById.get('instructions') || preferredDef;
                 }
+            }
+
+            if (!comp.builderComponentId && type === 'block') {
+                comp.builderComponentId = 'block';
+                preferredDef = defById.get('block') || { name: getTaskScopedBlockDisplayName(taskTypeForDefs) };
+            }
+
+            if (!comp.builderComponentId && type === 'mw-probe') {
+                comp.builderComponentId = 'mw-probe';
+                preferredDef = defById.get('mw-probe') || { name: 'Mind Wandering Probe' };
+            }
+
+            if (!comp.builderComponentId && type === 'survey-response') {
+                comp.builderComponentId = 'survey-response';
+                preferredDef = defById.get('survey-response') || { name: 'Survey Response' };
             }
 
             if (!comp.builderComponentId && defById.has(type)) {
                 comp.builderComponentId = type;
+                preferredDef = defById.get(type) || preferredDef;
+            }
+
+            if (hasGenericName && preferredDef?.name) {
+                comp.name = preferredDef.name.toString();
             }
 
             out.push(comp);
@@ -1845,6 +2787,22 @@ class JsonBuilder {
         });
 
         this.updateExperimentTypeUI();
+
+        // Restore experiment-level controls after panel re-render.
+        if (nextExperimentType === 'trial-based') {
+            this.setElementValue('numTrials', config?.num_trials);
+            this.setElementValue('iti', config?.default_iti);
+            if (config?.randomize_order !== undefined) {
+                this.setElementChecked('randomizeOrder', !!config.randomize_order);
+            }
+        } else if (nextExperimentType === 'continuous') {
+            this.setElementValue('frameRate', config?.frame_rate);
+            this.setElementValue('duration', config?.duration);
+            this.setElementValue('updateInterval', config?.update_interval);
+            this.setElementValue('defaultTransitionDuration', config?.transition_settings?.duration_ms);
+            this.setElementValue('defaultTransitionType', config?.transition_settings?.type);
+        }
+
         this.loadComponentLibrary();
         this.updateConditionalUI();
     }
@@ -1866,27 +2824,19 @@ class JsonBuilder {
             return;
         }
 
-        const validation = this.schemaValidator?.validate?.(config);
-        if (validation && validation.valid === false) {
-            const errs = Array.isArray(validation.errors) ? validation.errors.filter(Boolean) : [];
-            const detail = errs.slice(0, 6).join(' | ');
-            this.showValidationResult('error', `Import validation failed${detail ? `: ${detail}` : ''}`);
-            return;
+        try {
+            this.rehydrateBuilderFromConfig(config, filename);
+        } catch (e) {
+            this.showValidationResult('error', e?.message || `Import failed for ${filename}.`);
         }
-
-        this.applyImportedConfigState(config);
-
-        const taskType = (config?.task_type || config?.taskType || this.currentTaskType || 'rdm').toString();
-        const importedTimeline = Array.isArray(config.timeline) ? config.timeline : [];
-        const builderComponents = this.convertImportedTimelineToBuilderComponents(importedTimeline, taskType);
-        const rebuiltCount = this.rebuildTimelineDOMFromImportedComponents(builderComponents);
-
-        this.updateJSON();
-
-        this.showValidationResult('success', `Loaded ${filename}. Rebuilt ${rebuiltCount} timeline component(s).`);
     }
 
     async importLocalJsonFilesToTokenStore(files) {
+        if (this.isPlatformMode()) {
+            this.showValidationResult('warning', 'Token Store import is disabled in Platform Builder. Import a file into the editor and use Publish.');
+            return;
+        }
+
         const inputFiles = Array.isArray(files) ? files : [];
         if (inputFiles.length === 0) return;
 
@@ -3474,6 +4424,11 @@ class JsonBuilder {
                     <input type="number" class="form-control parameter-input" id="motSpeedDefault" value="150" min="20" max="600">
                 </div>
                 <div class="parameter-row">
+                    <label class="parameter-label">Dot Size (px):</label>
+                    <input type="number" class="form-control parameter-input" id="motDotSizePxDefault" value="44" min="2" max="200">
+                    <div class="parameter-help">Diameter of each MOT object in pixels</div>
+                </div>
+                <div class="parameter-row">
                     <label class="parameter-label">Motion Type:</label>
                     <select class="form-control parameter-input" id="motMotionTypeDefault">
                         <option value="linear" selected>Linear</option>
@@ -4015,7 +4970,7 @@ class JsonBuilder {
                 <div class="parameter-row">
                     <label class="parameter-label">Session Duration (ms):</label>
                     <input type="number" class="form-control parameter-input" id="socSessionDurationMs" value="60000" min="0" max="3600000">
-                    <div class="parameter-help">0 = no auto-end (participant ends with end key)</div>
+                    <div class="parameter-help">Duration of each SOC Dashboard session component. This is separate from the experiment-wide continuous duration.</div>
                 </div>
 
                 <div class="parameter-row">
@@ -4241,6 +5196,40 @@ class JsonBuilder {
                     <input type="number" class="form-control parameter-input" id="defaultFeedbackDuration" value="500" min="0" max="20000" disabled>
                     <div class="parameter-help">How long feedback is displayed after the response</div>
                 </div>
+                <div id="feedbackArrowStyleSettings" style="display:none;">
+                    <div class="parameter-row">
+                        <label class="parameter-label">Arrow Color Mode:</label>
+                        <select class="form-control parameter-input" id="defaultFeedbackArrowColorMode">
+                            <option value="auto" selected>Auto (correct/incorrect colors)</option>
+                            <option value="neutral">Neutral</option>
+                            <option value="custom">Custom single color</option>
+                        </select>
+                        <div class="parameter-help">Controls how arrow feedback color is determined.</div>
+                    </div>
+                    <div class="parameter-row" id="feedbackArrowAutoColorsRow" style="display:none;">
+                        <label class="parameter-label">Auto Colors:</label>
+                        <div class="d-flex gap-2">
+                            <input type="color" class="form-control form-control-color parameter-input" id="defaultFeedbackArrowCorrectColor" value="#5CFF8A" title="Correct color">
+                            <input type="color" class="form-control form-control-color parameter-input" id="defaultFeedbackArrowIncorrectColor" value="#FF5C5C" title="Incorrect color">
+                        </div>
+                    </div>
+                    <div class="parameter-row" id="feedbackArrowNeutralColorRow" style="display:none;">
+                        <label class="parameter-label">Neutral Arrow Color:</label>
+                        <input type="color" class="form-control form-control-color parameter-input" id="defaultFeedbackArrowNeutralColor" value="#CBD5E1">
+                    </div>
+                    <div class="parameter-row" id="feedbackArrowCustomColorRow" style="display:none;">
+                        <label class="parameter-label">Custom Arrow Color:</label>
+                        <input type="color" class="form-control form-control-color parameter-input" id="defaultFeedbackArrowCustomColor" value="#93A3B8">
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Arrow Size (px):</label>
+                        <input type="number" class="form-control parameter-input" id="defaultFeedbackArrowSizePx" value="8" min="2" max="80" step="1">
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Arrow Line Width (px):</label>
+                        <input type="number" class="form-control parameter-input" id="defaultFeedbackArrowLineWidthPx" value="3.5" min="0.5" max="20" step="0.5">
+                    </div>
+                </div>
                 <div id="mouseResponseSettings" style="display: none;">
                     <div class="parameter-row">
                         <label class="parameter-label">Mouse Response:</label>
@@ -4263,6 +5252,24 @@ class JsonBuilder {
                             <option value="hover">Hover (no click)</option>
                         </select>
                         <div class="parameter-help">How a segment selection is registered</div>
+                    </div>
+                    <div id="mouseAccuracySettings">
+                        <div class="parameter-row">
+                            <label class="parameter-label">Accuracy Mode:</label>
+                            <select class="form-control parameter-input" id="mouseAccuracyMode">
+                                <option value="auto" selected>Auto (side for 2 segments, angular for &gt;2)</option>
+                                <option value="side">Side</option>
+                                <option value="angular">Angular tolerance</option>
+                            </select>
+                        </div>
+                        <div class="parameter-row">
+                            <label class="parameter-label">Angular Tolerance (deg):</label>
+                            <input type="number" class="form-control parameter-input" id="mouseAccuracyToleranceDeg" value="" min="0" max="180" step="0.1" placeholder="Auto by segments">
+                        </div>
+                        <div class="parameter-row">
+                            <label class="parameter-label">Angular Slack (deg):</label>
+                            <input type="number" class="form-control parameter-input" id="mouseAccuracySlackDeg" value="0" min="0" max="180" step="0.1">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -4287,6 +5294,11 @@ class JsonBuilder {
         const feedbackTypeEl = document.getElementById('defaultFeedbackType');
         if (feedbackTypeEl) {
             feedbackTypeEl.addEventListener('change', () => this.updateConditionalUI());
+        }
+
+        const feedbackArrowColorModeEl = document.getElementById('defaultFeedbackArrowColorMode');
+        if (feedbackArrowColorModeEl) {
+            feedbackArrowColorModeEl.addEventListener('change', () => this.updateConditionalUI());
         }
 
         // Task-specific conditional UI (Gabor response keys)
@@ -4702,6 +5714,11 @@ class JsonBuilder {
                 <div class="parameter-row">
                     <label class="parameter-label">Speed (px/s):</label>
                     <input type="number" class="form-control parameter-input" id="motSpeedDefault" value="150" min="20" max="600">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Dot Size (px):</label>
+                    <input type="number" class="form-control parameter-input" id="motDotSizePxDefault" value="44" min="2" max="200">
+                    <div class="parameter-help">Diameter of each MOT object in pixels</div>
                 </div>
                 <div class="parameter-row">
                     <label class="parameter-label">Motion Type:</label>
@@ -5325,6 +6342,40 @@ class JsonBuilder {
                     <input type="number" class="form-control parameter-input" id="defaultFeedbackDuration" value="500" min="0" max="20000" disabled>
                     <div class="parameter-help">How long feedback is displayed after the response</div>
                 </div>
+                <div id="feedbackArrowStyleSettings" style="display:none;">
+                    <div class="parameter-row">
+                        <label class="parameter-label">Arrow Color Mode:</label>
+                        <select class="form-control parameter-input" id="defaultFeedbackArrowColorMode">
+                            <option value="auto" selected>Auto (correct/incorrect colors)</option>
+                            <option value="neutral">Neutral</option>
+                            <option value="custom">Custom single color</option>
+                        </select>
+                        <div class="parameter-help">Controls how arrow feedback color is determined.</div>
+                    </div>
+                    <div class="parameter-row" id="feedbackArrowAutoColorsRow" style="display:none;">
+                        <label class="parameter-label">Auto Colors:</label>
+                        <div class="d-flex gap-2">
+                            <input type="color" class="form-control form-control-color parameter-input" id="defaultFeedbackArrowCorrectColor" value="#5CFF8A" title="Correct color">
+                            <input type="color" class="form-control form-control-color parameter-input" id="defaultFeedbackArrowIncorrectColor" value="#FF5C5C" title="Incorrect color">
+                        </div>
+                    </div>
+                    <div class="parameter-row" id="feedbackArrowNeutralColorRow" style="display:none;">
+                        <label class="parameter-label">Neutral Arrow Color:</label>
+                        <input type="color" class="form-control form-control-color parameter-input" id="defaultFeedbackArrowNeutralColor" value="#CBD5E1">
+                    </div>
+                    <div class="parameter-row" id="feedbackArrowCustomColorRow" style="display:none;">
+                        <label class="parameter-label">Custom Arrow Color:</label>
+                        <input type="color" class="form-control form-control-color parameter-input" id="defaultFeedbackArrowCustomColor" value="#93A3B8">
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Arrow Size (px):</label>
+                        <input type="number" class="form-control parameter-input" id="defaultFeedbackArrowSizePx" value="8" min="2" max="80" step="1">
+                    </div>
+                    <div class="parameter-row">
+                        <label class="parameter-label">Arrow Line Width (px):</label>
+                        <input type="number" class="form-control parameter-input" id="defaultFeedbackArrowLineWidthPx" value="3.5" min="0.5" max="20" step="0.5">
+                    </div>
+                </div>
                 <div id="mouseResponseSettings" style="display: none;">
                     <div class="parameter-row">
                         <label class="parameter-label">Mouse Response:</label>
@@ -5347,6 +6398,24 @@ class JsonBuilder {
                             <option value="hover">Hover (no click)</option>
                         </select>
                         <div class="parameter-help">How a segment selection is registered</div>
+                    </div>
+                    <div id="mouseAccuracySettings">
+                        <div class="parameter-row">
+                            <label class="parameter-label">Accuracy Mode:</label>
+                            <select class="form-control parameter-input" id="mouseAccuracyMode">
+                                <option value="auto" selected>Auto (side for 2 segments, angular for &gt;2)</option>
+                                <option value="side">Side</option>
+                                <option value="angular">Angular tolerance</option>
+                            </select>
+                        </div>
+                        <div class="parameter-row">
+                            <label class="parameter-label">Angular Tolerance (deg):</label>
+                            <input type="number" class="form-control parameter-input" id="mouseAccuracyToleranceDeg" value="" min="0" max="180" step="0.1" placeholder="Auto by segments">
+                        </div>
+                        <div class="parameter-row">
+                            <label class="parameter-label">Angular Slack (deg):</label>
+                            <input type="number" class="form-control parameter-input" id="mouseAccuracySlackDeg" value="0" min="0" max="180" step="0.1">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -5373,6 +6442,11 @@ class JsonBuilder {
         const feedbackTypeEl = document.getElementById('defaultFeedbackType');
         if (feedbackTypeEl) {
             feedbackTypeEl.addEventListener('change', () => this.updateConditionalUI());
+        }
+
+        const feedbackArrowColorModeEl = document.getElementById('defaultFeedbackArrowColorMode');
+        if (feedbackArrowColorModeEl) {
+            feedbackArrowColorModeEl.addEventListener('change', () => this.updateConditionalUI());
         }
 
         // Task-specific conditional UI (Gabor response keys)
@@ -5585,18 +6659,18 @@ class JsonBuilder {
                 gabor_target_tilt_options: { type: 'string', default: '-45,45' },
                 gabor_distractor_orientation_options: { type: 'string', default: '0,90' },
                 gabor_spatial_cue_enabled: { type: 'boolean', default: true },
-                gabor_spatial_cue_options: { type: 'string', default: 'none,left,right,both' },
-                gabor_spatial_cue_probability: { type: 'number', default: 1, min: 0, max: 1, step: 0.01 },
-                gabor_spatial_cue_validity_probability: { type: 'number', default: 1, min: 0, max: 1, step: 0.01 },
-                gabor_target_left_probability: { type: 'number', default: null, min: 0, max: 1, step: 0.01 },
-                gabor_spatial_cue_target_mode: { type: 'select', default: 'couple_target_to_cue', options: ['couple_target_to_cue', 'preserve_target_distribution'] },
+                gabor_spatial_cue_options: { type: 'string', default: 'none,left,right,both', description: 'Allowed spatial cues sampled for the block.' },
+                gabor_spatial_cue_probability: { type: 'number', default: 1, min: 0, max: 1, step: 0.01, description: 'Probability that a spatial cue appears on a given trial.' },
+                gabor_spatial_cue_validity_probability: { type: 'number', default: 1, min: 0, max: 1, step: 0.01, description: 'When target-cue coupling is enabled, probability that a unilateral cue is valid.' },
+                gabor_target_left_probability: { type: 'number', default: null, min: 0, max: 1, step: 0.01, description: 'Optional target-side bias. When both target locations are available, this sets P(target = left). Leave blank for uniform sampling.' },
+                gabor_spatial_cue_target_mode: { type: 'select', default: 'couple_target_to_cue', options: ['couple_target_to_cue', 'preserve_target_distribution'], description: 'Choose whether cue validity flips the target side, or whether the sampled target distribution is preserved.' },
                 gabor_value_cue_enabled: { type: 'boolean', default: true },
-                gabor_left_value_options: { type: 'string', default: 'neutral,high,low' },
-                gabor_right_value_options: { type: 'string', default: 'neutral,high,low' },
-                gabor_value_cue_probability: { type: 'number', default: 1, min: 0, max: 1, step: 0.01 },
-                gabor_value_target_value: { type: 'select', default: 'any', options: ['any', 'high', 'low', 'neutral'] },
-                gabor_value_non_target_value: { type: 'select', default: 'any', options: ['any', 'high', 'low', 'neutral'] },
-                gabor_use_stored_thresholds: { type: 'boolean', default: false },
+                gabor_left_value_options: { type: 'string', default: 'neutral,high,low', description: 'Allowed value cues for the left side.' },
+                gabor_right_value_options: { type: 'string', default: 'neutral,high,low', description: 'Allowed value cues for the right side.' },
+                gabor_value_cue_probability: { type: 'number', default: 1, min: 0, max: 1, step: 0.01, description: 'Probability that value cues appear on a given trial.' },
+                gabor_value_target_value: { type: 'select', default: 'any', options: ['any', 'high', 'low', 'neutral'], description: 'If set, the target is forced onto a side carrying this value cue.' },
+                gabor_value_non_target_value: { type: 'select', default: 'any', options: ['any', 'high', 'low', 'neutral'], description: 'Optional forced value for the non-target side after target-value coupling is applied.' },
+                gabor_use_stored_thresholds: { type: 'boolean', default: false, description: 'Reuse threshold values stored by an earlier QUEST block when they are available.' },
                 gabor_reward_availability_high: { type: 'number', default: 0.8, min: 0, max: 1, step: 0.01 },
                 gabor_reward_availability_low: { type: 'number', default: 0.8, min: 0, max: 1, step: 0.01 },
                 gabor_reward_availability_neutral: { type: 'number', default: 0, min: 0, max: 1, step: 0.01 },
@@ -5615,8 +6689,8 @@ class JsonBuilder {
 
                 // Optional adaptive staircase per-block (stored in exported block.parameter_values.adaptive)
                 gabor_adaptive_mode: { type: 'select', default: 'none', options: ['none', 'quest'] },
-                gabor_quest_parameter: { type: 'select', default: 'target_tilt_deg', options: ['target_tilt_deg', 'spatial_frequency_cyc_per_px', 'contrast'] },
-                gabor_quest_target_performance: { type: 'number', default: 0.82, min: 0.5, max: 0.99, step: 0.01 },
+                gabor_quest_parameter: { type: 'select', default: 'target_tilt_deg', options: ['target_tilt_deg', 'spatial_frequency_cyc_per_px', 'contrast'], description: 'Stimulus parameter adjusted by QUEST.' },
+                gabor_quest_target_performance: { type: 'number', default: 0.82, min: 0.5, max: 0.99, step: 0.01, description: 'Target performance level for the QUEST posterior.' },
                 gabor_quest_start_value: { type: 'number', default: 45, step: 0.1 },
                 gabor_quest_start_sd: { type: 'number', default: 20, min: 0.001, step: 0.1 },
                 gabor_quest_beta: { type: 'number', default: 3.5, min: 0.001, step: 0.1 },
@@ -5624,18 +6698,18 @@ class JsonBuilder {
                 gabor_quest_gamma: { type: 'number', default: 0.5, min: 0, max: 1, step: 0.01 },
                 gabor_quest_min_value: { type: 'number', default: -90, step: 0.1 },
                 gabor_quest_max_value: { type: 'number', default: 90, step: 0.1 },
-                gabor_quest_trials_coarse: { type: 'number', default: 32, min: 0, max: 10000, step: 1 },
-                gabor_quest_trials_fine: { type: 'number', default: 32, min: 0, max: 10000, step: 1 },
-                gabor_quest_staircase_per_location: { type: 'boolean', default: false },
-                gabor_quest_store_location_threshold: { type: 'boolean', default: false },
+                gabor_quest_trials_coarse: { type: 'number', default: 32, min: 0, max: 10000, step: 1, description: 'Number of coarse-phase QUEST trials before fine tuning begins.' },
+                gabor_quest_trials_fine: { type: 'number', default: 32, min: 0, max: 10000, step: 1, description: 'Number of fine-phase QUEST trials after the coarse phase.' },
+                gabor_quest_staircase_per_location: { type: 'boolean', default: false, description: 'Maintain independent QUEST staircases for left and right target locations.' },
+                gabor_quest_store_location_threshold: { type: 'boolean', default: false, description: 'Store the estimated QUEST threshold(s) for later use in window.cogflowState.gabor_thresholds.' },
 
                 gabor_contrast_min: { type: 'number', default: 0.05, min: 0, max: 1, step: 0.01 },
                 gabor_contrast_max: { type: 'number', default: 0.95, min: 0, max: 1, step: 0.01 },
 
-                gabor_learning_streak_length: { type: 'number', default: 20, min: 1, max: 10000, step: 1 },
+                gabor_learning_streak_length: { type: 'number', default: 20, min: 1, max: 10000, step: 1, description: 'Rolling window length used to evaluate learning accuracy, not a strict consecutive-correct streak.' },
                 gabor_learning_target_accuracy: { type: 'number', default: 0.9, min: 0, max: 1, step: 0.01 },
                 gabor_learning_max_trials: { type: 'number', default: 200, min: 1, max: 100000, step: 1 },
-                gabor_show_feedback: { type: 'boolean', default: true },
+                gabor_show_feedback: { type: 'boolean', default: true, description: 'Show correctness feedback during learning or QUEST trials.' },
                 gabor_feedback_duration_ms: { type: 'number', default: 800, min: 0, max: 30000, step: 1 },
 
                 gabor_stimulus_duration_min: { type: 'number', default: 67, min: 0, max: 10000 },
@@ -5788,6 +6862,7 @@ class JsonBuilder {
             const motOnlyParams = {
                 mot_num_objects_options: { type: 'string', default: (document.getElementById('motNumObjectsDefault')?.value || '8').toString() },
                 mot_num_targets_options: { type: 'string', default: (document.getElementById('motNumTargetsDefault')?.value || '4').toString() },
+                mot_dot_size_px: { type: 'number', default: Number.parseFloat(document.getElementById('motDotSizePxDefault')?.value || '44'), min: 2, max: 200 },
                 mot_motion_type: { type: 'select', default: (document.getElementById('motMotionTypeDefault')?.value || 'linear').toString(), options: ['linear', 'curved'] },
                 mot_probe_mode: { type: 'select', default: (document.getElementById('motProbeModeDefault')?.value || 'click').toString(), options: ['click', 'number_entry', 'yes_no_recognition'] },
                 mot_yes_key: { type: 'string', default: (document.getElementById('motYesKeyDefault')?.value || 'y').toString() },
@@ -5848,9 +6923,21 @@ class JsonBuilder {
                 response_device: { type: 'select', default: 'inherit', options: ['inherit', 'keyboard', 'mouse', 'touch', 'voice', 'custom'] },
                 response_keys: { type: 'string', default: '' },
                 require_response_mode: { type: 'select', default: 'inherit', options: ['inherit', 'true', 'false'] },
+                feedback_mode: { type: 'select', default: 'inherit', options: ['inherit', 'off', 'corner-text', 'arrow', 'custom'] },
+                feedback_duration_ms: { type: 'number', default: 500, min: 0, max: 20000 },
+                feedback_arrow_color_mode: { type: 'select', default: 'inherit', options: ['inherit', 'auto', 'neutral', 'custom'] },
+                feedback_arrow_neutral_color: { type: 'COLOR', default: '#CBD5E1' },
+                feedback_arrow_custom_color: { type: 'COLOR', default: '#93A3B8' },
+                feedback_arrow_correct_color: { type: 'COLOR', default: '#5CFF8A' },
+                feedback_arrow_incorrect_color: { type: 'COLOR', default: '#FF5C5C' },
+                feedback_arrow_size_px: { type: 'number', default: 8, min: 2, max: 80 },
+                feedback_arrow_line_width_px: { type: 'number', default: 3.5, min: 0.5, max: 20, step: 0.5 },
                 mouse_segments: { type: 'number', default: 2, min: 1, max: 12 },
                 mouse_start_angle_deg: { type: 'number', default: 0, min: 0, max: 359 },
                 mouse_selection_mode: { type: 'select', default: 'click', options: ['click', 'hover'] },
+                mouse_accuracy_mode: { type: 'select', default: 'inherit', options: ['inherit', 'side', 'angular'] },
+                mouse_accuracy_tolerance_deg: { type: 'number', default: '', min: 0, max: 180, step: 0.1 },
+                mouse_accuracy_slack_deg: { type: 'number', default: 0, min: 0, max: 180, step: 0.1 },
 
                 // Shared RDM timing windows (set min=max for constant per-block timing)
                 stimulus_duration_min: { type: 'number', default: 1500, min: 100, max: 30000 },
@@ -7720,6 +8807,7 @@ class JsonBuilder {
             const numObjects = Number.parseInt(document.getElementById('motNumObjectsDefault')?.value || '8', 10);
             const numTargets = Number.parseInt(document.getElementById('motNumTargetsDefault')?.value || '4', 10);
             const speed = Number.parseFloat(document.getElementById('motSpeedDefault')?.value || '150');
+            const dotSizePx = Number.parseFloat(document.getElementById('motDotSizePxDefault')?.value || '44');
             const motionType = (document.getElementById('motMotionTypeDefault')?.value || 'linear').toString();
             const probeMode = (document.getElementById('motProbeModeDefault')?.value || 'click').toString();
             const yesKey = (document.getElementById('motYesKeyDefault')?.value || 'y').toString().trim() || 'y';
@@ -7738,6 +8826,7 @@ class JsonBuilder {
                 num_objects: Number.isFinite(numObjects) ? numObjects : 8,
                 num_targets: Number.isFinite(numTargets) ? numTargets : 4,
                 speed_px_per_s: Number.isFinite(speed) ? speed : 150,
+                dot_size_px: Number.isFinite(dotSizePx) ? dotSizePx : 44,
                 motion_type: motionType,
                 probe_mode: probeMode,
                 yes_key: yesKey,
@@ -8190,6 +9279,7 @@ class JsonBuilder {
             num_objects: Number.isFinite(Number(d.num_objects)) ? Number(d.num_objects) : 8,
             num_targets: Number.isFinite(Number(d.num_targets)) ? Number(d.num_targets) : 4,
             speed_px_per_s: Number.isFinite(Number(d.speed_px_per_s)) ? Number(d.speed_px_per_s) : 150,
+            dot_size_px: Number.isFinite(Number(d.dot_size_px)) ? Number(d.dot_size_px) : 44,
             motion_type: (d.motion_type || 'linear').toString(),
             probe_mode: (d.probe_mode || 'click').toString(),
             yes_key: (d.yes_key || 'y').toString(),
@@ -8444,6 +9534,7 @@ class JsonBuilder {
             num_objects: Number.parseInt(document.getElementById('motNumObjectsDefault')?.value || '8', 10),
             num_targets: Number.parseInt(document.getElementById('motNumTargetsDefault')?.value || '4', 10),
             speed_px_per_s: Number.parseFloat(document.getElementById('motSpeedDefault')?.value || '150'),
+            dot_size_px: Number.parseFloat(document.getElementById('motDotSizePxDefault')?.value || '44'),
             motion_type: (document.getElementById('motMotionTypeDefault')?.value || 'linear').toString(),
             probe_mode: (document.getElementById('motProbeModeDefault')?.value || 'click').toString(),
             yes_key: (document.getElementById('motYesKeyDefault')?.value || 'y').toString().trim() || 'y',
@@ -8468,6 +9559,7 @@ class JsonBuilder {
         const iti = Number.isFinite(Number(d.iti_ms)) ? Number(d.iti_ms) : 1000;
         const nums = Number.isFinite(Number(d.num_objects)) ? Number(d.num_objects) : 8;
         const tgts = Number.isFinite(Number(d.num_targets)) ? Number(d.num_targets) : 4;
+        const dotSizePx = Number.isFinite(Number(d.dot_size_px)) ? Number(d.dot_size_px) : 44;
         const recognitionProbeCount = Number.isFinite(Number(d.recognition_probe_count)) ? Math.max(1, Number(d.recognition_probe_count)) : 1;
         const borderWidth = Number.isFinite(Number(d.aperture_border_width_px)) ? Number(d.aperture_border_width_px) : 2;
 
@@ -8475,6 +9567,7 @@ class JsonBuilder {
             block_component_type: 'mot-trial',
             mot_num_objects_options: String(nums),
             mot_num_targets_options: String(tgts),
+            mot_dot_size_px: dotSizePx,
             mot_motion_type: (d.motion_type || 'linear').toString(),
             mot_probe_mode: (d.probe_mode || 'click').toString(),
             mot_yes_key: (d.yes_key || 'y').toString(),
@@ -9647,9 +10740,19 @@ class JsonBuilder {
                 'end_condition_on_response_mode',
                 'feedback_mode',
                 'feedback_duration_ms',
+                'feedback_arrow_color_mode',
+                'feedback_arrow_neutral_color',
+                'feedback_arrow_custom_color',
+                'feedback_arrow_correct_color',
+                'feedback_arrow_incorrect_color',
+                'feedback_arrow_size_px',
+                'feedback_arrow_line_width_px',
                 'mouse_segments',
                 'mouse_start_angle_deg',
                 'mouse_selection_mode',
+                'mouse_accuracy_mode',
+                'mouse_accuracy_tolerance_deg',
+                'mouse_accuracy_slack_deg',
                 'response_target_group',
                 'cue_border_mode',
                 'cue_border_color',
@@ -10495,6 +11598,10 @@ class JsonBuilder {
             if (nums.length > 0) values.num_objects = Array.from(new Set(nums));
             const tgts = parseIntCSV(blockComponent.mot_num_targets_options);
             if (tgts.length > 0) values.num_targets = Array.from(new Set(tgts));
+            if (blockComponent.mot_dot_size_px !== undefined && blockComponent.mot_dot_size_px !== null && blockComponent.mot_dot_size_px !== '') {
+                const dotSize = Number.parseFloat(blockComponent.mot_dot_size_px);
+                if (Number.isFinite(dotSize) && dotSize > 0) values.dot_size_px = dotSize;
+            }
             const mtype = (blockComponent.mot_motion_type ?? '').toString().trim();
             if (mtype) values.motion_type = mtype;
             const pm = (blockComponent.mot_probe_mode ?? '').toString().trim();
@@ -10669,6 +11776,13 @@ class JsonBuilder {
         // Feedback override
         const feedbackMode = componentParams.feedback_mode;
         const feedbackDurationRaw = componentParams.feedback_duration_ms;
+        const feedbackArrowColorMode = componentParams.feedback_arrow_color_mode;
+        const feedbackArrowNeutralColor = componentParams.feedback_arrow_neutral_color;
+        const feedbackArrowCustomColor = componentParams.feedback_arrow_custom_color;
+        const feedbackArrowCorrectColor = componentParams.feedback_arrow_correct_color;
+        const feedbackArrowIncorrectColor = componentParams.feedback_arrow_incorrect_color;
+        const feedbackArrowSizePxRaw = componentParams.feedback_arrow_size_px;
+        const feedbackArrowLineWidthPxRaw = componentParams.feedback_arrow_line_width_px;
 
         // Dot-groups target + cue border
         const responseTargetGroup = componentParams.response_target_group ?? componentParams.custom_response ?? componentParams.customResponse;
@@ -10686,15 +11800,27 @@ class JsonBuilder {
             endConditionMode !== 'inherit'
         );
         const hasFeedbackOverride = typeof feedbackMode === 'string' && feedbackMode !== '' && feedbackMode !== 'inherit';
+        const hasFeedbackStyleOverride = (
+            typeof feedbackArrowColorMode === 'string' && feedbackArrowColorMode !== '' && feedbackArrowColorMode !== 'inherit'
+        ) || !!feedbackArrowNeutralColor || !!feedbackArrowCustomColor || !!feedbackArrowCorrectColor || !!feedbackArrowIncorrectColor
+            || (feedbackArrowSizePxRaw !== undefined && feedbackArrowSizePxRaw !== null && feedbackArrowSizePxRaw !== '')
+            || (feedbackArrowLineWidthPxRaw !== undefined && feedbackArrowLineWidthPxRaw !== null && feedbackArrowLineWidthPxRaw !== '');
         const hasMouseOverride = (
             responseDevice === 'mouse' &&
-            (componentParams.mouse_segments !== undefined || componentParams.mouse_start_angle_deg !== undefined || componentParams.mouse_selection_mode !== undefined)
+            (
+                componentParams.mouse_segments !== undefined
+                || componentParams.mouse_start_angle_deg !== undefined
+                || componentParams.mouse_selection_mode !== undefined
+                || componentParams.mouse_accuracy_mode !== undefined
+                || componentParams.mouse_accuracy_tolerance_deg !== undefined
+                || componentParams.mouse_accuracy_slack_deg !== undefined
+            )
         );
 
         const hasTargetOverride = typeof responseTargetGroup === 'string' && responseTargetGroup !== '' && responseTargetGroup !== 'none';
         const hasCueOverride = typeof cueBorderMode === 'string' && cueBorderMode !== '' && cueBorderMode !== 'off';
 
-        if (!hasDeviceOverride && !hasKeysOverride && !hasRequireOverride && !hasEndConditionOverride && !hasFeedbackOverride && !hasMouseOverride && !hasTargetOverride && !hasCueOverride) {
+        if (!hasDeviceOverride && !hasKeysOverride && !hasRequireOverride && !hasEndConditionOverride && !hasFeedbackOverride && !hasFeedbackStyleOverride && !hasMouseOverride && !hasTargetOverride && !hasCueOverride) {
             return null;
         }
 
@@ -10736,6 +11862,29 @@ class JsonBuilder {
             }
         }
 
+        if (merged.feedback && merged.feedback.enabled) {
+            if (typeof feedbackArrowColorMode === 'string' && feedbackArrowColorMode !== '' && feedbackArrowColorMode !== 'inherit') {
+                merged.feedback.arrow_color_mode = feedbackArrowColorMode;
+            }
+            if (feedbackArrowNeutralColor) merged.feedback.arrow_neutral_color = feedbackArrowNeutralColor;
+            if (feedbackArrowCustomColor) merged.feedback.arrow_custom_color = feedbackArrowCustomColor;
+            if (feedbackArrowCorrectColor) merged.feedback.arrow_correct_color = feedbackArrowCorrectColor;
+            if (feedbackArrowIncorrectColor) merged.feedback.arrow_incorrect_color = feedbackArrowIncorrectColor;
+
+            if (feedbackArrowSizePxRaw !== undefined && feedbackArrowSizePxRaw !== null && feedbackArrowSizePxRaw !== '') {
+                const arrowSize = Number.parseFloat(feedbackArrowSizePxRaw);
+                if (Number.isFinite(arrowSize) && arrowSize > 0) {
+                    merged.feedback.arrow_size_px = arrowSize;
+                }
+            }
+            if (feedbackArrowLineWidthPxRaw !== undefined && feedbackArrowLineWidthPxRaw !== null && feedbackArrowLineWidthPxRaw !== '') {
+                const arrowLineWidth = Number.parseFloat(feedbackArrowLineWidthPxRaw);
+                if (Number.isFinite(arrowLineWidth) && arrowLineWidth > 0) {
+                    merged.feedback.arrow_line_width_px = arrowLineWidth;
+                }
+            }
+        }
+
         const effectiveDevice = merged.response_device || 'keyboard';
 
         // Apply key overrides (keyboard only)
@@ -10761,7 +11910,14 @@ class JsonBuilder {
                 mode: 'aperture-segments',
                 segments: parseInt(componentParams.mouse_segments ?? merged.mouse_response?.segments ?? 2),
                 start_angle_deg: parseFloat(componentParams.mouse_start_angle_deg ?? merged.mouse_response?.start_angle_deg ?? 0),
-                selection_mode: componentParams.mouse_selection_mode ?? merged.mouse_response?.selection_mode ?? 'click'
+                selection_mode: componentParams.mouse_selection_mode ?? merged.mouse_response?.selection_mode ?? 'click',
+                accuracy_mode: componentParams.mouse_accuracy_mode ?? merged.mouse_response?.accuracy_mode,
+                accuracy_tolerance_deg: (componentParams.mouse_accuracy_tolerance_deg !== undefined && componentParams.mouse_accuracy_tolerance_deg !== null && componentParams.mouse_accuracy_tolerance_deg !== '')
+                    ? parseFloat(componentParams.mouse_accuracy_tolerance_deg)
+                    : merged.mouse_response?.accuracy_tolerance_deg,
+                accuracy_slack_deg: (componentParams.mouse_accuracy_slack_deg !== undefined && componentParams.mouse_accuracy_slack_deg !== null && componentParams.mouse_accuracy_slack_deg !== '')
+                    ? parseFloat(componentParams.mouse_accuracy_slack_deg)
+                    : merged.mouse_response?.accuracy_slack_deg
             };
         } else {
             // Keep output clean if not a mouse-response component
@@ -10993,6 +12149,28 @@ class JsonBuilder {
                 type: feedbackType,
                 duration_ms: Number.isFinite(duration) ? duration : 500
             };
+
+            if (feedbackType === 'arrow') {
+                const arrowColorMode = (document.getElementById('defaultFeedbackArrowColorMode')?.value || 'auto').toString();
+                const arrowNeutralColor = (document.getElementById('defaultFeedbackArrowNeutralColor')?.value || '#CBD5E1').toString();
+                const arrowCustomColor = (document.getElementById('defaultFeedbackArrowCustomColor')?.value || '#93A3B8').toString();
+                const arrowCorrectColor = (document.getElementById('defaultFeedbackArrowCorrectColor')?.value || '#5CFF8A').toString();
+                const arrowIncorrectColor = (document.getElementById('defaultFeedbackArrowIncorrectColor')?.value || '#FF5C5C').toString();
+                const arrowSize = Number.parseFloat(document.getElementById('defaultFeedbackArrowSizePx')?.value || '8');
+                const arrowLineWidth = Number.parseFloat(document.getElementById('defaultFeedbackArrowLineWidthPx')?.value || '3.5');
+
+                responseParams.feedback.arrow_color_mode = arrowColorMode;
+                responseParams.feedback.arrow_neutral_color = arrowNeutralColor;
+                responseParams.feedback.arrow_custom_color = arrowCustomColor;
+                responseParams.feedback.arrow_correct_color = arrowCorrectColor;
+                responseParams.feedback.arrow_incorrect_color = arrowIncorrectColor;
+                if (Number.isFinite(arrowSize) && arrowSize > 0) {
+                    responseParams.feedback.arrow_size_px = arrowSize;
+                }
+                if (Number.isFinite(arrowLineWidth) && arrowLineWidth > 0) {
+                    responseParams.feedback.arrow_line_width_px = arrowLineWidth;
+                }
+            }
         }
 
         // Only include keyboard keys/mapping when keyboard is the active response device.
@@ -11014,6 +12192,19 @@ class JsonBuilder {
                 start_angle_deg: parseFloat(document.getElementById('mouseSegmentStartAngle')?.value || 0),
                 selection_mode: document.getElementById('mouseSelectionMode')?.value || 'click'
             };
+
+            const accuracyMode = (document.getElementById('mouseAccuracyMode')?.value || 'auto').toString();
+            const accuracyTolerance = Number.parseFloat(document.getElementById('mouseAccuracyToleranceDeg')?.value || '');
+            const accuracySlack = Number.parseFloat(document.getElementById('mouseAccuracySlackDeg')?.value || '');
+            if (accuracyMode === 'side' || accuracyMode === 'angular') {
+                responseParams.mouse_response.accuracy_mode = accuracyMode;
+            }
+            if (Number.isFinite(accuracyTolerance) && accuracyTolerance >= 0) {
+                responseParams.mouse_response.accuracy_tolerance_deg = accuracyTolerance;
+            }
+            if (Number.isFinite(accuracySlack) && accuracySlack >= 0) {
+                responseParams.mouse_response.accuracy_slack_deg = accuracySlack;
+            }
         }
 
         if (responseDevice === 'touch') {
@@ -11820,6 +13011,13 @@ class JsonBuilder {
         if (exp.response_parameters?.feedback?.type) {
             this.setElementValue('defaultFeedbackType', exp.response_parameters.feedback.type);
             this.setElementValue('defaultFeedbackDuration', exp.response_parameters.feedback.duration_ms);
+            this.setElementValue('defaultFeedbackArrowColorMode', exp.response_parameters.feedback.arrow_color_mode);
+            this.setElementValue('defaultFeedbackArrowNeutralColor', exp.response_parameters.feedback.arrow_neutral_color);
+            this.setElementValue('defaultFeedbackArrowCustomColor', exp.response_parameters.feedback.arrow_custom_color);
+            this.setElementValue('defaultFeedbackArrowCorrectColor', exp.response_parameters.feedback.arrow_correct_color);
+            this.setElementValue('defaultFeedbackArrowIncorrectColor', exp.response_parameters.feedback.arrow_incorrect_color);
+            this.setElementValue('defaultFeedbackArrowSizePx', exp.response_parameters.feedback.arrow_size_px);
+            this.setElementValue('defaultFeedbackArrowLineWidthPx', exp.response_parameters.feedback.arrow_line_width_px);
         }
 
         // Mouse response (optional)
@@ -11827,6 +13025,9 @@ class JsonBuilder {
             this.setElementValue('mouseApertureSegments', exp.response_parameters.mouse_response.segments);
             this.setElementValue('mouseSegmentStartAngle', exp.response_parameters.mouse_response.start_angle_deg);
             this.setElementValue('mouseSelectionMode', exp.response_parameters.mouse_response.selection_mode);
+            this.setElementValue('mouseAccuracyMode', exp.response_parameters.mouse_response.accuracy_mode);
+            this.setElementValue('mouseAccuracyToleranceDeg', exp.response_parameters.mouse_response.accuracy_tolerance_deg);
+            this.setElementValue('mouseAccuracySlackDeg', exp.response_parameters.mouse_response.accuracy_slack_deg);
         }
         this.setElementChecked('enableFixation', true);
         
@@ -12341,8 +13542,8 @@ class JsonBuilder {
      * Publish the current config to the CogFlow Platform backend.
      *
      * Activated when window.COGFLOW_PLATFORM_URL is set (e.g. "http://localhost:8000").
-     * Study metadata is read from window.COGFLOW_STUDY_SLUG / COGFLOW_STUDY_NAME /
-     * COGFLOW_CONFIG_VERSION, or prompted via the UI when absent.
+    * Study metadata is read from window.COGFLOW_STUDY_SLUG / COGFLOW_STUDY_NAME /
+    * COGFLOW_CONFIG_VERSION (used as task/config label), or prompted via the UI.
      *
      * Called by the "Platform Publish" button in the platform version of index.html.
      */
@@ -12375,7 +13576,7 @@ class JsonBuilder {
             }
         };
 
-        const requestPublishMetadata = ({ initialName = '', initialSlug = '', initialVersion = '' }) => {
+        const requestPublishMetadata = ({ initialName = '', initialSlug = '', initialTaskLabel = '' }) => {
             const modalEl = document.getElementById('publishMetadataModal');
             const bootstrapApi = window.bootstrap;
             if (!modalEl || !bootstrapApi?.Modal) {
@@ -12437,7 +13638,7 @@ class JsonBuilder {
                 const onConfirm = () => {
                     const studyName = String(nameInput.value || '').trim();
                     const studySlug = toSlug(slugInput.value);
-                    const configVersion = String(versionInput.value || '').trim();
+                    const taskLabel = String(versionInput.value || '').trim();
 
                     if (!studyName) {
                         showError('Study name is required.');
@@ -12449,8 +13650,8 @@ class JsonBuilder {
                         slugInput.focus();
                         return;
                     }
-                    if (!configVersion) {
-                        showError('Config version is required.');
+                    if (!taskLabel) {
+                        showError('Task name is required.');
                         versionInput.focus();
                         return;
                     }
@@ -12458,7 +13659,7 @@ class JsonBuilder {
                     finish({
                         study_name: studyName,
                         study_slug: studySlug,
-                        config_version: configVersion,
+                        task_label: taskLabel,
                     });
                     modal.hide();
                 };
@@ -12466,7 +13667,7 @@ class JsonBuilder {
                 clearError();
                 nameInput.value = initialName;
                 slugInput.value = initialSlug;
-                versionInput.value = initialVersion;
+                versionInput.value = initialTaskLabel;
                 slugTouched = Boolean(initialSlug);
 
                 modalEl.addEventListener('hidden.bs.modal', onHidden);
@@ -12518,7 +13719,17 @@ class JsonBuilder {
             savedMeta = {};
         }
 
-        const defaultVersionLabel = `v${new Date().toISOString().slice(0, 10)}`;
+        const stamp = (() => {
+            const d = new Date();
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+        })();
+        const defaultTaskLabel = (() => {
+            const explicitTaskName = String(config?.task_name || '').trim();
+            if (explicitTaskName) return explicitTaskName;
+            const taskType = String(config?.task_type || 'task').trim().toUpperCase();
+            return `${taskType} ${stamp}`;
+        })();
 
         let studyName = (
             (typeof window.COGFLOW_STUDY_NAME === 'string' && window.COGFLOW_STUDY_NAME.trim()) ||
@@ -12531,10 +13742,10 @@ class JsonBuilder {
             ''
         );
 
-        let versionLabel = (
+        let taskLabel = (
             (typeof window.COGFLOW_CONFIG_VERSION === 'string' && window.COGFLOW_CONFIG_VERSION.trim()) ||
             (typeof savedMeta.config_version === 'string' && savedMeta.config_version.trim()) ||
-            defaultVersionLabel
+            defaultTaskLabel
         );
 
         const defaultName = (config?.task_name || config?.task_type || 'Untitled Study').toString().trim();
@@ -12543,56 +13754,59 @@ class JsonBuilder {
             studySlug = toSlug(studyName) || (config && config.task_type ? `${config.task_type}-study` : 'untitled-study');
         }
 
-        const metadataNeeded = !window.COGFLOW_STUDY_NAME || !window.COGFLOW_STUDY_SLUG;
-        if (metadataNeeded) {
-            const modalMeta = await requestPublishMetadata({
-                initialName: studyName,
-                initialSlug: studySlug,
-                initialVersion: versionLabel,
-            });
+        // Always ask on publish so researchers explicitly choose destination + labels.
+        const modalMeta = await requestPublishMetadata({
+            initialName: studyName,
+            initialSlug: studySlug,
+            initialTaskLabel: taskLabel,
+        });
 
-            if (modalMeta) {
-                studyName = modalMeta.study_name;
-                studySlug = modalMeta.study_slug;
-                versionLabel = modalMeta.config_version;
-            } else {
-                const enteredName = safePrompt('Enter study name for Platform Publish:', studyName || defaultName);
-                if (enteredName === null) {
-                    this.showValidationResult('warning', 'Publish canceled.');
-                    return;
-                }
-                studyName = String(enteredName || '').trim();
-                if (!studyName) {
-                    this.showValidationResult('error', 'Study name is required for publish.');
-                    return;
-                }
-
-                const enteredSlug = safePrompt('Enter study slug (URL-safe id):', studySlug || toSlug(studyName));
-                if (enteredSlug === null) {
-                    this.showValidationResult('warning', 'Publish canceled.');
-                    return;
-                }
-                studySlug = toSlug(enteredSlug);
-                if (!studySlug) {
-                    this.showValidationResult('error', 'Study slug is required for publish.');
-                    return;
-                }
-
-                const enteredVersion = safePrompt('Enter config version label:', versionLabel || defaultVersionLabel);
-                if (enteredVersion === null) {
-                    this.showValidationResult('warning', 'Publish canceled.');
-                    return;
-                }
-                versionLabel = String(enteredVersion || '').trim() || defaultVersionLabel;
+        if (modalMeta) {
+            studyName = modalMeta.study_name;
+            studySlug = modalMeta.study_slug;
+            taskLabel = modalMeta.task_label;
+        } else {
+            const enteredName = safePrompt('Enter study name for Platform Publish:', studyName || defaultName);
+            if (enteredName === null) {
+                this.showValidationResult('warning', 'Publish canceled.');
+                return;
             }
+            studyName = String(enteredName || '').trim();
+            if (!studyName) {
+                this.showValidationResult('error', 'Study name is required for publish.');
+                return;
+            }
+
+            const enteredSlug = safePrompt('Enter study slug (URL-safe id):', studySlug || toSlug(studyName));
+            if (enteredSlug === null) {
+                this.showValidationResult('warning', 'Publish canceled.');
+                return;
+            }
+            studySlug = toSlug(enteredSlug);
+            if (!studySlug) {
+                this.showValidationResult('error', 'Study slug is required for publish.');
+                return;
+            }
+
+            const enteredTaskLabel = safePrompt('Enter task name (saved config label):', taskLabel || defaultTaskLabel);
+            if (enteredTaskLabel === null) {
+                this.showValidationResult('warning', 'Publish canceled.');
+                return;
+            }
+            taskLabel = String(enteredTaskLabel || '').trim() || defaultTaskLabel;
+        }
+
+        // Keep a clear task identifier in the JSON itself for downstream selection/UI.
+        if (!String(config.task_name || '').trim()) {
+            config.task_name = taskLabel;
         }
 
         try {
-            const meta = { study_name: studyName, study_slug: studySlug, config_version: versionLabel };
+            const meta = { study_name: studyName, study_slug: studySlug, config_version: taskLabel };
             localStorage.setItem(publishMetaKey, JSON.stringify(meta));
             window.COGFLOW_STUDY_NAME = studyName;
             window.COGFLOW_STUDY_SLUG = studySlug;
-            window.COGFLOW_CONFIG_VERSION = versionLabel;
+            window.COGFLOW_CONFIG_VERSION = taskLabel;
         } catch {
             // ignore storage errors
         }
@@ -12606,7 +13820,7 @@ class JsonBuilder {
         const payload = {
             study_slug: studySlug,
             study_name: studyName,
-            config_version_label: versionLabel,
+            config_version_label: taskLabel,
             builder_version: builderVersion,
             runtime_mode: 'django',
             config,
@@ -12630,9 +13844,11 @@ class JsonBuilder {
 
             if (response.ok) {
                 const dashUrl = data.dashboard_url || `${platformUrl}/studies/${data.study_slug || studySlug}/`;
+                const resolvedLabel = (data.config_version_label || taskLabel || '').toString();
+                const labelAdjusted = data.config_version_label_adjusted === true;
                 this.showValidationResult(
                     'success',
-                    `Published! Study: ${data.study_slug || studySlug} · Config ID: ${data.config_version_id || '—'}\nDashboard: ${dashUrl}`
+                    `Published! Study: ${data.study_slug || studySlug} · Config ID: ${data.config_version_id || '—'} · Task: ${resolvedLabel || '—'}${labelAdjusted ? ' (auto-adjusted to avoid overwrite)' : ''}\nDashboard: ${dashUrl}`
                 );
             } else {
                 const errMsg = data.detail || data.error || JSON.stringify(data);
