@@ -894,6 +894,7 @@ class JsonBuilder {
 
         try {
             this.timelineBuilder = new TimelineBuilder(this);
+            window._cogflowTimelineBuilder = this.timelineBuilder;
         } catch (error) {
             console.error('Error initializing TimelineBuilder:', error);
         }
@@ -2392,6 +2393,7 @@ class JsonBuilder {
                 if (Array.isArray(values.num_targets)) out.mot_num_targets_options = csv(values.num_targets);
                 if (values.dot_size_px !== undefined) out.mot_dot_size_px = values.dot_size_px;
                 if (values.motion_type !== undefined) out.mot_motion_type = values.motion_type;
+                if (values.direction_jitter_deg_per_frame !== undefined) out.mot_direction_jitter_deg_per_frame = values.direction_jitter_deg_per_frame;
                 if (values.probe_mode !== undefined) out.mot_probe_mode = values.probe_mode;
                 if (values.yes_key !== undefined) out.mot_yes_key = values.yes_key;
                 if (values.no_key !== undefined) out.mot_no_key = values.no_key;
@@ -2399,7 +2401,11 @@ class JsonBuilder {
                 if (values.aperture_shape !== undefined) out.mot_aperture_shape = values.aperture_shape;
                 if (values.aperture_border_enabled !== undefined) out.mot_aperture_border_enabled = !!values.aperture_border_enabled;
                 if (values.aperture_border_color !== undefined) out.mot_aperture_border_color = values.aperture_border_color;
+                if (values.object_color !== undefined) out.mot_object_color = values.object_color;
+                if (values.target_cue_color !== undefined) out.mot_target_cue_color = values.target_cue_color;
+                if (values.background_color !== undefined) out.mot_background_color = values.background_color;
                 if (values.show_feedback !== undefined) out.mot_show_feedback = !!values.show_feedback;
+                if (values.feedback_show_count_message !== undefined) out.mot_feedback_show_count_message = !!values.feedback_show_count_message;
                 if (values.feedback_duration_ms !== undefined) out.mot_feedback_duration_ms = values.feedback_duration_ms;
             } else if (innerType === 'stroop-trial') {
                 if (Array.isArray(values.word)) out.stroop_word_options = csv(values.word);
@@ -2482,11 +2488,18 @@ class JsonBuilder {
                 if (values.too_slow_feedback_enabled !== undefined) out.gabor_too_slow_feedback_enabled = !!values.too_slow_feedback_enabled;
                 if (values.feedback_text_no_response !== undefined) out.gabor_feedback_text_no_response = values.feedback_text_no_response;
                 if (values.reward_feedback_enabled !== undefined) out.gabor_reward_feedback_enabled = !!values.reward_feedback_enabled;
+                if (values.reward_scoring_mode !== undefined) out.gabor_reward_scoring_mode = values.reward_scoring_mode;
                 if (values.reward_fast_rt_threshold_ms !== undefined) out.gabor_reward_fast_rt_threshold_ms = values.reward_fast_rt_threshold_ms;
                 if (values.reward_medium_rt_threshold_ms !== undefined) out.gabor_reward_medium_rt_threshold_ms = values.reward_medium_rt_threshold_ms;
                 if (values.reward_points_fast !== undefined) out.gabor_reward_points_fast = values.reward_points_fast;
                 if (values.reward_points_medium !== undefined) out.gabor_reward_points_medium = values.reward_points_medium;
                 if (values.reward_points_slow !== undefined) out.gabor_reward_points_slow = values.reward_points_slow;
+                if (values.reward_bonus_rt_fast_ms !== undefined) out.gabor_reward_bonus_rt_fast_ms = values.reward_bonus_rt_fast_ms;
+                if (values.reward_bonus_rt_slow_ms !== undefined) out.gabor_reward_bonus_rt_slow_ms = values.reward_bonus_rt_slow_ms;
+                if (values.reward_base_points_high !== undefined) out.gabor_reward_base_points_high = values.reward_base_points_high;
+                if (values.reward_base_points_low !== undefined) out.gabor_reward_base_points_low = values.reward_base_points_low;
+                if (values.reward_bonus_max_high !== undefined) out.gabor_reward_bonus_max_high = values.reward_bonus_max_high;
+                if (values.reward_bonus_max_low !== undefined) out.gabor_reward_bonus_max_low = values.reward_bonus_max_low;
                 if (values.reward_feedback_text_template !== undefined) out.gabor_reward_feedback_text_template = values.reward_feedback_text_template;
                 if (values.adaptive && typeof values.adaptive === 'object' && (values.adaptive.mode || '').toString() === 'quest') {
                     const adaptive = values.adaptive;
@@ -4515,6 +4528,15 @@ class JsonBuilder {
                 <div class="parameter-row">
                     <label class="parameter-label">Feedback Duration (ms):</label>
                     <input type="number" class="form-control parameter-input" id="motFeedbackDurationMsDefault" value="1500" min="0" max="10000">
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Show Count Message:</label>
+                    <div class="parameter-input">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="motFeedbackShowCountMessageDefault" checked>
+                            <label class="form-check-label" for="motFeedbackShowCountMessageDefault">Display correct identifications summary text during feedback</label>
+                        </div>
+                    </div>
                 </div>
             </div>
             `
@@ -6732,12 +6754,19 @@ class JsonBuilder {
                 gabor_too_slow_feedback_enabled: { type: 'boolean', default: false, description: 'Show no-response feedback when the response window expires (suppressed during QUEST-adaptive trials).' },
                 gabor_feedback_text_no_response: { type: 'string', default: 'Too slow', description: 'Feedback text shown when there is no response.' },
                 gabor_reward_feedback_enabled: { type: 'boolean', default: false, description: 'Show reward feedback based on RT tiers.' },
+                gabor_reward_scoring_mode: { type: 'select', default: 'tiered', options: ['tiered', 'proportional_linear'], description: 'Reward scoring model: tiered or proportional linear bonus.' },
                 gabor_reward_fast_rt_threshold_ms: { type: 'number', default: 450, min: 0, max: 60000, step: 1, description: 'RT threshold (ms) for fast reward tier.' },
                 gabor_reward_medium_rt_threshold_ms: { type: 'number', default: 800, min: 0, max: 60000, step: 1, description: 'RT threshold (ms) for medium reward tier.' },
                 gabor_reward_points_fast: { type: 'number', default: 2, min: -9999, max: 9999, step: 0.1, description: 'Points shown for fast RT responses.' },
                 gabor_reward_points_medium: { type: 'number', default: 1, min: -9999, max: 9999, step: 0.1, description: 'Points shown for medium RT responses.' },
                 gabor_reward_points_slow: { type: 'number', default: 0, min: -9999, max: 9999, step: 0.1, description: 'Points shown for slow RT responses.' },
-                gabor_reward_feedback_text_template: { type: 'string', default: '+{{points}} points', description: 'Template for reward feedback text. Use {{points}} placeholder.' },
+                gabor_reward_bonus_rt_fast_ms: { type: 'number', default: 350, min: 0, max: 60000, step: 1, description: 'RT <= this gets max proportional bonus.' },
+                gabor_reward_bonus_rt_slow_ms: { type: 'number', default: 850, min: 0, max: 60000, step: 1, description: 'RT >= this gets zero proportional bonus.' },
+                gabor_reward_base_points_high: { type: 'number', default: 50, min: -9999, max: 9999, step: 0.1, description: 'Base points for high-value targets in proportional mode.' },
+                gabor_reward_base_points_low: { type: 'number', default: 5, min: -9999, max: 9999, step: 0.1, description: 'Base points for low-value targets in proportional mode.' },
+                gabor_reward_bonus_max_high: { type: 'number', default: 50, min: -9999, max: 9999, step: 0.1, description: 'Max RT bonus for high-value targets in proportional mode.' },
+                gabor_reward_bonus_max_low: { type: 'number', default: 5, min: -9999, max: 9999, step: 0.1, description: 'Max RT bonus for low-value targets in proportional mode.' },
+                gabor_reward_feedback_text_template: { type: 'string', default: '+{{points}} points', description: 'Template for reward feedback text. Supports {{points}}, {{base}}, {{bonus}}.' },
 
                 gabor_stimulus_duration_min: { type: 'number', default: 67, min: 0, max: 10000 },
                 gabor_stimulus_duration_max: { type: 'number', default: 67, min: 0, max: 10000 },
@@ -6891,6 +6920,7 @@ class JsonBuilder {
                 mot_num_targets_options: { type: 'string', default: (document.getElementById('motNumTargetsDefault')?.value || '4').toString() },
                 mot_dot_size_px: { type: 'number', default: Number.parseFloat(document.getElementById('motDotSizePxDefault')?.value || '44'), min: 2, max: 200 },
                 mot_motion_type: { type: 'select', default: (document.getElementById('motMotionTypeDefault')?.value || 'linear').toString(), options: ['linear', 'curved'] },
+                mot_direction_jitter_deg_per_frame: { type: 'number', default: 0, min: 0, max: 180, step: 0.5 },
                 mot_probe_mode: { type: 'select', default: (document.getElementById('motProbeModeDefault')?.value || 'click').toString(), options: ['click', 'number_entry', 'yes_no_recognition'] },
                 mot_yes_key: { type: 'string', default: (document.getElementById('motYesKeyDefault')?.value || 'y').toString() },
                 mot_no_key: { type: 'string', default: (document.getElementById('motNoKeyDefault')?.value || 'n').toString() },
@@ -6898,7 +6928,11 @@ class JsonBuilder {
                 mot_aperture_shape: { type: 'select', default: (document.getElementById('motApertureShapeDefault')?.value || 'rectangle').toString(), options: ['rectangle', 'circle'] },
                 mot_aperture_border_enabled: { type: 'boolean', default: !!document.getElementById('motApertureBorderEnabledDefault')?.checked },
                 mot_aperture_border_color: { type: 'COLOR', default: (document.getElementById('motApertureBorderColorDefault')?.value || '#444444').toString() },
+                mot_object_color: { type: 'COLOR', default: (document.getElementById('motObjectColorDefault')?.value || '#FFFFFF').toString() },
+                mot_target_cue_color: { type: 'COLOR', default: (document.getElementById('motTargetCueColorDefault')?.value || '#FF9900').toString() },
+                mot_background_color: { type: 'COLOR', default: (document.getElementById('motBackgroundColorDefault')?.value || '#111111').toString() },
                 mot_show_feedback: { type: 'boolean', default: !!document.getElementById('motShowFeedbackDefault')?.checked },
+                mot_feedback_show_count_message: { type: 'boolean', default: !!document.getElementById('motFeedbackShowCountMessageDefault')?.checked },
                 mot_feedback_duration_ms: { type: 'number', default: Number.parseInt(document.getElementById('motFeedbackDurationMsDefault')?.value || '1500', 10), min: 0, max: 10000 },
                 mot_speed_px_per_s_min: { type: 'number', default: Number.parseFloat(document.getElementById('motSpeedDefault')?.value || '150'), min: 20, max: 600 },
                 mot_speed_px_per_s_max: { type: 'number', default: Number.parseFloat(document.getElementById('motSpeedDefault')?.value || '150'), min: 20, max: 600 },
@@ -7288,6 +7322,20 @@ class JsonBuilder {
                     scoring_basis: { type: 'select', default: 'both', options: ['accuracy', 'reaction_time', 'both'] },
                     rt_threshold_ms: { type: 'number', default: 600, min: 0, max: 60000, step: 1 },
                     points_per_success: { type: 'number', default: 1, min: 0, max: 1000, step: 0.1 },
+                    gabor_reward_feedback_enabled: { type: 'boolean', default: false },
+                    gabor_reward_scoring_mode: { type: 'select', default: 'tiered', options: ['tiered', 'proportional_linear'] },
+                    gabor_reward_fast_rt_threshold_ms: { type: 'number', default: 450, min: 0, max: 60000, step: 1 },
+                    gabor_reward_medium_rt_threshold_ms: { type: 'number', default: 800, min: 0, max: 60000, step: 1 },
+                    gabor_reward_points_fast: { type: 'number', default: 2, min: -9999, max: 9999, step: 0.1 },
+                    gabor_reward_points_medium: { type: 'number', default: 1, min: -9999, max: 9999, step: 0.1 },
+                    gabor_reward_points_slow: { type: 'number', default: 0, min: -9999, max: 9999, step: 0.1 },
+                    gabor_reward_bonus_rt_fast_ms: { type: 'number', default: 350, min: 0, max: 60000, step: 1 },
+                    gabor_reward_bonus_rt_slow_ms: { type: 'number', default: 850, min: 0, max: 60000, step: 1 },
+                    gabor_reward_base_points_high: { type: 'number', default: 50, min: -9999, max: 9999, step: 0.1 },
+                    gabor_reward_base_points_low: { type: 'number', default: 5, min: -9999, max: 9999, step: 0.1 },
+                    gabor_reward_bonus_max_high: { type: 'number', default: 50, min: -9999, max: 9999, step: 0.1 },
+                    gabor_reward_bonus_max_low: { type: 'number', default: 5, min: -9999, max: 9999, step: 0.1 },
+                    gabor_reward_feedback_text_template: { type: 'string', default: '+{{points}} points' },
                     require_correct_for_rt: { type: 'boolean', default: false },
 
                     calculate_on_the_fly: { type: 'boolean', default: true },
@@ -8839,6 +8887,7 @@ class JsonBuilder {
             const speed = Number.parseFloat(document.getElementById('motSpeedDefault')?.value || '150');
             const dotSizePx = Number.parseFloat(document.getElementById('motDotSizePxDefault')?.value || '44');
             const motionType = (document.getElementById('motMotionTypeDefault')?.value || 'linear').toString();
+            const directionJitter = Number.parseFloat(document.getElementById('motDirectionJitterDefault')?.value || '0');
             const probeMode = (document.getElementById('motProbeModeDefault')?.value || 'click').toString();
             const yesKey = (document.getElementById('motYesKeyDefault')?.value || 'y').toString().trim() || 'y';
             const noKey = (document.getElementById('motNoKeyDefault')?.value || 'n').toString().trim() || 'n';
@@ -8849,8 +8898,12 @@ class JsonBuilder {
             const apertureShape = (document.getElementById('motApertureShapeDefault')?.value || 'rectangle').toString();
             const apertureBorderEnabled = !!document.getElementById('motApertureBorderEnabledDefault')?.checked;
             const apertureBorderColor = (document.getElementById('motApertureBorderColorDefault')?.value || '#444444').toString();
+            const objectColor = (document.getElementById('motObjectColorDefault')?.value || '#FFFFFF').toString();
+            const targetCueColor = (document.getElementById('motTargetCueColorDefault')?.value || '#FF9900').toString();
+            const backgroundColor = (document.getElementById('motBackgroundColorDefault')?.value || '#111111').toString();
             const apertureBorderWidth = Number.parseInt(document.getElementById('motApertureBorderWidthPxDefault')?.value || '2', 10);
             const showFeedback = !!document.getElementById('motShowFeedbackDefault')?.checked;
+            const feedbackShowCountMessage = !!document.getElementById('motFeedbackShowCountMessageDefault')?.checked;
             const feedbackDurationMs = Number.parseInt(document.getElementById('motFeedbackDurationMsDefault')?.value || '1500', 10);
 
             config.mot_settings = {
@@ -8859,6 +8912,7 @@ class JsonBuilder {
                 speed_px_per_s: Number.isFinite(speed) ? speed : 150,
                 dot_size_px: Number.isFinite(dotSizePx) ? dotSizePx : 44,
                 motion_type: motionType,
+                direction_jitter_deg_per_frame: Number.isFinite(directionJitter) ? directionJitter : 0,
                 probe_mode: probeMode,
                 yes_key: yesKey,
                 no_key: noKey,
@@ -8869,8 +8923,12 @@ class JsonBuilder {
                 aperture_shape: apertureShape,
                 aperture_border_enabled: apertureBorderEnabled,
                 aperture_border_color: apertureBorderColor,
+                object_color: objectColor,
+                target_cue_color: targetCueColor,
+                background_color: backgroundColor,
                 aperture_border_width_px: Number.isFinite(apertureBorderWidth) ? apertureBorderWidth : 2,
                 show_feedback: showFeedback,
+                feedback_show_count_message: feedbackShowCountMessage,
                 feedback_duration_ms: Number.isFinite(feedbackDurationMs) ? Math.max(0, feedbackDurationMs) : 1500
             };
         }
@@ -9313,6 +9371,7 @@ class JsonBuilder {
             speed_px_per_s: Number.isFinite(Number(d.speed_px_per_s)) ? Number(d.speed_px_per_s) : 150,
             dot_size_px: Number.isFinite(Number(d.dot_size_px)) ? Number(d.dot_size_px) : 44,
             motion_type: (d.motion_type || 'linear').toString(),
+            direction_jitter_deg_per_frame: Number.isFinite(Number(d.direction_jitter_deg_per_frame)) ? Number(d.direction_jitter_deg_per_frame) : 0,
             probe_mode: (d.probe_mode || 'click').toString(),
             yes_key: (d.yes_key || 'y').toString(),
             no_key: (d.no_key || 'n').toString(),
@@ -9323,6 +9382,9 @@ class JsonBuilder {
             aperture_shape: (d.aperture_shape || 'rectangle').toString(),
             aperture_border_enabled: d.aperture_border_enabled !== false,
             aperture_border_color: (d.aperture_border_color || '#444444').toString(),
+            object_color: (d.object_color || '#FFFFFF').toString(),
+            target_cue_color: (d.target_cue_color || '#FF9900').toString(),
+            background_color: (d.background_color || '#111111').toString(),
             aperture_border_width_px: Number.isFinite(Number(d.aperture_border_width_px)) ? Number(d.aperture_border_width_px) : 2,
             show_feedback: !!d.show_feedback
         };
@@ -9568,6 +9630,7 @@ class JsonBuilder {
             speed_px_per_s: Number.parseFloat(document.getElementById('motSpeedDefault')?.value || '150'),
             dot_size_px: Number.parseFloat(document.getElementById('motDotSizePxDefault')?.value || '44'),
             motion_type: (document.getElementById('motMotionTypeDefault')?.value || 'linear').toString(),
+            direction_jitter_deg_per_frame: Number.parseFloat(document.getElementById('motDirectionJitterDefault')?.value || '0'),
             probe_mode: (document.getElementById('motProbeModeDefault')?.value || 'click').toString(),
             yes_key: (document.getElementById('motYesKeyDefault')?.value || 'y').toString().trim() || 'y',
             no_key: (document.getElementById('motNoKeyDefault')?.value || 'n').toString().trim() || 'n',
@@ -9578,8 +9641,12 @@ class JsonBuilder {
             aperture_shape: (document.getElementById('motApertureShapeDefault')?.value || 'rectangle').toString(),
             aperture_border_enabled: !!document.getElementById('motApertureBorderEnabledDefault')?.checked,
             aperture_border_color: (document.getElementById('motApertureBorderColorDefault')?.value || '#444444').toString(),
+            object_color: (document.getElementById('motObjectColorDefault')?.value || '#FFFFFF').toString(),
+            target_cue_color: (document.getElementById('motTargetCueColorDefault')?.value || '#FF9900').toString(),
+            background_color: (document.getElementById('motBackgroundColorDefault')?.value || '#111111').toString(),
             aperture_border_width_px: Number.parseInt(document.getElementById('motApertureBorderWidthPxDefault')?.value || '2', 10),
             show_feedback: !!document.getElementById('motShowFeedbackDefault')?.checked,
+            feedback_show_count_message: !!document.getElementById('motFeedbackShowCountMessageDefault')?.checked,
             feedback_duration_ms: Number.parseInt(document.getElementById('motFeedbackDurationMsDefault')?.value || '1500', 10)
         };
     }
@@ -9593,6 +9660,7 @@ class JsonBuilder {
         const nums = Number.isFinite(Number(d.num_objects)) ? Number(d.num_objects) : 8;
         const tgts = Number.isFinite(Number(d.num_targets)) ? Number(d.num_targets) : 4;
         const dotSizePx = Number.isFinite(Number(d.dot_size_px)) ? Number(d.dot_size_px) : 44;
+        const directionJitter = Number.isFinite(Number(d.direction_jitter_deg_per_frame)) ? Number(d.direction_jitter_deg_per_frame) : 0;
         const recognitionProbeCount = Number.isFinite(Number(d.recognition_probe_count)) ? Math.max(1, Number(d.recognition_probe_count)) : 1;
         const borderWidth = Number.isFinite(Number(d.aperture_border_width_px)) ? Number(d.aperture_border_width_px) : 2;
 
@@ -9602,6 +9670,7 @@ class JsonBuilder {
             mot_num_targets_options: String(tgts),
             mot_dot_size_px: dotSizePx,
             mot_motion_type: (d.motion_type || 'linear').toString(),
+            mot_direction_jitter_deg_per_frame: directionJitter,
             mot_probe_mode: (d.probe_mode || 'click').toString(),
             mot_yes_key: (d.yes_key || 'y').toString(),
             mot_no_key: (d.no_key || 'n').toString(),
@@ -9609,7 +9678,11 @@ class JsonBuilder {
             mot_aperture_shape: (d.aperture_shape || 'rectangle').toString(),
             mot_aperture_border_enabled: d.aperture_border_enabled !== false,
             mot_aperture_border_color: (d.aperture_border_color || '#444444').toString(),
+            mot_object_color: (d.object_color || '#FFFFFF').toString(),
+            mot_target_cue_color: (d.target_cue_color || '#FF9900').toString(),
+            mot_background_color: (d.background_color || '#111111').toString(),
             mot_show_feedback: !!d.show_feedback,
+            mot_feedback_show_count_message: d.feedback_show_count_message !== false,
             mot_feedback_duration_ms: Number.isFinite(Number(d.feedback_duration_ms)) ? Math.max(0, Number(d.feedback_duration_ms)) : 1500,
             mot_speed_px_per_s_min: speed,
             mot_speed_px_per_s_max: speed,
@@ -11405,6 +11478,9 @@ class JsonBuilder {
             if (blockComponent.gabor_reward_feedback_enabled !== undefined) {
                 values.reward_feedback_enabled = !!blockComponent.gabor_reward_feedback_enabled;
             }
+            if (blockComponent.gabor_reward_scoring_mode !== undefined) {
+                values.reward_scoring_mode = (blockComponent.gabor_reward_scoring_mode ?? 'tiered').toString();
+            }
             const rewardFast = Number(blockComponent.gabor_reward_fast_rt_threshold_ms);
             if (Number.isFinite(rewardFast)) values.reward_fast_rt_threshold_ms = Math.max(0, Math.round(rewardFast));
             const rewardMedium = Number(blockComponent.gabor_reward_medium_rt_threshold_ms);
@@ -11415,6 +11491,18 @@ class JsonBuilder {
             if (Number.isFinite(pointsMedium)) values.reward_points_medium = pointsMedium;
             const pointsSlow = Number(blockComponent.gabor_reward_points_slow);
             if (Number.isFinite(pointsSlow)) values.reward_points_slow = pointsSlow;
+            const bonusFast = Number(blockComponent.gabor_reward_bonus_rt_fast_ms);
+            if (Number.isFinite(bonusFast)) values.reward_bonus_rt_fast_ms = Math.max(0, Math.round(bonusFast));
+            const bonusSlow = Number(blockComponent.gabor_reward_bonus_rt_slow_ms);
+            if (Number.isFinite(bonusSlow)) values.reward_bonus_rt_slow_ms = Math.max(0, Math.round(bonusSlow));
+            const baseHigh = Number(blockComponent.gabor_reward_base_points_high);
+            if (Number.isFinite(baseHigh)) values.reward_base_points_high = baseHigh;
+            const baseLow = Number(blockComponent.gabor_reward_base_points_low);
+            if (Number.isFinite(baseLow)) values.reward_base_points_low = baseLow;
+            const bonusHigh = Number(blockComponent.gabor_reward_bonus_max_high);
+            if (Number.isFinite(bonusHigh)) values.reward_bonus_max_high = bonusHigh;
+            const bonusLow = Number(blockComponent.gabor_reward_bonus_max_low);
+            if (Number.isFinite(bonusLow)) values.reward_bonus_max_low = bonusLow;
             if (blockComponent.gabor_reward_feedback_text_template !== undefined) {
                 values.reward_feedback_text_template = (blockComponent.gabor_reward_feedback_text_template ?? '').toString();
             }
@@ -11666,6 +11754,10 @@ class JsonBuilder {
             }
             const mtype = (blockComponent.mot_motion_type ?? '').toString().trim();
             if (mtype) values.motion_type = mtype;
+            if (blockComponent.mot_direction_jitter_deg_per_frame !== undefined && blockComponent.mot_direction_jitter_deg_per_frame !== null && blockComponent.mot_direction_jitter_deg_per_frame !== '') {
+                const jitter = Number.parseFloat(blockComponent.mot_direction_jitter_deg_per_frame);
+                if (Number.isFinite(jitter) && jitter >= 0) values.direction_jitter_deg_per_frame = jitter;
+            }
             const pm = (blockComponent.mot_probe_mode ?? '').toString().trim();
             if (pm) values.probe_mode = pm;
             const yesKey = (blockComponent.mot_yes_key ?? '').toString().trim();
@@ -11683,8 +11775,17 @@ class JsonBuilder {
             }
             const apertureBorderColor = (blockComponent.mot_aperture_border_color ?? '').toString().trim();
             if (apertureBorderColor) values.aperture_border_color = apertureBorderColor;
+            const objectColor = (blockComponent.mot_object_color ?? '').toString().trim();
+            if (objectColor) values.object_color = objectColor;
+            const targetCueColor = (blockComponent.mot_target_cue_color ?? '').toString().trim();
+            if (targetCueColor) values.target_cue_color = targetCueColor;
+            const backgroundColor = (blockComponent.mot_background_color ?? '').toString().trim();
+            if (backgroundColor) values.background_color = backgroundColor;
             if (blockComponent.mot_show_feedback !== undefined) {
                 values.show_feedback = !!blockComponent.mot_show_feedback;
+            }
+            if (blockComponent.mot_feedback_show_count_message !== undefined) {
+                values.feedback_show_count_message = !!blockComponent.mot_feedback_show_count_message;
             }
             if (blockComponent.mot_feedback_duration_ms !== undefined && blockComponent.mot_feedback_duration_ms !== null && blockComponent.mot_feedback_duration_ms !== '') {
                 const feedbackDurationMs = Number.parseInt(blockComponent.mot_feedback_duration_ms, 10);
@@ -11822,6 +11923,11 @@ class JsonBuilder {
 
         if (hasSeed) {
             out.seed = seed;
+        }
+
+        // Carry forward miniblock_structure when set
+        if (blockComponent.miniblock_structure && typeof blockComponent.miniblock_structure === 'object') {
+            out.miniblock_structure = blockComponent.miniblock_structure;
         }
 
         return out;
