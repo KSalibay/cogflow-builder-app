@@ -3789,6 +3789,14 @@ class JSPsychSchemas {
                         default: false,
                         blockTarget: 'mot-trial',
                         description: 'MOT: whether to show feedback for all trials in this block'
+                    },
+                    mot_feedback_duration_ms: {
+                        type: this.parameterTypes.INT,
+                        default: 1500,
+                        min: 0,
+                        max: 10000,
+                        blockTarget: 'mot-trial',
+                        description: 'MOT: feedback display duration in ms for all trials in this block'
                     }
                 },
                 data: {}

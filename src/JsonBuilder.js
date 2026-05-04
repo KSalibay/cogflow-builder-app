@@ -2400,6 +2400,7 @@ class JsonBuilder {
                 if (values.aperture_border_enabled !== undefined) out.mot_aperture_border_enabled = !!values.aperture_border_enabled;
                 if (values.aperture_border_color !== undefined) out.mot_aperture_border_color = values.aperture_border_color;
                 if (values.show_feedback !== undefined) out.mot_show_feedback = !!values.show_feedback;
+                if (values.feedback_duration_ms !== undefined) out.mot_feedback_duration_ms = values.feedback_duration_ms;
             } else if (innerType === 'stroop-trial') {
                 if (Array.isArray(values.word)) out.stroop_word_options = csv(values.word);
                 if (Array.isArray(values.ink_color_name)) out.stroop_ink_color_options = csv(values.ink_color_name);
@@ -4510,6 +4511,10 @@ class JsonBuilder {
                             <label class="form-check-label" for="motShowFeedbackDefault">Highlight correct/incorrect picks</label>
                         </div>
                     </div>
+                </div>
+                <div class="parameter-row">
+                    <label class="parameter-label">Feedback Duration (ms):</label>
+                    <input type="number" class="form-control parameter-input" id="motFeedbackDurationMsDefault" value="1500" min="0" max="10000">
                 </div>
             </div>
             `
@@ -6894,6 +6899,7 @@ class JsonBuilder {
                 mot_aperture_border_enabled: { type: 'boolean', default: !!document.getElementById('motApertureBorderEnabledDefault')?.checked },
                 mot_aperture_border_color: { type: 'COLOR', default: (document.getElementById('motApertureBorderColorDefault')?.value || '#444444').toString() },
                 mot_show_feedback: { type: 'boolean', default: !!document.getElementById('motShowFeedbackDefault')?.checked },
+                mot_feedback_duration_ms: { type: 'number', default: Number.parseInt(document.getElementById('motFeedbackDurationMsDefault')?.value || '1500', 10), min: 0, max: 10000 },
                 mot_speed_px_per_s_min: { type: 'number', default: Number.parseFloat(document.getElementById('motSpeedDefault')?.value || '150'), min: 20, max: 600 },
                 mot_speed_px_per_s_max: { type: 'number', default: Number.parseFloat(document.getElementById('motSpeedDefault')?.value || '150'), min: 20, max: 600 },
                 mot_tracking_duration_ms_min: { type: 'number', default: Number.parseInt(document.getElementById('motTrackingDurationMsDefault')?.value || '8000', 10), min: 0, max: 60000 },
@@ -8845,6 +8851,7 @@ class JsonBuilder {
             const apertureBorderColor = (document.getElementById('motApertureBorderColorDefault')?.value || '#444444').toString();
             const apertureBorderWidth = Number.parseInt(document.getElementById('motApertureBorderWidthPxDefault')?.value || '2', 10);
             const showFeedback = !!document.getElementById('motShowFeedbackDefault')?.checked;
+            const feedbackDurationMs = Number.parseInt(document.getElementById('motFeedbackDurationMsDefault')?.value || '1500', 10);
 
             config.mot_settings = {
                 num_objects: Number.isFinite(numObjects) ? numObjects : 8,
@@ -8863,7 +8870,8 @@ class JsonBuilder {
                 aperture_border_enabled: apertureBorderEnabled,
                 aperture_border_color: apertureBorderColor,
                 aperture_border_width_px: Number.isFinite(apertureBorderWidth) ? apertureBorderWidth : 2,
-                show_feedback: showFeedback
+                show_feedback: showFeedback,
+                feedback_duration_ms: Number.isFinite(feedbackDurationMs) ? Math.max(0, feedbackDurationMs) : 1500
             };
         }
 
@@ -9571,7 +9579,8 @@ class JsonBuilder {
             aperture_border_enabled: !!document.getElementById('motApertureBorderEnabledDefault')?.checked,
             aperture_border_color: (document.getElementById('motApertureBorderColorDefault')?.value || '#444444').toString(),
             aperture_border_width_px: Number.parseInt(document.getElementById('motApertureBorderWidthPxDefault')?.value || '2', 10),
-            show_feedback: !!document.getElementById('motShowFeedbackDefault')?.checked
+            show_feedback: !!document.getElementById('motShowFeedbackDefault')?.checked,
+            feedback_duration_ms: Number.parseInt(document.getElementById('motFeedbackDurationMsDefault')?.value || '1500', 10)
         };
     }
 
@@ -9601,6 +9610,7 @@ class JsonBuilder {
             mot_aperture_border_enabled: d.aperture_border_enabled !== false,
             mot_aperture_border_color: (d.aperture_border_color || '#444444').toString(),
             mot_show_feedback: !!d.show_feedback,
+            mot_feedback_duration_ms: Number.isFinite(Number(d.feedback_duration_ms)) ? Math.max(0, Number(d.feedback_duration_ms)) : 1500,
             mot_speed_px_per_s_min: speed,
             mot_speed_px_per_s_max: speed,
             mot_tracking_duration_ms_min: tracking,
@@ -11675,6 +11685,10 @@ class JsonBuilder {
             if (apertureBorderColor) values.aperture_border_color = apertureBorderColor;
             if (blockComponent.mot_show_feedback !== undefined) {
                 values.show_feedback = !!blockComponent.mot_show_feedback;
+            }
+            if (blockComponent.mot_feedback_duration_ms !== undefined && blockComponent.mot_feedback_duration_ms !== null && blockComponent.mot_feedback_duration_ms !== '') {
+                const feedbackDurationMs = Number.parseInt(blockComponent.mot_feedback_duration_ms, 10);
+                if (Number.isFinite(feedbackDurationMs)) values.feedback_duration_ms = Math.max(0, feedbackDurationMs);
             }
             addWindow('speed_px_per_s', blockComponent.mot_speed_px_per_s_min, blockComponent.mot_speed_px_per_s_max);
             addWindow('tracking_duration_ms', blockComponent.mot_tracking_duration_ms_min, blockComponent.mot_tracking_duration_ms_max);
